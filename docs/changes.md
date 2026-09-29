@@ -120,7 +120,9 @@ predict this path and pre-create a file or symlink at it before the render.
 **faxcli** (`faxcli/api.py`): when `local=False`, a directory is created with
 `tempfile.mkdtemp()`, which uses a mode-0700 directory with an unpredictable
 name.  The TIFF is written inside it.  The directory is removed with
-`shutil.rmtree` after spooling (or on a spool error).
+`shutil.rmtree` in a `finally`, so it goes on every path: after spooling, on a spool error, on a failed
+render, and on an unreadable TIFF. (Review of run 12: the first version cleaned up only on the spool paths,
+so a failed render left the directory behind.)
 
 **Why**: `/tmp/<predictable-name>` is a classic TOCTOU / symlink-attack target.
 `tempfile.mkdtemp` is the stdlib-recommended fix.
@@ -128,6 +130,7 @@ name.  The TIFF is written inside it.  The directory is removed with
 **Tests**: `tests/test_run12.py::TestTempfileForNonLocalRender`
 - `test_render_path_is_not_predictable_slash_tmp`
 - `test_tmpdir_cleaned_up_after_dry_run`
+- review: `TestReviewOfRun12::test_a_failed_render_leaves_no_temp_dir`
 
 ---
 
@@ -169,10 +172,12 @@ in the argv; they did not assert its absence, so they continue to pass).
 reads the entire CDR file with `open(CDR)` and then slices `rows[-N:]`.  The
 full file is always read regardless of `N`.
 
-**faxcli** (`faxcli/transport.py`): `LocalTransport.read_cdr(limit)` reads all
-lines but only returns the last `limit` lines via `lines[-limit:]`.  The text
-passed to `parse_cdr` is therefore already bounded, consistent with the SSH
-transport which passes `tail -n limit` to the remote host.
+**faxcli** (`faxcli/transport.py`): `LocalTransport.read_cdr(limit)` streams the
+file through a `collections.deque(maxlen=limit)`, so it keeps only the last `limit` lines in memory, and
+returns those. A limit of 0 or less returns nothing, as `tail -n 0` does. The text passed to `parse_cdr` is
+therefore bounded, consistent with the SSH transport, which passes `tail -n limit` to the remote host.
+(Review of run 12: the first version read every line and sliced `lines[-limit:]`. That still held the
+whole file in memory, and for `limit=0` it returned every line, because `lines[-0:]` is the whole list.)
 
 **Why**: the SSH and local transports now behave symmetrically.  On a very long
 CDR (years of call records), the local path was always reading the whole file
@@ -182,3 +187,4 @@ into memory while the SSH path was bounded.
 - characterization: `test_legacy_reads_whole_file_ignoring_limit`
 - new: `test_new_read_cdr_honours_limit`,
   `test_new_read_cdr_limit_larger_than_file`
+- review: `TestReviewOfRun12::test_read_cdr_limit_zero_is_nothing_and_a_limit_is_the_tail`
