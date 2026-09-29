@@ -46,9 +46,10 @@ console can be tested and demonstrated without touching a phone line.
 
 ## Run it in replay mode
 
-Replay mode needs no PBX and only the Python standard library. The adapter reads the recorded,
-scrubbed fixtures in `tests/fixtures/`, so status, the fax log and the send form all work, and
-nothing can dial.
+Replay mode needs no PBX and only the Python standard library. The adapter reads the fixtures in
+`tests/fixtures/`: the PBX and CDR data were recorded on 2026-09-28 and scrubbed, and the VoIP.ms
+data are sample data (illustrative, not a real account). Status, the fax log and the send form all
+work, and nothing can dial.
 
 ```bash
 git clone https://github.com/jphein/fax-console && cd fax-console
@@ -57,8 +58,12 @@ python3 -m faxconsole --replay tests/fixtures    # the console on fixtures at ht
 
 In replay mode, every `POST /api/fax/send` is forced to a dry run. The GET routes are `/` (the
 page), `/api/fax` (the panel's state), `/api/fax/status`, `/api/fax/log`, `/api/voipms` (the
-balance, from fixtures in replay), `/api/pbx/trunk`, `/api/pbx/calls`, `/api/pbx/endpoints` and
+balance: sample data in replay), `/api/pbx/trunk`, `/api/pbx/calls`, `/api/pbx/endpoints` and
 `/api/version`. The one POST route is `/api/fax/send`.
+
+A static copy of the replay runs on GitHub Pages at https://jphein.github.io/fax-console/. It has
+the same views, from the same fixtures, with sending off. [`docs/deploy.md`](docs/deploy.md) says
+how that copy is built, checked and published, and how to self-host the replay server.
 
 ### Run the tests
 
@@ -158,7 +163,8 @@ Material open-source components and third-party services (rules §6.6, §9.3):
 | Asterisk | the PBX the adapter talks to | GPL-2.0 | no |
 | SpanDSP | the fax modem inside Asterisk's fax module | LGPL-2.1 | no |
 | Ghostscript | PDF to fax TIFF, called by the CLI | AGPL-3.0 | no |
-| Caddy | reverse proxy in front of the live demo | Apache-2.0 | no |
+| GitHub Pages | hosts the static replay demo | service | no |
+| Node.js | runs the page's `app.js` in the static-page test | MIT | no (dev tool) |
 | GitHub Actions | CI | service | no |
 | Faxbeep | public test inbox for `fax test` | service | no |
 | Azure AI Speech | the narration voice in the demo video | service | no |
