@@ -102,6 +102,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 01:26 | 10 | `afc9c5e2` | the inbound-fax design as generated config: the dialplan, the hook and `fax inbound --render`; 56 tests | kept; Bob found the caller-ID injection in the legacy design unaided; review narrowed its filter and rebuilt the hostile tests | 3.362 |
 | 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered, since the sandbox drops an outside gateway variable; a gateway planted in Bob's settings broke the run with `--gateway-url` and without it | the flag does not pin the gateway, so it was not used; then all runs held (see Budget) | 0.065 |
 | 09:00 | – | – | the policy control for PR 6, in a throwaway clone ("reply ok"): a gateway planted in Bob's settings broke the run without the policy file and not with it; the baseline answered | the read-only policy locks the gateway; runs resume after PR 6 merges | 0.044 |
+| 09:26 | 11 | `d01d3024` | review fixes: the public replay surface, headers, the server's timeout and permit, the entry point, the replay spool, the `numbers.py` rename | kept; the first run through the PR 5 wrapper and under the PR 6 lock (its log shows the policy loaded and all 46 requests to IBM); stopped at the cap with the suite red, finished by the reviewer | 6.100 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills them in (see **Budget** below).
@@ -123,7 +124,7 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | 10 | 9/29 01:26 | [The inbound dialplan](bob-runs/10-inbound.prompt.md) | `faxcli/inbound.py` (`render_dialplan`, `render_hook`), `fax inbound --render`; 56 tests; a work log ([worklog](bob-runs/10-inbound.worklog.md)) | 42 | 3.362 | Kept. Bob found the legacy design's caller-ID injection (into `System()` and a file path) unaided and wrapped it in `FILTER()`. Review: the filter admitted `-` (argument injection into the notify program), the log line used the raw value, the hook's spool check passed `..`, and the hostile tests could not fail on the real risk. All fixed |
 | – | 9/29 01:35 | Gateway-pin controls | Tiny sandboxed runs testing whether `--gateway-url` beats a redirect: an outside env var is dropped by the sandbox (both answered "ok"); a planted `settings.gatewayUrl` breaks the run, with the flag or without | 3 answered, 2 failed | 0.065 | The flag was not proven; the fix is PR 5's environment pin |
 | – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
-| 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | review pending |
+| 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | Kept: all seven items. Bob stopped at the cap with the suite red, having not yet updated `build()`'s test callers, and the replay-path mask leaked when inbox and spool share no directory. The reviewer fixed both, plus a second `TRUNK` definition |
 
 **Running total: 51.83 Bobcoins** (after run 11).
 
@@ -394,6 +395,27 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
     positive control, and check what a path, a shell and a log line receive. Four perturbations each go
     red.
 - **Cost.** 3.36.
+
+### Run 11: review fixes
+- **What Bob did.** Bob worked a seven-item review list, starting with the public replay surface (the lead's
+  rule: nothing derived from the machine). In replay mode, runtime paths became `replay:` tokens. JSON
+  responses gained `nosniff`. The server got a handler timeout and releases its permit when the pool refuses
+  a submit. `build()` returns its args, and the server is created inside the `try`. Replay renders into one
+  spool, and `faxcli/numbers.py` became `phone_numbers.py`, which no longer shadows the stdlib. The adapter
+  tests stopped waiting out timeouts, saving about 16 s of the suite.
+  - It was the first run through the PR 5 wrapper, which wrote this row itself, and under the PR 6 lock.
+    Its Bob log shows the policy loaded, and all 46 of its requests went to IBM's gateway.
+- **Kept.** All seven items.
+- **Rejected or fixed, with reasons.**
+  - **The run stopped at its cap with the suite red,** having not yet updated `build()`'s test callers:
+    47 errors and 2 failures. There was no work log this time. The reviewer finished the callers.
+  - **The replay mask leaked.** It stripped the common path of inbox and spool, which is only "/" when
+    they share no directory, so `replay:tmp/...` still named the temp dir. Paths are now masked by the
+    replay root that `build()` records.
+    - Bob's scan could not see it: it looked for the temp dir with its leading "/".
+    - With the leak reintroduced, Bob's 5 surface tests pass and the reviewed ones fail 4.
+  - **A second `TRUNK` definition,** in `faxcli/cdr.py` since run 4, is now the only one.
+- **Cost.** 6.10, the full cap.
 
 ## Who wrote what
 | Author | What |
