@@ -10,6 +10,8 @@
 #   scripts/scrub-check.sh --message FILE   scan a commit message (commit-msg hook)
 #   scripts/scrub-check.sh --paths P...     scan files/dirs (prompts, positive controls)
 #   scripts/scrub-check.sh --stdin LABEL    scan text on stdin (the Bob prompt/tool gates)
+#   scripts/scrub-check.sh --shadow         only the stdlib-shadow check, on what is on disk (ignored files
+#                                           too): test.sh runs it before the sandbox
 #   scripts/scrub-check.sh --history        scan the history this ref publishes (reachable from HEAD):
 #                                           every line ever added (merge resolutions included), every
 #                                           blob that is not plain text, every file name, every commit
@@ -674,6 +676,12 @@ def main(argv):
         items = [(p, p, git("cat-file", "blob", f":{p}")) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
         hits += shadow_findings(names)
+    elif argv[0] == "--shadow" and len(argv) == 1:
+        # A planted json.py, json.pyc, json.so, json/ package or json symlink at the root, in tests/ or in
+        # scripts/ is imported instead of the real module, so one file could fake a green test run. Every
+        # bypass of the Bob guard ends in such a file, and test.sh refuses to run while one is on disk
+        # (the Oracle's delta on PR 11).
+        hits += shadow_findings(disk_shadow_paths())
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", None, open(argv[1], "rb").read())]
     elif argv[0] == "--stdin" and len(argv) == 2:
@@ -696,7 +704,8 @@ def main(argv):
             else:
                 items.append((p, p, open(p, "rb").read()))
     else:
-        print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL | --history [REV]]"
+        print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL | --history [REV]"
+              " | --shadow]"
               " [--require-deny]",
               file=sys.stderr)
         return 2

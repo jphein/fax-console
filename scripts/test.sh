@@ -17,4 +17,15 @@ cd "$root"
 # Refuse to run while either exists.
 stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit)
 [ -z "$stray" ] || { echo "test.sh: refusing: sourceless bytecode or an extension module outside __pycache__: $stray" >&2; exit 2; }
+# A stdlib-named module, package or symlink where Python looks first (json.py at the root, say) is imported
+# instead of the real module, and every bypass of the Bob guard ends in such a file (the Oracle's delta on
+# PR 11). scrub-check reads the disk, ignored files included, and runs under python3 -I itself.
+# Exit 1 is a finding. Anything else means the check itself failed, and that refuses too, saying so.
+rc=0; shadow=$(scripts/scrub-check.sh --shadow 2>&1) || rc=$?
+if [ "$rc" -ne 0 ]; then
+  printf '%s\n' "$shadow" >&2
+  if [ "$rc" -eq 1 ]; then echo "test.sh: refusing: a file shadows a standard-library module" >&2
+  else echo "test.sh: refusing: the shadow check itself failed (exit $rc)" >&2; fi
+  exit 2
+fi
 exec scripts/bob-sandbox.sh bash -c '.venv/bin/python -m pytest -q "$@" && .venv/bin/ruff check .' test.sh "$@"
