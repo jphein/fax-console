@@ -450,32 +450,41 @@ def _public_path(config: Config, path: str) -> str:
     return path
 
 
-# _ABS_PATH_RE finds the longest absolute path token in an error string.
-# Matches a '/' followed by non-whitespace, non-quote characters.
-# A URL, or an absolute path that is not already a "replay:/…" token (nor part of a URL).
-_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"]+")
-_ABS_PATH_RE = re.compile(r"(?<![\w:/])(/[^\s'\"]+)")
+# What replay says instead of an error that names a path it does not know.
+REPLAY_ERROR_WITHHELD = "error details withheld in replay mode"
+# A known dir ends where its path does: at a "/", a quote, whitespace or the end ("/opt/fx-2" is not
+# "/opt/fx").
+_KNOWN_DIR_END = r"(?=[/'\"\s]|$)"
+# What a replacement leaves: "replay:", and the path inside the known dir.
+_REPLAY_TOKEN = re.compile(r"replay:(?:/[^\s'\"]*)?")
 
 
 def _mask_error(config: Config, text: str) -> str:
     """In replay mode, take every machine path out of *text*, an error message. Live mode, which only
     the LAN sees, returns it unchanged.
 
-    First the directories replay knows are replaced EXACTLY: the replay root (the temp dir) and the
-    fixture dir become "replay:". An exact replacement survives a space or a quote inside the name.
-    Then any other URL or absolute path becomes a constant, never its basename, which is also a name
-    from the machine.
+    The directories replay knows, the replay root (the temp dir) and the fixture dir, are replaced
+    EXACTLY by "replay:", at a path boundary. Each is replaced in two forms: as str() gives it, and as
+    repr() escapes it, since OSError and KeyError quote a file name with repr(). An exact replacement
+    survives a space or a quote inside the name. After that the mask fails closed. If any "/" is left
+    outside the replay: tokens, the error named some other path or a URL, and the whole message becomes
+    REPLAY_ERROR_WITHHELD: no legitimate replay error names any other path.
 
-    Review of PR 8, S-a: the first version masked token by token. A token ends at a space or a quote,
-    so a deploy path such as "/srv/x y/fixtures" left " y/fixtures" behind.
+    - Review of PR 8, S-a: the first version masked token by token. A token ends at a space or a
+      quote, so a deploy path such as "/srv/x y/fixtures" left " y/fixtures" behind.
+    - The Oracle's delta on PR 11: a replacement without a boundary turned "/opt/fx-zqx7" into
+      "replay:-zqx7"; a repr()-escaped name escaped the exact replacement; and a token fallback kept
+      paths glued to other text ("path:/srv/x"). Failing closed covers all three.
     """
     if not config.replay:
         return text
-    known = [d.rstrip(os.sep) for d in (config.replay_root, config.replay_fixture_dir) if d]
-    for d in sorted({d for d in known if d}, key=len, reverse=True):
-        text = text.replace(d + os.sep, "replay:/").replace(d, "replay:")
-    text = _URL_RE.sub("replay:<url>", text)
-    return _ABS_PATH_RE.sub("replay:<path>", text)
+    known = {d.rstrip(os.sep) for d in (config.replay_root, config.replay_fixture_dir) if d}
+    forms = {f for d in known if d for f in (d, repr(d)[1:-1])}
+    for f in sorted(forms, key=len, reverse=True):
+        text = re.sub(re.escape(f) + _KNOWN_DIR_END, "replay:", text)
+    if "/" in _REPLAY_TOKEN.sub("", text):
+        return REPLAY_ERROR_WITHHELD
+    return text
 
 
 def _route_version(config: Config | None = None) -> Response:
