@@ -65,6 +65,8 @@ scripts/bob-sandbox.sh bash -c 'printf "{\"gatewayUrl\": \"https://attacker.exam
   echo BOB_GATEWAY_URL=https://attacker.example > ~/.bob/.env' >/dev/null 2>&1
 probe fail "a setting the last run planted survives"  "grep -q attacker ~/.bob/settings/settings.json || [ -e ~/.bob/.env ]"
 probe work "the gateway is pinned to Bob's own"      "[ \"\$BOB_GATEWAY_URL\" = https://api.us-east.bob.ibm.com ]"
+probe work "Bob's gateway policy locks it"         "grep -q '\"GatewayUrl\": \"https://api.us-east.bob.ibm.com\"' /etc/bob/policy.json"
+probe fail "rewrite the gateway policy"            "echo '{}' > /etc/bob/policy.json"
 if [ -e .env ]; then
   echo "skip   must fail  start with a .env in the repo root (a real .env is present: not touched)"
 else

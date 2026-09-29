@@ -206,8 +206,40 @@ def secret_value(m, kind=""):
     return not IDENT.match(v)
 
 
+HEX = frozenset("0123456789abcdef")
+# Full hex ids: 32 = Bob Shell's task_id (every docs/bob-runs transcript carries one) and MD5,
+# 40 = a SHA-1 git object id, 64 = a SHA-256 one.
+ID_LENGTHS = (32, 40, 64)
+
+
+def in_object_id(m):
+    """True if the match is digits inside a full hex id: 32, 40 or 64 lowercase hex characters,
+    at least one of them a letter, with no letter, digit or underscore on either side.
+    GitHub's pull_request merge message ("Merge <40 hex> into <40 hex>") tripped the phone rule
+    on a 10-digit run inside the head's id (the Oracle, PR #6, 2026-09-29). A revert message
+    ("This reverts commit <40 hex>"), a blob id in REVIEWED_BINARIES or a Bob transcript's
+    32-hex task_id can do the same (the Oracle: a few percent of runs).
+    Abbreviated ids are not exempt: a 10-12 character one could be a phone number with two hex
+    letters glued on, and git abbreviates this repo's ids to 7, too short for 10 digits.
+    Uppercase hex, any other length, or a run glued to a word stays a finding."""
+    s, a, b = m.string, m.start(), m.end()
+    if not all(c in HEX for c in s[a:b]):
+        return False
+    lo, hi = a, b
+    while lo > 0 and s[lo - 1] in HEX and b - lo < 65:   # bounded: a longer run is no id anyway
+        lo -= 1
+    while hi < len(s) and s[hi] in HEX and hi - lo < 65:
+        hi += 1
+    def word(c):
+        return c.isalnum() or c == "_"
+    return (hi - lo in ID_LENGTHS and any(c in "abcdef" for c in s[lo:hi])
+            and not (lo > 0 and word(s[lo - 1])) and not (hi < len(s) and word(s[hi])))
+
+
 def allowed(rule, m, kind=""):
     s = m.group(0)
+    if rule in ("phone-number", "imsi-imei-shape") and in_object_id(m):
+        return True                                    # digits inside a commit or blob id
     if rule == "phone-number":
         raw = re.sub(r"\D", "", s)
         digits = raw if len(raw) == 11 else "1" + raw

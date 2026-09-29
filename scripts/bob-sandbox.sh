@@ -25,9 +25,12 @@
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 [ "$#" -ge 1 ] || { echo "usage: bob-sandbox.sh CMD [ARGS...]" >&2; exit 2; }
-# Bob Shell 2.0.5's own gateway and login (its built-in defaults), pinned in the sandbox's environment,
-# which outranks its settings file, so nothing a run leaves behind can point the next run's API key
-# (a bearer token) anywhere else (the Oracle, 9/29 01:3x).
+# Bob Shell 2.0.5's own gateway and login (its built-in defaults). The gateway is pinned by Bob's own
+# enterprise policy, /etc/bob/policy.json, bound read-only below: the policy locks settings.gatewayUrl
+# at every load and reload, and in the bundle's own words "users and CLI flags cannot override this
+# value". A settings file alone would win over the flag and the environment on the config-apply path
+# (baseUrl = settings.gatewayUrl ?? policy ?? default; Aurora's A/B test, 9/29), and a mid-run write
+# to it is reloaded. The environment pin covers the other path (flag ?? BOB_GATEWAY_URL ?? settings).
 BOB_GATEWAY=https://api.us-east.bob.ibm.com
 BOB_WEB_LOGIN=https://bob.ibm.com
 # Bob Shell loads a .env from its working directory, the repo root, and that could set other values.
@@ -84,6 +87,10 @@ done
 # read-only ledger and run records away and let a new docs/ stand in their place (Oracle, 9/29).
 docs_bind=()
 [ -d "$root/docs" ] && docs_bind=(--bind "$root/docs" "$root/docs")
+printf '{"GatewayUrl": "%s"}\n' "$BOB_GATEWAY" > "$rt/policy.json"; chmod 644 "$rt/policy.json"
+# The lock is only a lock if Bob can read it: refuse to start unless it parses to exactly that one key.
+python3 -I -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p == {"GatewayUrl": sys.argv[2]} else 1)' \
+  "$rt/policy.json" "$BOB_GATEWAY" || { echo "refusing: the gateway policy does not parse to its one key" >&2; exit 2; }
 etc=()
 for p in /etc/ssl /etc/ca-certificates /etc/ld.so.cache /etc/ld.so.conf /etc/ld.so.conf.d /etc/nsswitch.conf \
          /etc/localtime /etc/alternatives /etc/gai.conf /etc/host.conf /etc/protocols /etc/services; do
@@ -101,7 +108,7 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/sbin /sbin \
     --symlink usr/lib /lib --symlink usr/lib64 /lib64 \
     --proc /proc --dev /dev --tmpfs /tmp --tmpfs /run --tmpfs /home --dir /etc \
-    "${etc[@]}" --ro-bind "$resolv" /etc/resolv.conf \
+    "${etc[@]}" --ro-bind "$resolv" /etc/resolv.conf --dir /etc/bob --ro-bind "$rt/policy.json" /etc/bob/policy.json \
     --ro-bind "$rt/passwd" /etc/passwd --ro-bind "$rt/group" /etc/group \
     --bind "$bob_home" /home/bob \
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \

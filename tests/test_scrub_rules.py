@@ -72,6 +72,16 @@ CAUGHT = [
     # subscriber-identity shapes (Aurora's 23:18 rule)
     ("imsi-imei-shape", j("31015", "0123456789")),                                  # an MCC prefix
     ("imsi-imei-shape", j("490154", "20323", "7518")),                                  # a Luhn IMEI
+    # a digit run near a commit id is still a number; only a run INSIDE a full id is not (PR #6)
+    ("phone-number", j("call ", "202", "555", "0299")),
+    ("phone-number", j("fixed in c0ffee1, call ", "202", "555", "0299")),        # an id beside it
+    ("phone-number", j("tel", "202", "555", "0299")),                            # glued to a word
+    ("phone-number", j("c", "202", "555", "0299", "ab")),                        # abbreviated-id shape
+    ("phone-number", j("CAFE", "202", "555", "0299", "BEEF" * 6, "CC")),         # uppercase: no git id
+    ("phone-number", j("cafe", "202", "555", "0299", "beef" * 6, "ccc")),        # 41 hex: no git id
+    ("phone-number", j("xcafe", "202", "555", "0299", "beef" * 6, "cc")),        # 40 hex glued to a word
+    ("imsi-imei-shape", j("ab", "31015", "0123456789", "cdef" * 5, "abcd")),     # 41 hex: no git id
+    ("phone-number", j('{"task_id":"', "ab", "202", "555", "0299", "cdef" * 5, 'a"}')),  # 33 hex
 ]
 
 PASSED = [
@@ -112,6 +122,13 @@ PASSED = [
     # decorators and escapes (Aurora's 23:18 controls)
     "+@pytest.fixture",
     "@pytest.fixture(scope='module')",
+    # full git object ids hold digit runs by chance: GitHub's pull_request merge message tripped the
+    # phone rule on one (the Oracle, PR #6, 2026-09-29); 40 hex is SHA-1, 64 is SHA-256
+    j("Merge cafe", "202", "555", "0299", "beef" * 6, "cc into ", "0123abcd" * 5),
+    j("This reverts commit ", "cafe", "202", "555", "0299", "beef" * 6, "cc."),
+    j("https://github.com/o/r/commit/", "ab", "31015", "0123456789", "cdef" * 5, "abc"),   # IMSI shape
+    j('    "', "cafe", "202", "555", "0299", "beef" * 12, 'cc": "a 64-hex id",'),
+    j('{"type":"result","task_id":"', "ab", "202", "555", "0299", "cdef" * 5, '"}'),   # Bob's 32 hex
 ]
 
 
@@ -151,7 +168,8 @@ def test_in_config_files_an_unquoted_value_is_a_literal(tmp_path, name, text):
     "ab:" * 66_000,                                 # MAC / IPv6 shapes
     "1" * 200_000,                                  # phone / IMSI shapes
     "x-" * 100_000 + ".lan",
-], ids=["email-run", "dots", "pass", "hex-colons", "digits", "hyphens-lan"])
+    j("cafe", "202", "555", "0299", "beef" * 6, "cc ") * 5_000,   # every match is inside an id
+], ids=["email-run", "dots", "pass", "hex-colons", "digits", "hyphens-lan", "object-ids"])
 def test_long_lines_scan_in_linear_time(line):
     t = time.monotonic()
     scrub(line)
