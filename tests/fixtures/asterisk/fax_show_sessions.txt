@@ -1,0 +1,7 @@
+
+Current FAX Sessions:
+
+Channel                        Tech       FAXID      Type  Operation  State           File(s)                       
+
+0 FAX sessions
+

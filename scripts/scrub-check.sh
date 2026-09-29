@@ -28,7 +28,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # The program travels in a variable, not on stdin: stdin belongs to --stdin callers.
 PROG=$(cat <<'PY'
-import os, re, subprocess, sys
+import json, os, re, subprocess, sys
 
 # Numbers that are PUBLIC test services, used on purpose (documented in BASELINE.md).
 ALLOW_NUMBERS = {
@@ -44,7 +44,9 @@ GENERIC = [
         r"|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2})(?!\d)(?!\.\d)")),
     ("phone-number", re.compile(
         r"(?<![\d.])(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})(?![\d])")),
-    ("email", re.compile(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")),
+    # the local part starts with a letter or digit: "+@pytest.fixture" in a diff is a decorator, while
+    # an address on an added diff line (right after its "+") is still an address: no lookbehind
+    ("email", re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")),
     ("credential", re.compile(
         r"api_password=[A-Za-z0-9][^&\s\"'<>`]{3,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bghp_[A-Za-z0-9]{20,}"
         r"|\bxox[abprs]-[A-Za-z0-9-]{10,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."
@@ -66,6 +68,11 @@ def allowed(rule, m):
             return True
         return dom in ("example.com", "example.org", "example.net", "anthropic.com", "github.com",
                        "users.noreply.github.com") or dom.endswith(".example")
+    if rule == "imsi-imei-shape":
+        # 15 digits alone name no subscriber. Flag the shapes that can: an IMSI starts with a mobile
+        # country code (2xx-7xx, 9xx for international/test networks, 001 for test), and an IMEI
+        # carries a valid Luhn check digit. A made-up "too long" number like 1202555010012xx is neither.
+        return not (s[0] in "2345679" or s.startswith("001") or luhn_ok(s))
     if rule == "private-ipv4":
         # A whole private range in canonical CIDR form (a firewall rule, a sandbox deny list)
         # names no host, so it cannot leak one: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10.
@@ -74,6 +81,16 @@ def allowed(rule, m):
             return True
         return any(n.match(s) for n in DOC_NETS)
     return False
+
+
+def luhn_ok(digits):
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2:
+            d = d * 2 - 9 if d > 4 else d * 2
+        total += d
+    return total % 10 == 0
 
 
 def mask(s):
@@ -105,6 +122,41 @@ def load_deny(require):
     return rules
 
 
+class _Pairs(list):
+    """A JSON object as its raw (key, value) pairs: json.loads would keep only the LAST of two
+    duplicate keys, so a value could hide behind a later copy of its key."""
+
+
+def json_strings(obj):
+    if isinstance(obj, _Pairs):
+        for k, v in obj:
+            yield str(k)
+            yield from json_strings(v)
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            yield str(k)
+            yield from json_strings(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from json_strings(v)
+    elif obj is not None:
+        yield str(obj)
+
+
+def decode_json(name, text):
+    """JSON escapes hide what a value really says (an escaped newline followed by a Python
+    decorator reads as an e-mail address), so .json/.jsonl content is scanned as its decoded
+    strings. Undecodable lines are scanned raw."""
+    docs = text.splitlines() if name.rstrip(">").lower().endswith(".jsonl") else [text]
+    out = []
+    for doc in docs:
+        try:
+            out.extend(json_strings(json.loads(doc, object_pairs_hook=_Pairs)))
+        except ValueError:
+            out.append(doc)
+    return "\n".join(out)
+
+
 def text_of(name, data):
     """Text to scan, or None for a binary we cannot read. PDFs are read via pdftotext:
     a document is exactly where a name and a home address hide."""
@@ -116,7 +168,10 @@ def text_of(name, data):
             return None
     if b"\0" in data[:8192]:
         return None
-    return data.decode("utf-8", "replace")
+    text = data.decode("utf-8", "replace")
+    if name.rstrip(">").lower().endswith((".json", ".jsonl")):
+        return decode_json(name, text)
+    return text
 
 
 def scan(name, text, rules):

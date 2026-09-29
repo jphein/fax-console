@@ -39,6 +39,8 @@ probe fail "read the private deny-list"          "cat \${HOME_REAL:-/home/$(id -
 probe fail "list ~/.ssh of the real home"        "ls /home/$(id -un)/.ssh"
 probe fail "list ~/.claude of the real home"     "ls /home/$(id -un)/.claude"
 probe fail "read /etc/hosts"                     "cat /etc/hosts"
+probe fail "other global CLIs are visible"       "command -v bw || ls $HOME/.npm-global/lib/node_modules/@bitwarden"
+probe work "the bob CLI starts"                  "bob --version"
 probe fail "read the host ssh config"            "cat /etc/ssh/ssh_config"
 probe fail "a sibling repository is visible"     "ls /home/$(id -un)/Projects/fax"
 # writes: the frozen baseline, git internals, the guard and its rules are read-only

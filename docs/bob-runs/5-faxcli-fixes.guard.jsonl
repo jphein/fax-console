@@ -1,0 +1,51 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "3629 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Read AGENTS.md and understand project constraints\\n[ ] Fix #1: SshTransport._ssh command quoting (shlex.quote each arg)\\n[ ] Fix #2: LocalTransport sudo skip for asterisk user (inject"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/fax/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/conftest.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_unit.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_golden.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./pyproject.toml\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/models.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1 | tail -30\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check . 2>&1 | head -50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check faxcli/ tests/ 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md and understand project constraints\\n[-] Fix #1: SshTransport._ssh command quoting (shlex.quote each arg)\\n[ ] Fix #2: LocalTransport sudo skip for asterisk user (inject"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./faxcli/transport.py\", \"line_count\": 256, \"content\": \"\\\"\\\"\\\"faxcli.transport \\u2014 the one I/O seam.\\n\\nDefines the Reading result type, the Transport protocol,"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxcli.cli \\u2014 argparse entry point, thin I/O orchestration.\\n\\nSubcommands: status, log, send, test.\\nAll pure logic is in the other faxcli.* modules.\\n\\\"\\\"\\\"\\nfrom __future__ i"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxcli/__main__.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\nfrom faxcli.cli import main\\nimport sys\\n=======\\nimport sys\\n\\nfrom faxcli.cli import mai"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cdr.py\", \"range\": \"1-35\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxcli/cdr.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:31\\n-------\\n            out.append(dict(zip(CDR_COLS, r)))\\n=======\\n            out.append(dict(zip(CDR_C"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:6\\n-------\\nfrom __future__ import annotations\\n\\nfrom dataclasses import dataclass, field\\nfrom collections import OrderedDict\\nfrom typing import Any\\n=======\\n"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"conftest.py \\u2014 shared fixtures and subprocess/os.system guard.\\n\\nAny test that accidentally reaches subprocess.run, subprocess.Popen, or\\nos.system will fail immediately rather"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:3\\n-------\\nbuild-backend = \\\"setuptools.backends.legacy:build\\\"\\n=======\\nbuild-backend = \\\"setuptools.build_meta\\\"\\n>>>>>>> REPLACE\\n\\n<<<<<<< SEARCH\\n:start_li"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:17\\n-------\\nimport types\\nfrom pathlib import Path\\n=======\\nfrom pathlib import Path\\n>>>>>>> REPLACE\\n\\n<<<<<<< SEARCH\\n:start_line:221\\n-------\\n        for i"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_unit.py\", \"range\": \"93-97\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:93\\n-------\\nFailed FAXes         : 0\\n\\nSpandsp G.711       \\nSuccess              : 3\\n=======\\nFailed FAXes         : 0\\n\\nSpandsp G.711\\nSuccess              "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:28\\n-------\\nclass TestGoldenStatus:\\n    @pytest.fixture(scope=\\\"class\\\")\\n    def golden(self):\\n        return json.loads((GOLDEN / \\\"status.json\\\").read_text("}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check faxcli/ tests/ 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:11\\n-------\\nfrom dataclasses import dataclass\\nfrom pathlib import Path\\nfrom typing import Callable, Protocol\\n=======\\nimport contextlib\\nfrom collections.abc "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check faxcli/ tests/ 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:8\\n-------\\nimport os\\nimport shlex\\nimport subprocess\\nimport contextlib\\nfrom collections.abc import Callable\\n=======\\nimport contextlib\\nimport os\\nimport shl"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check faxcli/ tests/ 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\", \"range\": \"308,375\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\", \"range\": \"290,320\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:291\\n-------\\n    def render(self, pdf: str, tif: str) -> Reading:\\n        \\\"\\\"\\\"Write a minimal 1-page TIFF to the given path (no real gs needed).\\\"\\\"\\\"\\n      "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:346\\n-------\\n        from faxcli.cli import main\\n        from faxcli.transport import ReplayTransport\\n\\n        buf_new = io.StringIO()\\n        rc = main(\\n  "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"Tests for transport fixes and send-path behaviour (items 1\\u20134 of the review).\\n\\nCovers:\\n  1. SshTransport._ssh quotes every remote argument with shlex.quote.\\n  2. LocalTransp"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"160,185\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"185,230\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:192\\n-------\\n    render_reading = transport.render(a.pdf, localtif)\\n    if not render_reading.ok:\\n        print(f\\\"error: render failed: {render_reading.why}\\\""}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && git stash && .venv/bin/ruff check . 2>&1 | head -20\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && git diff HEAD -- pyproject.toml 2>&1 | head -20\"}"}

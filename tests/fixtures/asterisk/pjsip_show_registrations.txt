@@ -1,0 +1,8 @@
+
+ <Registration/ServerURI..............................>  <Auth....................>  <Status.......>
+==========================================================================================
+
+ voipms/sip:pop1.example.com                             voipms-auth                 Registered        (exp. 767s)
+
+Objects found: 1
+

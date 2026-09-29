@@ -1,0 +1,69 @@
+
+ Endpoint:  <Endpoint/CID.....................................>  <State.....>  <Channels.>
+    I/OAuth:  <AuthId/UserName...........................................................>
+        Aor:  <Aor............................................>  <MaxContact>
+      Contact:  <Aor/ContactUri..........................> <Hash....> <Status> <RTT(ms)..>
+  Transport:  <TransportId........>  <Type>  <cos>  <tos>  <BindAddress..................>
+   Identify:  <Identify/Endpoint.........................................................>
+        Match:  <criteria.........................>
+    Channel:  <ChannelId......................................>  <State.....>  <Time.....>
+        Exten: <DialedExten...........>  CLCID: <ConnectedLineCID.......>
+==========================================================================================
+
+ Endpoint:  2001/2001                                            Unavailable   0 of inf
+     InAuth:  2001/2001
+        Aor:  2001                                               1
+
+ Endpoint:  2002/2002                                            Unavailable   0 of inf
+     InAuth:  2002/2002
+        Aor:  2002                                               1
+
+ Endpoint:  2003/2003                                            Unavailable   0 of inf
+     InAuth:  2003/2003
+        Aor:  2003                                               1
+
+ Endpoint:  2004/2004                                            Not in use    0 of inf
+     InAuth:  2004/2004
+        Aor:  2004                                               1
+      Contact:  2004/sip:2004@192.0.2.124:38540;pn-prid=REDACTED d51c4fc4c8 Avail       431.894
+
+ Endpoint:  2005/2005                                            Unavailable   0 of inf
+     InAuth:  2005/2005
+        Aor:  2005                                               1
+
+ Endpoint:  2006/2006                                            Unavailable   0 of inf
+     InAuth:  2006/2006
+        Aor:  2006                                               1
+
+ Endpoint:  2007/2007                                            Not in use    0 of inf
+     InAuth:  2007/2007
+        Aor:  2007                                               1
+      Contact:  2007/sip:2007@192.0.2.131:5080              29d40da7be Avail         3.700
+
+ Endpoint:  2008/1003                                            Unavailable   0 of inf
+     InAuth:  2008/2008
+        Aor:  2008                                               1
+
+ Endpoint:  cell-bridge                                          Not in use    0 of inf
+        Aor:  cell-bridge                                        0
+      Contact:  cell-bridge/sip:127.0.0.1:5069               df71a9f169 NonQual        -nan
+   Identify:  cell-bridge/cell-bridge
+        Match: 127.0.0.1/32
+
+ Endpoint:  voipms                                               Not in use    0 of inf
+    OutAuth:  voipms-auth/000000_house
+        Aor:  voipms                                             0
+      Contact:  voipms/sip:pop1.example.com                4470b052f7 Avail        15.021
+  Transport:  transport-udp             udp      0      0  0.0.0.0:5060
+   Identify:  voipms/voipms
+        Match: 203.0.113.41/32
+
+ Endpoint:  voipms-fax                                           Not in use    0 of inf
+    OutAuth:  voipms-auth/000000_house
+        Aor:  voipms                                             0
+      Contact:  voipms/sip:pop1.example.com                4470b052f7 Avail        15.021
+  Transport:  transport-udp             udp      0      0  0.0.0.0:5060
+
+
+Objects found: 11
+

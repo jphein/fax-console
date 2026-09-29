@@ -58,6 +58,7 @@ ALLOWED = [
     cmd(".venv/bin/python -m pytest tests/test_x.py -q"),
     cmd(".venv/bin/ruff check faxcli tests"),
     cmd("git diff --stat && git status --short"),
+    cmd("git log --oneline -5 && git show HEAD --stat"),
     cmd("grep -n fax_cli legacy/console/telephony-console.py | head"),
     cmd("wc -l legacy/fax/fax/cli.py"),
     cmd("python3 -m py_compile legacy/console/telephony-console.py"),
@@ -73,6 +74,10 @@ REFUSED = [
     cmd("echo x; curl http://example.com"),
     cmd("git push origin main"),
     cmd("git commit -am wip"),
+    cmd("git stash"),
+    cmd("git restore faxcli/cli.py"),
+    cmd("git -c core.pager=less log"),
+    cmd("git -C .. status"),
     cmd("pip install requests"),
     cmd("python3 -m pip install ruff"),
     cmd("sudo true"),
@@ -163,4 +168,18 @@ def test_prompt_gate_outside_sandbox_fails_closed_without_deny_list(tmp_path):
 def test_scrub_check_canonical_blocks(text, expect, env):
     r = subprocess.run([SCRUB, "--stdin", "t"], input=text.encode(), capture_output=True, env=env, timeout=30,
                        check=False)
+    assert r.returncode == expect, r.stdout.decode()
+
+
+# The independent review of PR #4 found two false negatives in the JSON-aware scan; these pin the fixes.
+@pytest.mark.parametrize("name,payload,expect", [
+    ("dup.jsonl", j('{"note":"', BAD_PHONE, '","note":"ok"}'), 1),          # duplicate key hid a value
+    ("dup.json", j('{"note":"', BAD_PHONE, '","note":"ok"}'), 1),
+    ("diff.jsonl", j('{"diff":"+', BAD_EMAIL, '"}'), 1),                    # an added diff line
+    ("deco.jsonl", j('{"diff":"x\\n@pytest', '.fixture\\n+@pytest', '.fixture(scope=\\"module\\")"}'), 0),
+])
+def test_scrub_check_json_false_negatives(tmp_path, env, name, payload, expect):
+    f = tmp_path / name
+    f.write_text(payload + "\n")
+    r = subprocess.run([SCRUB, "--paths", str(f)], capture_output=True, env=env, timeout=30, check=False)
     assert r.returncode == expect, r.stdout.decode()

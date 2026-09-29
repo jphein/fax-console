@@ -62,12 +62,23 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 | 1 | 9/28 22:15 | [Modernization analysis](bob-runs/1-analysis.prompt.md) | [`docs/analysis.md`](analysis.md) §1–§8, 451 lines | 26 | 3.078 | Kept verbatim; 7 corrections and 6 added findings in §9 |
 | 2 | 9/28 22:34 | [Isolation check](bob-runs/2-isolation-check.prompt.md) | none: the prompt gate refused the prompt, failing closed, because the private deny-list was not reachable from the clean home | 0 | 0 | Showed the gate fails closed; led to the sandbox's split between generic rules inside and the private list outside |
 | 3 | 9/28 22:44 | [Sandbox check](bob-runs/3-sandbox-check.prompt.md) | "ok", from inside the OS sandbox | 0 | 0.021 | Proved Bob works sandboxed; its prompt now lists only Bob's own six skills |
+| 4 | 9/28 23:02 | [The faxcli package](bob-runs/4-faxcli-package.prompt.md) | `faxcli/` (9 modules, ~905 lines), `pyproject.toml`, 121 tests (unit, golden, characterization) | 58 | 6.027 | Architecture kept. Review found 2 production regressions and 5 more defects (run 5) |
+| 5 | 9/28 23:26 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
 
-**Running total: 3.21 Bobcoins** (after run 3).
+**Running total: 14.40 Bobcoins** (after run 5). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
 measurably needs more, and any raise is recorded in this ledger with its reason.
+
+**Cap raised for run 4 (the faxcli package): 6.** Run 1 reached 3.08 on reading alone: 26 tool
+calls, ~3,300 legacy lines. Run 4 has to read the analysis, the CLI and the fixtures, write about
+1,000 lines of code and tests, and iterate on pytest until green. A run stopped by its cap
+mid-way would have to re-read everything on resume, which costs more than the headroom.
+
+**Cap for run 5 (review fixes): 5.** Run 4 spent its full 6 and stopped before its own lint and
+full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
+before it edits them. 3 would likely stop mid-fix again.
 
 ## Run notes
 
@@ -95,10 +106,66 @@ measurably needs more, and any raise is recorded in this ledger with its reason.
 - **Cost note.** Reading about 3,300 lines of legacy code was most of the 3.08. Later runs
   work on the smaller package and should cost less per step.
 
+### Runs 4 and 5: the package
+- **What Bob did.** Run 4 wrote the whole package in one pass:
+  - pure parsers (`numbers`, `asterisk`, `cdr`, `outcome`, `tiff`);
+  - frozen dataclasses that emit the legacy JSON keys in the legacy order;
+  - one I/O seam, `transport.py`, with a `Reading(ok, text, why)` result, local, ssh and replay
+    transports, and the deliberate change (an unreadable PBX reports `ok: false` with `why` and
+    `unread`);
+  - 121 tests: unit tests; golden tests against what the real CLI printed from the real PBX; and
+    characterization tests that run the frozen legacy code and the new code on the same fixtures.
+
+  Run 4 spent its cap before its own lint pass. Run 5 fixed everything the review found and added
+  `tests/test_transport.py`.
+- **Kept.** The architecture, `Reading`, the replay transport, the golden and characterization
+  tests, and the deliberate change. The commit history shows run 4 exactly as Bob wrote it
+  (`feat(faxcli)…by Bob (run 4), before review`), then run 5's fixes.
+- **Rejected or fixed, with reasons.**
+  - **ssh remote commands were not quoted.** `" ".join(argv)` makes the remote shell split
+    `fax show stats`, so Asterisk would run `-rx fax`. The review caught it; replay tests cannot
+    see it. Fixed with `shlex.quote`, as legacy did, and pinned by argv tests.
+  - **sudo even as the `asterisk` user,** which is how the console runs on the PBX. Every read
+    would have failed. Fixed with legacy's rule behind an injectable check.
+  - **`FAX_EXCHANGE_HOST` was ignored.** Fixed. Then run 5's test for it turned out to be vacuous:
+    it passed the host explicitly. The reviewer fixed it, and a perturbation that pins the default
+    turns the test red.
+  - **`send` bypassed the seam,** so dry-run tests wrote into `/var/spool`. Moved behind the
+    transport.
+  - **A test-page default that pointed at the old document path.** Now the neutral
+    `demo/test-page.pdf`.
+  - **An invented build backend** (`setuptools.backends.legacy:build`, caught by the independent
+    review). Now `setuptools.build_meta`.
+  - **ruff linted the frozen baseline.** Excluded.
+- **Guard moments.**
+  - The content scan refused one of Bob's test files over a 15-digit literal. Bob adapted, and the
+    rule was later sharpened to real IMSI and IMEI shapes.
+  - In run 5, Bob ran `git stash`. The sandbox's read-only `.git` refused it ("Unable to create
+    .git/index.lock: Read-only file system"), so the owner's uncommitted work was never at risk.
+    The hook guard now refuses every git subcommand that isn't read-only, which gives the same
+    answer earlier.
+- **The independent review of the PR** (a read-only reviewer agent) found three more, all fixed before merge:
+  - **A failed `sudo install` was reported as success.** Bob's code. `spool()` discarded the result, so
+    `send` would dial a TIFF that never reached the spool. Legacy aborted there. Fixed by the reviewer,
+    with two tests, each proven by a perturbation.
+  - **Two false negatives in the scrub gate's new JSON mode**, both the orchestrator's own: a value
+    hidden behind a duplicate JSON key, and an address right after a diff's "+". Fixed with regression
+    cases.
+  - **The conftest subprocess guard could be swallowed** by production code's `except Exception`. It
+    now uses `pytest.fail`, a positive control proves it fires, and a blind half-probe is fixed.
+- **Kept for week 2** (review items that are real but not blocking):
+  - legacy behaviours the port kept on purpose, now candidates for deliberate fixes like finding A:
+    a failed originate still reports `ok: true`; a failed "before" stats read counts the delta from
+    zero; an empty CDR `file` matches any send;
+  - hardening: `mktemp` for temp paths, `--` before the ssh host, the ignored CDR `limit` on the local
+    path.
+- **Cost.** 6.03 and 5.16. Each run spent its full cap. Fresh runs re-read the package, so
+  targeted follow-ups by the reviewer are cheaper for small fixes.
+
 ## Who wrote what
 | Author | What |
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
-| **Bob** | `docs/analysis.md` §1–§8. |
+| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up. |
 | Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
