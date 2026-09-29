@@ -1,0 +1,41 @@
+
+FAX Statistics:
+---------------
+
+Current Sessions     : 0
+Reserved Sessions    : 0
+Transmit Attempts    : 4
+Receive Attempts     : 0
+Completed FAXes      : 3
+Failed FAXes         : 0
+
+Spandsp G.711       
+Success              : 3
+Switched to T.38     : 0
+Call Dropped         : 0
+No FAX               : 0
+Negotiation Failed   : 0
+Train Failure        : 0
+Retries Exceeded     : 0
+Protocol Error       : 0
+TX Protocol Error    : 0
+RX Protocol Error    : 0
+File Error           : 0
+Memory Error         : 0
+Unknown Error        : 0
+
+Spandsp T.38        
+Success              : 0
+Call Dropped         : 0
+No FAX               : 0
+Negotiation Failed   : 0
+Train Failure        : 0
+Retries Exceeded     : 0
+Protocol Error       : 0
+TX Protocol Error    : 0
+RX Protocol Error    : 0
+File Error           : 0
+Memory Error         : 0
+Unknown Error        : 0
+
+

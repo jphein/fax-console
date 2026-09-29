@@ -1,0 +1,4 @@
+Module                         Description                              Use Count  Status      Support Level
+res_fax.so                     Generic FAX Applications                 1          Running              core
+res_fax_spandsp.so             Spandsp G.711 and T.38 FAX Technologies  0          Running          extended
+2 modules loaded
