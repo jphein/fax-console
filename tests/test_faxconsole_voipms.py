@@ -96,17 +96,24 @@ def instant_sleep():
 # ---------------------------------------------------------------------------
 
 class TestScrub:
+    # The two mechanisms are tested apart. `api_password=` is rewritten ALWAYS, so a test string
+    # carrying that key passes even with value replacement deleted: these strings do not carry it.
     def test_value_replaced(self):
-        secret = "fake-password-xyz"
-        result = _scrub(f"error calling api_password={secret}&foo=bar", secret)
+        import urllib.parse
+        secret = "fake pass/word-xyz"          # its encoded form differs, so only the
+        assert urllib.parse.quote(secret, safe="") != secret   # value replacement can match
+        result = _scrub(f"error: the server echoed {secret} back", secret)
         assert secret not in result
+        assert result == "error: the server echoed *** back"
 
     def test_percent_encoded_replaced(self):
         import urllib.parse
-        secret = "fake-password-xyz"
+        secret = "fake pass/word&x+y"          # characters that URL encoding changes
         encoded = urllib.parse.quote(secret, safe="")
-        result = _scrub(f"url: https://example.com/?api_password={encoded}", secret)
+        assert encoded != secret               # else this compares the value with itself
+        result = _scrub(f"url: https://example.com/rest.php?p={encoded}&x=1", secret)
         assert encoded not in result
+        assert result == "url: https://example.com/rest.php?p=***&x=1"
 
     def test_api_password_always_rewritten(self):
         """api_password= is rewritten even when the secret is too short to value-replace."""
@@ -220,7 +227,7 @@ class TestNoCredInError:
         )
 
     def test_plain_password_not_in_error(self, tmp_path):
-        pw = "fake-pass-scrub-plain99"
+        pw = "fake-pass scrub/plain99"      # encoded form differs: value replacement holds alone
 
         def _bad_http(method, params):
             raise RuntimeError(f"connection failed with {pw}")
@@ -232,11 +239,12 @@ class TestNoCredInError:
 
     def test_percent_encoded_password_not_in_error(self, tmp_path):
         import urllib.parse
-        pw = "fake-pass-scrub-enc99"
+        pw = "fake-pass scrub/enc&99"       # URL encoding changes it
         encoded = urllib.parse.quote(pw, safe="")
+        assert encoded != pw
 
-        def _bad_http(method, params):
-            raise RuntimeError(f"URL was https://x.com/?api_password={encoded}")
+        def _bad_http(method, params):       # no api_password= key: value replacement must hold alone
+            raise RuntimeError(f"URL was https://x.com/rest.php?p={encoded}")
 
         p = self._make_poller(tmp_path, pw, _bad_http)
         p._refresh_once()
@@ -246,16 +254,25 @@ class TestNoCredInError:
         assert encoded not in err
 
     def test_cause_suppressed(self, tmp_path):
+        """A printed traceback of the error never carries the original, and so never the password.
+
+        `__cause__ is None` alone proves nothing: implicit chaining also leaves it None, and the
+        original then prints as "During handling of the above exception...". `from None` is what
+        suppresses that, so the test formats the traceback, as a log would.
+        """
+        import traceback
         pw = "fake-pass-cause99"
 
         def _bad_http(method, params):
-            raise RuntimeError(f"cause: {pw}")
+            raise OSError(f"urlopen failed for ?p={pw}")
 
         p = self._make_poller(tmp_path, pw, _bad_http)
-        # _call should raise RuntimeError with from None suppression
         with pytest.raises(RuntimeError) as exc_info:
             p._call("getBalance", "u", pw)
-        assert exc_info.value.__cause__ is None
+        exc = exc_info.value
+        assert exc.__cause__ is None and exc.__suppress_context__ is True
+        printed = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        assert pw not in printed
 
     def test_http_error_branch(self, tmp_path):
         pw = "fake-pass-http403"
@@ -808,6 +825,11 @@ class TestCharacterizationFresh:
     def test_days_to_billing_agrees(self):
         assert self._leg_snap["days_to_billing"] == self._new_snap["days_to_billing"]
 
+    def test_whole_snapshot_agrees(self):
+        """Every field, not a chosen few: the per-field tests above skip register_ip,
+        register_agent, did_routing, the calls/time counters, error and fetched_at."""
+        assert self._new_snap == self._leg_snap
+
 
 class TestCharacterizationStale:
     """Agree with the frozen legacy poller at a timestamp where data is stale."""
@@ -865,6 +887,9 @@ class TestCharacterizationStale:
     def test_months_left_agrees_stale(self):
         assert self._leg_snap["months_left"] == self._new_snap["months_left"]
 
+    def test_whole_snapshot_agrees_stale(self):
+        assert self._new_snap == self._leg_snap
+
 
 # ---------------------------------------------------------------------------
 # Item 2: build() tests
@@ -884,6 +909,13 @@ class TestBuildReplayMode:
             # The poller has just started; data may not have arrived yet, but
             # the route returns a valid snapshot dict.
             assert "balance" in body or "stale" in body
+            # The replay poller really runs on the fixture HTTP: one refresh, on the calling
+            # thread, reads the synthesized fixtures (the background loop waits 2 s first).
+            config.voipms._refresh_once()
+            snap = json.loads(handle("GET", "/api/voipms", {}, b"", config).body)
+            assert snap["error"] is None
+            assert snap["balance"] == 23.55 and snap["registered"] is True
+            assert snap["did_description"] == "House fax line"
         finally:
             cleanup()
 
@@ -904,8 +936,10 @@ class TestBuildReplayMode:
         from faxconsole.__main__ import build
 
         config, cleanup = build(["--replay", "tests/fixtures"])
-        assert created_dirs  # a temp dir was created
-        tmpdir = created_dirs[0]
-        assert Path(tmpdir).is_dir()  # still exists while running
-        cleanup()
+        try:
+            assert created_dirs  # a temp dir was created
+            tmpdir = created_dirs[0]
+            assert Path(tmpdir).is_dir()  # still exists while running
+        finally:
+            cleanup()                     # a failed assert must not leave the poller running
         assert not Path(tmpdir).exists()  # removed after cleanup
