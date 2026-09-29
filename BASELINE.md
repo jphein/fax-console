@@ -126,6 +126,9 @@ above), and the tag moved with it. Nothing else changed: the source commits, lin
 every other byte are the same. History has not been rewritten since, and will not be; later
 fixes go forward in new commits.
 
+The repository itself was recreated on 2026-09-28 at 23:06 PDT, with the same history, to drop
+pull-request refs that still pointed at the pre-rewrite commits.
+
 ## License
 
 AGPL-3.0-or-later. The fax CLI was relicensed by its owner on 2026-09-27. The console
