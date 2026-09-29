@@ -11,7 +11,10 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _block_real_subprocesses(monkeypatch, request):
-    """Raise AssertionError if test code calls subprocess.run, subprocess.Popen, or os.system.
+    """Fail the test if its code calls subprocess.run, subprocess.Popen, or os.system.
+
+    pytest.fail raises a BaseException, so production code's `except Exception` (the transports
+    turn errors into failed Readings) cannot swallow it: a guard that can be caught cannot fail.
 
     Tests marked ``allow_subprocesses`` may install their own fake for
     subprocess.run — but Popen and os.system remain blocked even for them.
@@ -19,17 +22,17 @@ def _block_real_subprocesses(monkeypatch, request):
     fixtures and are excluded entirely.
     """
     # Skip the guard for tests in test_sandbox_guard.py (they run guards themselves)
-    if "test_sandbox_guard" in request.fspath.basename:
+    if request.fspath.basename == "test_sandbox_guard.py":
         yield
         return
 
     def _blocked_popen(*args, **kwargs):
-        raise AssertionError(
+        pytest.fail(
             f"subprocess.Popen called unexpectedly in test {request.node.nodeid!r}: {args!r}"
         )
 
     def _blocked_system(cmd):
-        raise AssertionError(
+        pytest.fail(
             f"os.system called unexpectedly in test {request.node.nodeid!r}: {cmd!r}"
         )
 
@@ -43,7 +46,7 @@ def _block_real_subprocesses(monkeypatch, request):
         return
 
     def _blocked_run(*args, **kwargs):
-        raise AssertionError(
+        pytest.fail(
             f"subprocess.run called unexpectedly in test {request.node.nodeid!r}: {args!r}"
         )
 
