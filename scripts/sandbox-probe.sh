@@ -2,7 +2,8 @@
 # sandbox-probe.sh — prove scripts/bob-sandbox.sh contains what it claims to (positive controls).
 # Every "must fail" probe is something an agent inside the sandbox might try; every "must work"
 # probe is something legitimate work needs. Exit 0 only if all of them come out as expected.
-# Run on the workstation (needs bwrap + sudo systemd-run); it is not a CI test.
+# Run on the workstation (needs bwrap + sudo systemd-run) for the full proof. CI's "sandbox" job runs it too, against
+# a real bubblewrap; there a few probes are only vacuously true, since their targets do not exist on a runner.
 set -uo pipefail
 root=$(git rev-parse --show-toplevel); cd "$root"
 pass=0; fail=0
@@ -40,7 +41,13 @@ probe fail "list ~/.ssh of the real home"        "ls /home/$(id -un)/.ssh"
 probe fail "list ~/.claude of the real home"     "ls /home/$(id -un)/.claude"
 probe fail "read /etc/hosts"                     "cat /etc/hosts"
 probe fail "other global CLIs are visible"       "command -v bw || ls $HOME/.npm-global/lib/node_modules/@bitwarden"
-probe work "the bob CLI starts"                  "bob --version"
+# CI runs every probe against a real bubblewrap (the "sandbox" job) but never installs the proprietary Bob CLI,
+# so that one probe is a declared skip there; the job asserts it is the only skip.
+if [ "${SANDBOX_PROBE_CI:-}" = 1 ]; then
+  echo "skip   must work  the bob CLI starts (CI: the proprietary Bob CLI is never installed there)"
+else
+  probe work "the bob CLI starts"                  "bob --version"
+fi
 probe fail "read the host ssh config"            "cat /etc/ssh/ssh_config"
 probe fail "a sibling repository is visible"     "ls /home/$(id -un)/Projects/fax"
 # writes: the frozen baseline, git internals, the guard and its rules are read-only
@@ -56,7 +63,28 @@ probe fail "rewrite the Bobcoin ledger"          "echo x >> docs/bob-usage.md"
 probe fail "replace the ledger by a rename"      "cp docs/bob-usage.md x.tmp && mv -f x.tmp docs/bob-usage.md; r=\$?; rm -f x.tmp; exit \$r"
 probe fail "forge a run record"                  "echo x > docs/bob-runs/probe.jsonl"
 probe fail "replace docs/ by a rename"           "mv docs docs.old && { mv docs.old docs; exit 0; }"
-probe fail "write outside the repo"              "echo x > /home/bob/../probe; echo x > /usr/probe"
+# Writes outside the repo must never reach the host. The old form took its result from `echo x > /usr/probe`, which
+# the invoking uid cannot write on the host either, so it could never fail (the Oracle, PR #17). Now the writes are
+# attempted inside, and the HOST is checked afterwards.
+# A marker written into the repo (a legitimate write) proves the same sandbox run really made the attempts: a sandbox
+# that failed to start must not pass (the Oracle, PR #17).
+out_name=".sandbox-probe-outside-$$"
+ran="$root/.sandbox-probe-ran-$$"
+outside=("$root/../$out_name" "$HOME/$out_name" "/tmp/$out_name")
+for f in "${outside[@]}" "$ran"; do
+  if [ -e "$f" ] || [ -L "$f" ]; then echo "sandbox-probe: $f exists before the probe" >&2; exit 2; fi
+done
+scripts/bob-sandbox.sh bash -c 'm=$1; shift; for f in "$@"; do echo x 2>/dev/null > "$f"; done; echo ran > "$m"' _ \
+  "$ran" "${outside[@]}" >/dev/null 2>&1
+leaked=""
+for f in "${outside[@]}"; do
+  if [ -e "$f" ] || [ -L "$f" ]; then leaked="$leaked $f"; rm -f "$f"; fi
+done
+if [ ! -f "$ran" ]; then r=WRONG; fail=$((fail+1)); leaked=" (the sandbox never ran the attempt)"
+elif [ -z "$leaked" ]; then r=ok; pass=$((pass+1))
+else r=WRONG; fail=$((fail+1)); fi
+rm -f "$ran"
+printf '%-6s must fail  %s\n' "$r" "write outside the repo (checked on the host${leaked:+; leaked:$leaked})"
 # paths the host later executes or sends are read-only too (PR #8 S2)
 for d in docs/deck docs/video demo scratch; do
   if [ -d "$d" ]; then probe fail "write into $d/ (the host runs or sends it)" "echo x > $d/probe"

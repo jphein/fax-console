@@ -53,3 +53,63 @@ jobs:
       - name: ruff (the top-level legacy/ is the frozen baseline and is not linted)
         run: ruff check . --extend-exclude ./legacy
       - run: python -m pytest -q
+  sandbox:
+    # Every isolation probe in scripts/sandbox-probe.sh, run against the REAL scripts/bob-sandbox.sh with a real
+    # bubblewrap. Until now these ran only by hand on the workstation (measured feasible 2026-09-29: run 36628864083).
+    # The runner's bubblewrap is Ubuntu 24.04's (0.9.0), not the workstation's build, so this proves the sandbox
+    # script, not a particular bwrap. The counts are asserted exactly, so a probe that silently stops running fails.
+    name: sandbox isolation (real bubblewrap)
+    runs-on: ubuntu-24.04          # pinned: the AppArmor user-namespace step below is specific to this image
+    timeout-minutes: 15
+    env:
+      EXPECT_OK: "51"              # every probe but the one declared CI skip; bump it when a probe is added
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bubblewrap, and unprivileged user namespaces for it (24.04's AppArmor restricts them; disposable runner)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: the repo's venv (a probe runs its test tools) and a placeholder at Bob's install path (bound, never run)
+        run: |
+          python3 -m venv .venv && .venv/bin/pip install -q pytest "ruff==0.16.9"
+          mkdir -p "$HOME/.npm-global/lib/node_modules/bobshell/dist"
+          : > "$HOME/.npm-global/lib/node_modules/bobshell/dist/bob.js"
+      - name: real targets for the must-fail probes (a stock runner lacks them, so those probes would pass vacuously)
+        run: |
+          mkdir -p ~/.ssh ~/.claude ~/Projects/fax ~/.npm-global/lib/node_modules/@bitwarden ~/.config/fax-console
+          printf 'zz-ci-placeholder-zz\n' > ~/.config/fax-console/scrub-deny.txt   # fictional; never a real value
+          touch ../.sandbox-probe-sibling                                         # so ".." holds more than the repo
+      - name: every isolation probe against the real sandbox
+        run: |
+          set -o pipefail                         # run steps are `bash -e` without it: keep the probe script's own code
+          eval "$(ssh-agent -s)" > /dev/null      # a real agent, so the "ssh agent is reachable" probe can leak one
+          [ -S "$SSH_AUTH_SOCK" ] || { echo "::error::ssh-agent did not start"; exit 1; }
+          rc=0
+          SANDBOX_PROBE_CI=1 timeout 600 bash scripts/sandbox-probe.sh | tee probe.out || rc=$?
+          ok=$(grep -c '^ok ' probe.out || true)
+          wrong=$(grep -c '^WRONG' probe.out || true)
+          skips=$(grep '^skip' probe.out || true)
+          nskip=$(printf '%s' "$skips" | grep -c . || true)
+          echo "probe script exit $rc; probes as expected: $ok (expected $EXPECT_OK); WRONG: $wrong; skips ($nskip): ${skips:-none}"
+          {
+            echo "### Sandbox isolation (real bubblewrap): what this job proves"
+            echo "- Probe script exit $rc; $ok of $EXPECT_OK probes as expected; WRONG $wrong; skips $nskip (only the Bob-CLI skip is allowed)."
+            echo "- **Vacuous on a runner** (the target does not exist outside the sandbox either): the 4 ssh-to-PBX probes, and"
+            echo "  the network-deny probes for the LAN ranges (10/8, 192.168/16), CGNAT (100.64/10) and global IPv6."
+            echo "  Loopback depends on the runner's sshd. **This job does not test IPAddressDeny, nor the PBX ssh block.**"
+            echo "- The workstation run of scripts/sandbox-probe.sh proves loopback (v4, v6), the tailnet/CGNAT address and, with"
+            echo "  PROBE_PBX_HOST set, the PBX ssh block. Its LAN and global-IPv6 targets are unreachable there too, so those probes"
+            echo "  are vacuous everywhere today (issue #18: runtime-derived targets with outside controls)."
+            echo "- Made real by this job's fixtures: ~/.ssh, ~/.claude, ~/Projects/fax, @bitwarden, the deny-list, the directory"
+            echo "  above the repo; \"write outside the repo\" is checked on the host. The ssh-agent probe catches only an explicit"
+            echo "  passthrough (sudo's env_reset strips the variable before bwrap's --clearenv)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$wrong" -eq 0 ] || { echo "::error::a sandbox probe came out WRONG"; exit 1; }
+          [ "$ok" -eq "$EXPECT_OK" ] || { echo "::error::expected $EXPECT_OK probes as expected, got $ok"; exit 1; }
+          [ "$(printf '%s\n' "$skips" | grep -c .)" -eq 1 ] && printf '%s' "$skips" | grep -q 'the bob CLI starts' \
+            || { echo "::error::only the declared Bob-CLI skip may skip; got: ${skips:-none}"; exit 1; }
+          [ "$rc" -eq 0 ] || { echo "::error::sandbox-probe.sh exited $rc (a crash, a timeout, or a WRONG)"; exit 1; }
+          grep -qx "sandbox-probe: $EXPECT_OK as expected, 0 wrong" probe.out \
+            || { echo "::error::no final summary line: the probe script did not reach its end"; exit 1; }
