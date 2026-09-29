@@ -61,7 +61,10 @@ def test_the_policy_and_pinned_requests_pass(tmp_path):
 @pytest.mark.parametrize("name,lines,why", [
     ("no-policy", req(PINNED), "no policy-loaded line"),                         # Aurora's policy-off run
     ("off-origin", POLICY + req(PINNED) + req("https://attacker.example"), "2 off-origin"),
-    ("userinfo", POLICY + req(PINNED + "@attacker.example"), "2 off-origin"),    # host read after user-info
+    ("userinfo", POLICY + req(PINNED + "@attacker.example"), "2 off-origin"),    # any user-info: "?"
+    ("backslash-at",                                                             # WHATWG: "\\" is "/"
+     POLICY + req("https://elsewhere.example\\@api.us-east.bob.ibm.com"), "2 off-origin"),
+    ("tab-in-host", POLICY + req(PINNED + "\t"), "2 off-origin"),                  # fail closed
     ("plain-http", POLICY + req("http://api.us-east.bob.ibm.com"), "2 off-origin"),
     ("other-port", POLICY + req(PINNED + ":8443"), "2 off-origin"),
     ("no-url", POLICY + req(PINNED) + [line("Gateway", "HTTP request", method="GET")], "1 off-origin"),
@@ -74,6 +77,22 @@ def test_a_missing_or_broken_lock_fails(tmp_path, name, lines, why):
     r = check(logdir(tmp_path, *lines))
     assert r.returncode == 3 and "FAILED" in r.stdout and why in r.stdout, r.stdout
     assert "/inference" not in r.stdout
+
+
+def test_an_other_origin_is_printed_as_a_hash_never_as_its_host(tmp_path):
+    """A hostname can carry data (the Oracle, #7): only the pinned origin is printed verbatim."""
+    other = "https://leaky-label-0123.attacker.example"
+    r = check(logdir(tmp_path, *POLICY, *req(PINNED), *req(other)))
+    assert r.returncode == 3 and "<other origin " in r.stdout, r.stdout
+    assert f", {len(other)} chars> x2" in r.stdout
+    assert "attacker" not in r.stdout and "leaky" not in r.stdout and f"{PINNED} x2" in r.stdout
+
+
+def test_an_ipv6_origin_keeps_its_brackets(tmp_path):
+    v6 = "https://[2001:db8::1]:8443"
+    d = logdir(tmp_path, *POLICY, *req(v6))
+    r = check(d, "--origin", v6)
+    assert r.returncode == 0 and f"{v6} x2" in r.stdout, r.stdout
 
 
 def test_no_log_at_all_is_no_evidence(tmp_path):
