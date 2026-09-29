@@ -7,24 +7,51 @@ per-request thread model of ``ThreadingHTTPServer`` (fixes analysis §9 F).
 Design:
   - One ``ThreadPoolExecutor(max_workers=POOL_SIZE)`` is created once and
     shared for the lifetime of the server.
-  - Each request is submitted as a task; if all workers are busy the task
-    queues (the ``Future`` is not waited on in the server loop — the handler
-    method blocks the reader thread just long enough to submit the work, then
-    returns; responses are sent from the worker thread, which has its own
-    wfile reference).
+  - A ``threading.BoundedSemaphore`` limits waiting requests to
+    ``POOL_SIZE + BACKLOG``.  A request that cannot acquire the semaphore
+    immediately receives 503 with a JSON body and a ``Retry-After`` header.
   - Tests call ``handle()`` directly and never open a TCP port.  The adapter
     is exercised over ``socket.socketpair(AF_UNIX)`` (see test_faxconsole_adapter).
 """
 from __future__ import annotations
 
 import concurrent.futures
+import contextlib
 import http.server
 import json
+import threading
 from typing import Any
 
 from faxconsole.routes import Config, Response, handle
 
-POOL_SIZE = 8  # fixed worker count; queue is unbounded but each task is bounded
+POOL_SIZE = 8   # fixed worker count
+BACKLOG = 4     # extra waiting slots beyond the pool
+_CAPACITY = POOL_SIZE + BACKLOG  # total inflight + queued requests allowed
+
+_503_BODY = json.dumps({
+    "ok": False,
+    "detail": "server overloaded; retry shortly",
+}).encode()
+
+
+def _send_503(sock: Any) -> None:
+    """Write a minimal HTTP/1.0 503 response directly to *sock*.
+
+    Called before a handler is constructed, so we write raw bytes rather
+    than going through BaseHTTPRequestHandler.
+    """
+    body = _503_BODY
+    response = (
+        b"HTTP/1.0 503 Service Unavailable\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Retry-After: 5\r\n"
+        b"Cache-Control: no-cache, no-store, must-revalidate\r\n"
+        + b"Content-Length: " + str(len(body)).encode() + b"\r\n"
+        b"\r\n"
+        + body
+    )
+    with contextlib.suppress(OSError):
+        sock.sendall(response)
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -86,9 +113,15 @@ class FaxServer:
         host: str = "127.0.0.1",
         port: int = 8093,
         pool_size: int = POOL_SIZE,
+        backlog: int = BACKLOG,
     ) -> None:
         self.config = config
+        capacity = pool_size + backlog
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=pool_size)
+        # BoundedSemaphore(capacity): at most *capacity* requests are inflight
+        # or queued at any moment.  A non-blocking acquire attempt on a full
+        # semaphore returns False; that request gets an immediate 503.
+        self._sem: threading.BoundedSemaphore = threading.BoundedSemaphore(capacity)
 
         # Build a custom HTTPServer subclass that injects config into the handler
         server_config = config
@@ -98,20 +131,27 @@ class FaxServer:
 
         _ConfiguredHandler.config = server_config  # type: ignore[attr-defined]
 
+        sem = self._sem
+
         class _PooledHTTPServer(http.server.HTTPServer):
-            """Overrides process_request to use the shared pool."""
+            """Overrides process_request to use the shared pool + semaphore."""
 
             def process_request(self, request: Any, client_address: Any) -> None:
-                pool = outer_pool
-                pool.submit(self.process_request_thread, request, client_address)
+                if not sem.acquire(blocking=False):
+                    # Capacity full: send 503 and close without queuing.
+                    _send_503(request)
+                    self.shutdown_request(request)
+                    return
+                outer_pool.submit(self._run, request, client_address)
 
-            def process_request_thread(self, request: Any, client_address: Any) -> None:
+            def _run(self, request: Any, client_address: Any) -> None:
                 try:
                     self.finish_request(request, client_address)
                 except Exception:
                     self.handle_error(request, client_address)
                 finally:
                     self.shutdown_request(request)
+                    sem.release()
 
         outer_pool = self._pool
         self._httpd = _PooledHTTPServer((host, port), _ConfiguredHandler)

@@ -1,0 +1,70 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "4318 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[ ] Part 1.1: Replay mode temp dir isolation\\n[ ] Part 1.2: --ssh host defaults to FAX_EXCHANGE_HOST/pbx\\n[ ] Part 1.3: Type"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./docs/console-slice.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./docs/plan-week2.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxconsole\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/__main__.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"681-1003\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_send.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_pbx.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/models.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_adapter.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_sandbox_guard.py\", \"range\": \"1-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_sandbox_guard.py\", \"range\": \"50-100\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -20\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[-] Part 1.1: Replay mode temp dir isolation (Config(replay=True) + ReplayTransport with temp dir)\\n[ ] Part 1.2: --ssh host"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"461-480\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/routes.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:150\\n-------\\n# ---------------------------------------------------------------------------\\n# Confi"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/__main__.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\n\\\"\\\"\\\"faxconsole.__main__ \\u2014 entry point for ``python3 -m faxconsole``.\\n\\nModes:\\"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"replay=True\", \"include\": \"*.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./faxcli/api.py\", \"content\": \"\\\"\\\"\\\"faxcli.api \\u2014 typed send API.\\n\\n``send(pdf, number, *, label=None, dry_run=False, wait=0, transport)``\\nreturns a :class:"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:165\\n-------\\ndef cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> int:\\n    try:\\n        number = normalize(a.number)\\n    except Inval"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"1-25\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:8\\n-------\\nimport argparse\\nimport datetime as dt\\nimport json\\nimport os\\nimport re\\nimport socket\\nimport sys\\nfrom typing import IO, Any\\n\\nfrom faxcli import"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\n\\\"\\\"\\\"faxconsole.routes \\u2014 pure request handler.\\n\\n``handle(method, path, headers, body, transport, config)`` is a pure\\nfunction: it receives a "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:291\\n-------\\ndef _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:\\n    \\\"\\\"\\\"Port of legacy fax_send (e:2058\\u20132090), calling faxcli di"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"argparse|io\\\\.|StringIO|cli_mod\", \"path\": \"./faxconsole/routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\n\\\"\\\"\\\"faxconsole.server \\u2014 fixed-size worker pool + http.server adapter.\\n\\nThe HTTP handler is a thin wrapper around the pure ``handle()`` functi"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:88\\n-------\\n    def __init__(\\n        self,\\n        config: Config,\\n        host: str = \\\"127.0.0.1\\\",\\n        port: int = 8093,\\n        pool_size: int = PO"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:35\\n-------\\n\\nclass _Handler(http.server.BaseHTTPRequestHandler):\\n=======\\n\\ndef _send_503(sock: Any) -> None:\\n    \\\"\\\"\\\"Write a minimal HTTP/1.0 503 response "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -30\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:21\\n-------\\nfrom faxcli.numbers import InvalidNumber, normalize\\n=======\\nfrom faxcli.numbers import normalize\\n>>>>>>> REPLACE\\n\", \"path\": \"~/Projects/fa"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:14\\n-------\\nfrom typing import Union\\n=======\\n>>>>>>> REPLACE\\n\\n<<<<<<< SEARCH\\n:start_line:48\\n-------\\n) -> Union[DryRunResult, SendResult]:\\n=======\\n) -> D"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:16\\n-------\\nimport concurrent.futures\\nimport http.server\\nimport json\\nimport threading\\nfrom typing import Any\\n=======\\nimport concurrent.futures\\nimport cont"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -10\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[x] Part 1.1: Replay mode temp dir isolation (Config(replay=True) + ReplayTransport with temp dir)\\n[x] Part 1.2: --ssh host"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_part1_review.py \\u2014 tests for the run-7 Part 1 review fixes.\\n\\nCovers:\\n  1. Replay isolation: Config(replay=True) refuses non-ReplayTransport; send writes\\n     only"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_part1_review.py -v 2>&1 | tail -40\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[x] Part 1.1: Replay mode temp dir isolation (Config(replay=True) + ReplayTransport with temp dir)\\n[x] Part 1.2: --ssh host"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"461-540\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxconsole.voipms \\u2014 injectable VoIP.ms background poller.\\n\\nPort of VoipMsPoller (legacy/console/telephony-console.py e:760\\u20131003),\\n_voipms_scrub (e:681\\u2013712), and _v"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[x] Part 1.1: Replay mode temp dir isolation (Config(replay=True) + ReplayTransport with temp dir)\\n[x] Part 1.2: --ssh host"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"mkdir -p tests/fixtures/voipms\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"## tests/fixtures/voipms/ \\u2014 synthesized VoIP.ms API response fixtures\\n\\nThese fixtures are **synthesized** from the VoIP.ms REST API response\\nshapes that the legacy `VoipMsPoller` "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"{\\n  \\\"status\\\": \\\"success\\\",\\n  \\\"balance\\\": {\\n    \\\"current_balance\\\": \\\"23.55\\\",\\n    \\\"spent_today\\\": \\\"0.02\\\",\\n    \\\"calls_today\\\": \\\"1\\\",\\n    \\\"time_today\\\": \\\"62\\\",\\n    \\\"spent"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"{\\n  \\\"status\\\": \\\"success\\\",\\n  \\\"registered\\\": \\\"yes\\\",\\n  \\\"registrations\\\": [\\n    {\\n      \\\"server_hostname\\\": \\\"pop1.example.com\\\",\\n      \\\"register_ip\\\": \\\"192.0.2.20\\\",\\n      \\"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"{\\n  \\\"status\\\": \\\"success\\\",\\n  \\\"dids\\\": [\\n    {\\n      \\\"did\\\": \\\"2025550100\\\",\\n      \\\"description\\\": \\\"House fax line\\\",\\n      \\\"sms_enabled\\\": \\\"0\\\",\\n      \\\"e911\\\": \\\"0\\\",\\n   "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/console-slice.md, docs/plan-week2.md\\n[x] Part 1.1: Replay mode temp dir isolation (Config(replay=True) + ReplayTransport with temp dir)\\n[x] Part 1.2: --ssh host"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:150\\n-------\\n# ---------------------------------------------------------------------------\\n# Config\\n# ---------------------------------------------------------"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:179\\n-------\\ndef _route_status(config: Config) -> Response:\\n=======\\ndef _route_voipms(config: Config) -> Response:\\n    \\\"\\\"\\\"GET /api/voipms \\u2014 VoIP.ms po"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:425\\n-------\\n    if method == \\\"GET\\\":\\n        if route == \\\"/api/fax/status\\\":\\n            return _route_status(config)\\n=======\\n    if method == \\\"GET\\\":\\n "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -10\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_sandbox_guard.py\", \"range\": \"40-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_sandbox_guard.py\", \"range\": \"100-130\"}"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "write refused: the content carries identifying data (masked): <write>:254: [credential] ap******************g"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"echo 'VOIPMS_PASS=\\\"test-password-99\\\"' | .bob/hooks/scrub-check.sh 2>&1 || true\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"echo 'VOIPMS_PASS=\\\"test-password-99\\\"' | scripts/scrub-check.sh 2>&1 || true\"}"}

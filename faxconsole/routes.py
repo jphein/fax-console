@@ -32,6 +32,9 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from faxcli import cli as cli_mod
+from faxcli.api import SendError
+from faxcli.api import send as api_send
+from faxcli.numbers import InvalidNumber
 from faxcli.transport import Transport
 from faxconsole.pbx import read_calls, read_sip_endpoints, read_trunk
 from faxconsole.version import version_dict
@@ -156,13 +159,29 @@ class Config:
     inbox: str = "/var/lib/faxconsole/fax"
     spool: str = "/var/spool/asterisk/fax"
     max_bytes: int = FAX_MAX_BYTES
-    write_token: str | None = None  # if None, falls back to env
-    replay: bool = False            # replay mode: POST /api/fax/send → dry run
+    write_token: str | None = None   # if None, falls back to env
+    replay: bool = False             # replay mode: POST /api/fax/send → dry run
+    voipms: Any = None               # VoipMsPoller instance, or None
+
+    def __post_init__(self) -> None:
+        from faxcli.transport import ReplayTransport  # noqa: PLC0415
+        if self.replay and not isinstance(self.transport, ReplayTransport):
+            raise TypeError(
+                "Config(replay=True) requires a ReplayTransport; "
+                f"got {type(self.transport).__name__!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
 # Route implementations
 # ---------------------------------------------------------------------------
+
+def _route_voipms(config: Config) -> Response:
+    """GET /api/voipms — VoIP.ms poller snapshot (legacy e:2859–2861)."""
+    if config.voipms is None:
+        return _err(503, {"ok": False, "detail": "VoIP.ms poller not configured"})
+    return _ok(config.voipms.snapshot())
+
 
 def _route_status(config: Config) -> Response:
     """GET /api/fax/status — faxcli cmd_status result as JSON."""
@@ -280,8 +299,8 @@ def _route_send(headers: dict[str, str], body: bytes, config: Config) -> Respons
 
 
 def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
-    """Port of legacy fax_send (e:2058–2090), calling faxcli directly."""
-    from faxcli.numbers import InvalidNumber, normalize  # noqa: PLC0415
+    """Port of legacy fax_send (e:2058–2090), calling faxcli.api.send directly."""
+    from faxcli.numbers import normalize  # noqa: PLC0415
 
     # Validate number (legacy e:2060–2066)
     raw_number = fields.get("number", "")
@@ -317,53 +336,33 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
     except OSError as e:
         return {"ok": False, "detail": f"could not store the PDF: {e}"}
 
-    # In replay mode, always dry-run (design requirement)
-    if config.replay:
-        a = argparse.Namespace(
-            json=True,
-            number=number,
-            pdf=path,
+    # Call faxcli.api.send directly (no argparse, no JSON round-trip)
+    try:
+        result = api_send(
+            path,
+            number,
             label=label,
-            dry_run=True,
+            dry_run=config.replay,   # replay → always dry run
             wait=0,
-            local=True,
+            transport=config.transport,
+            local=True,              # console always spool-local
         )
-        buf = io.StringIO()
-        cli_mod.cmd_send(a, config.transport, buf)
-        try:
-            r: dict = json.loads(buf.getvalue().strip().splitlines()[-1])
-        except Exception as e:
-            return {"ok": False, "detail": f"unparseable send output: {e}"}
-        if not r.get("ok"):
-            return {"ok": False, "detail": r.get("why") or "the fax CLI refused"}
+    except InvalidNumber as exc:
+        return {"ok": False, "detail": str(exc)}
+    except SendError as exc:
+        return {"ok": False, "detail": exc.reason}
+
+    r = result.to_json()
+    r["ok"] = True
+    r["pdf"] = path
+    if config.replay:
         r["replay"] = True
         r["detail"] = "replay: nothing is dialled"
-        r["pdf"] = path
-        return r
-
-    # Real send (legacy e:2083–2090)
-    a = argparse.Namespace(
-        json=True,
-        number=number,
-        pdf=path,
-        label=label,
-        dry_run=False,
-        wait=0,
-        local=True,
-    )
-    buf = io.StringIO()
-    cli_mod.cmd_send(a, config.transport, buf)
-    try:
-        r = json.loads(buf.getvalue().strip().splitlines()[-1])
-    except Exception as e:
-        return {"ok": False, "detail": f"unparseable send output: {e}"}
-    if not r.get("ok"):
-        return {"ok": False, "detail": r.get("why") or "the fax CLI refused"}
-    r["detail"] = (
-        f"dialing {number} with {r.get('pages', '?')} page(s); the outcome appears in "
-        "the log below when the call ends (judged by the fax counters, not the call disposition)"
-    )
-    r["pdf"] = path
+    else:
+        r["detail"] = (
+            f"dialing {number} with {r.get('pages', '?')} page(s); the outcome appears in "
+            "the log below when the call ends (judged by the fax counters, not the call disposition)"
+        )
     return r
 
 
@@ -406,6 +405,8 @@ def handle(
     route = parsed.path
 
     if method == "GET":
+        if route == "/api/voipms":
+            return _route_voipms(config)
         if route == "/api/fax/status":
             return _route_status(config)
         if route == "/api/fax/log":
