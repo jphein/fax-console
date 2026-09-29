@@ -8,7 +8,9 @@ before publishing:
 - the absolute repo path became `.`, and the workstation's home directory became `~`;
 - the content of any write the sandbox guard refused is replaced by a placeholder, because that
   content is exactly what the guard keeps out; the tool name, path and reason stay;
-- two cellular endpoint names match the rebuilt baseline.
+- two cellular endpoint names match the rebuilt baseline;
+- one fictional test value in run 8 was renamed to the gate's placeholder form (`fake-…`), in the test
+  and in its recording. The gate landing with PR 2 cannot tell that value from a real one.
 
 | File | Contents |
 |---|---|
@@ -81,6 +83,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | Time (PDT) | Run | Bob task | What Bob did | Outcome | Bobcoins |
 |---|---|---|---|---|---|
 | 00:13 | 7 | `0b7f46c4` | run 6's review items (replay isolation, typed send API, bounded queue) and the VoIP.ms poller | Part 1 kept; the poller's tests were refused by the guard, so run 8 finishes it | 10.225 |
+| 00:40 | 8 | `eeebacd0` | finished the VoIP.ms port: 4 fixes, replay wiring with cleanup, 50 tests and the legacy characterization | kept; the first run under its cap with its summary; review strengthened 7 tests | 4.975 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below the table.
@@ -96,8 +99,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below t
 | 5 | 9/28 23:19 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
 | 6 | 9/28 23:57 | [The faxconsole core](bob-runs/6-faxconsole-core.prompt.md) | `faxconsole/` (888 lines): pure `handle()`, PBX readers, the write gate, a pooled server, sigil; 103 tests | 62 | 8.022 | Kept. Review: replay mode lacks a temp spool/inbox; send still parses CLI output; `--ssh` pins the host (run 7) |
 | 7 | 9/29 00:13 | [Run 6's review and the VoIP.ms poller](bob-runs/7-voipms-and-replay.prompt.md) | replay temp dir, `Config(replay=True)` check, `--ssh` host, `faxcli/api.py` (typed send), a bounded queue with 503; `faxconsole/voipms.py` (391 lines), 3 synthesized fixtures, `GET /api/voipms`; 16 tests | 69 | 10.225 | Part 1 kept. Review: the 503 test bound TCP and was vacuous, and the 503 was lost to a reset (fixed by the reviewer). The poller's tests were refused by the guard; run 8 finishes them |
+| 8 | 9/29 00:40 | [Finish the VoIP.ms port](bob-runs/8-voipms-finish.prompt.md) | the 4 review fixes in `voipms.py`; `fixture_http`; `build(argv)` with cleanup and SIGTERM; 50 tests, 17 of them characterization against the legacy poller; a work log ([worklog](bob-runs/8-voipms-finish.worklog.md)) | 46 | 4.975 | Kept. Review: 5 perturbations left Bob's tests green (two mechanisms masked each other, a vacuous `__cause__` check, 12 chosen fields); fixed with whole-snapshot equality. The credentials error text had changed from legacy's (fixed) |
 
-**Running total: 32.65 Bobcoins** (after run 7). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 37.62 Bobcoins** (after run 8). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
@@ -111,6 +115,10 @@ mid-way would have to re-read everything on resume, which costs more than the he
 **Cap for run 5 (review fixes): 5.** Run 4 spent its full 6 and stopped before its own lint and
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
+
+**Cap for run 9 (the page): 8,** as planned. It ports the page's PBX pieces (about 450 lines of
+legacy markup, CSS and JS, read in ranges), writes four static files and 20 or more tests, and keeps the
+work log that brought run 8 in under its cap.
 
 **Cap for run 8 (finish the VoIP.ms port): 7.** Run 7 spent 0.15 per tool call. Run 8 re-reads
 about 900 lines (the poller, the legacy poller and the legacy-import pattern), then writes about 400
@@ -256,10 +264,44 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
 - **Cost.** 8.02 and 10.23, each the full cap. Neither run reached its final summary, so run 8's
   prompt asks for a work log after each item.
 
+### Run 8: finishing the VoIP.ms port
+- **What Bob did.** Bob fixed the four review items in `voipms.py`:
+  - the clock is injected everywhere;
+  - legacy's 403 hint is back;
+  - `stop()` takes effect within one tick;
+  - ruff is clean.
+
+  Then it added a fixture HTTP for replay mode, an injectable credentials source, and `build(argv)`, which
+  returns a config and a cleanup that also runs on SIGTERM. It wrote 50 tests, including 17 that
+  characterize the frozen legacy poller at a fresh and a stale clock.
+  - It kept the work log the prompt asked for, finished under its cap (4.97 of 7), and gave its summary:
+    the first run to do both.
+- **Kept.** All of it.
+- **Rejected or fixed, with reasons.**
+  - **Five perturbations of the production code left all 50 tests green.** The reviewer's fixes turn
+    each one red:
+    - **The two scrub mechanisms were never tested apart.** Every test string carried `api_password=`,
+      which legacy rewrites always. The values had no characters that URL encoding changes, so the
+      "encoded" form was the plain value, and each mechanism covered for the other.
+    - **`__cause__ is None` proves nothing:** implicit chaining leaves it None too. The test now formats
+      the traceback, as a log would, and looks for the password.
+    - **The characterization compared 12 chosen fields.** Whole-snapshot equality now covers the rest.
+    - **The replay test accepted any dict.** It now reads the synthesized balance.
+  - **The credentials error text had changed** when the source became injectable. It is part of the
+    snapshot's JSON contract, and legacy names the path. The legacy text is back, proved against the
+    legacy poller.
+  - **Two legacy rule comments were dropped** in the lint refactor. They are restored.
+  - **One fictional test value** did not use the `fake-…` form the prompt asked for. It was renamed
+    before the commit, because the gate landing with PR 2 cannot tell it from a real one.
+- **Kept for the review-fixes run.**
+  - `main()` builds the server outside its `try`, so a failed bind skips cleanup.
+  - `main()` re-parses argv with a second parser.
+- **Cost.** 4.97.
+
 ## Who wrote what
 | Author | What |
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
-| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests (runs 6 and 7), except the reviewer fixes named in the run notes. |
+| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests (runs 6–8), except the reviewer fixes named in the run notes. |
 | Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`, the network guard and the process guard's hardening in `tests/conftest.py`), review notes (`docs/analysis.md` §9), and this file. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
