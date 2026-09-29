@@ -128,6 +128,37 @@ def strings(obj, keys=None):
     return out
 
 
+# A module named like the standard library, at the repo root or in tests/ or scripts/, shadows the stdlib
+# for any `python3 -c` or `python3 -` run from the root: the host-side wrapper and the hooks would import
+# it (the independent review, 9/29 01:40). Refused for write tools and for command tokens alike.
+STDLIB = frozenset(sys.stdlib_module_names)
+SHADOW_DIRS = ("", "tests", "scripts")
+
+
+def shadows_stdlib(rel):
+    """True for a stdlib-named .py file or package directly at the root, in tests/ or in scripts/."""
+    parts = rel.replace("\\", "/").lstrip("./").split("/")
+    for depth in (1, 2):                                   # json.py | tests/re.py | json/__init__.py
+        if len(parts) < depth:
+            continue
+        head, name = "/".join(parts[:depth - 1]), parts[depth - 1]
+        if head not in SHADOW_DIRS:
+            continue
+        stem = name[:-3] if name.endswith(".py") else (name if len(parts) > depth else None)
+        if stem and stem in STDLIB:
+            return True
+    return False
+
+
+# A token starts at a path boundary: never right after "/" or ".", or "faxcli/numbers.py" would read as
+# a root-level numbers.py.
+SHADOW_TOKEN = re.compile(r"(?<![\w./-])((?:\./)?(?:tests/|scripts/)?[A-Za-z_][\w]*(?:\.py|/__init__\.py))")
+# Bob's own configuration: a gateway planted in its settings would carry the API key elsewhere, within a
+# run or into the next one (the independent review, 9/29). Nothing in this repository needs to touch it.
+BOB_CONFIG = re.compile(r"(?i)gateway_?url|BOB_GATEWAY|VITE_GATEWAY|\.bob/settings|trustedFolders|"
+                        r"/etc/bob|policy\.json|BOB_WEB_LOGIN")
+
+
 def inside(p):
     full = os.path.realpath(os.path.join(ROOT, os.path.expanduser(p)))
     return full == ROOT or full.startswith(ROOT + os.sep), os.path.relpath(full, ROOT)
@@ -143,8 +174,14 @@ def main():
     try:
         if DENY_TOOLS.search(tool):
             deny(tool, f"{tool} is disabled in this repository (no web, MCP or skill use)")
+        if BOB_CONFIG.search(json.dumps(args)):
+            deny(tool, "refused: Bob's own configuration (its settings, policy or gateway) is off-limits "
+                       "in this repository")
         if "command" in args and isinstance(args.get("command"), str):
             cmd = args["command"]
+            for tok in SHADOW_TOKEN.findall(cmd):
+                if shadows_stdlib(tok):
+                    deny(tool, f"command refused: {tok} would shadow a standard-library module")
             if DENY_COMMAND.search(cmd):
                 deny(tool, "command refused: no network, remote, privileged, PBX, package-install or "
                            "git-writing "
@@ -168,6 +205,9 @@ def main():
             ok, rel = inside(p)
             if not ok:
                 deny(tool, "path refused: outside the repository")
+            if is_write and shadows_stdlib(rel):
+                deny(tool, f"write refused: {rel} would shadow a standard-library module "
+                           "(the root, tests/ and scripts/ may not hold one)")
             if is_write and (rel.startswith(PROTECTED) or (rel + "/").startswith(PROTECTED)):
                 deny(tool, f"write refused: {rel} is protected "
                            "(frozen baseline, git internals, or this guard)")
