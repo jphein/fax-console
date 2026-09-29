@@ -2,8 +2,8 @@
 
 A house PBX's legacy fax tools, modernized with **IBM Bob** while the phone line kept working.
 
-**Building with IBM Bob hackathon · track Modernize What Matters** · Live demo (replay mode):
-{{demo.url}} · Video: {{video.url}} · Deck: [`docs/deck.pdf`](docs/deck.pdf)
+**Building with IBM Bob hackathon · track Modernize What Matters** · Demo (a static replay):
+https://jphein.github.io/fax-console/ · Video: {{video.url}} · Deck: [`docs/deck.pdf`](docs/deck.pdf)
 
 > **Status: week 2 of 3.** The pre-hackathon baseline, the safety tooling, Bob's modernization
 > analysis, the `faxcli` package and the `faxconsole` service with its replay mode are here. This
@@ -67,7 +67,9 @@ how that copy is built, checked and published, and how to self-host the replay s
 
 ### Run the tests
 
-The runtime is the Python 3.10+ standard library. The tests need pytest, and lint uses ruff.
+The runtime is the Python 3.10+ standard library. The tests need pytest, and lint uses ruff. One
+test, `tests/test_static_page_render.py`, runs the page's `app.js` under Node.js: without `node` it
+is skipped locally, and CI requires it.
 
 ```bash
 python3 -m pip install pytest ruff
