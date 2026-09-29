@@ -150,6 +150,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._send(Response(
                 status=413,
                 body=json.dumps({"ok": False, "detail": "upload too large (15 MB max)"}).encode(),
+                extra_headers={"X-Content-Type-Options": "nosniff"},
             ))
             self._linger()
             return

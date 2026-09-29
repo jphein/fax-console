@@ -76,7 +76,9 @@ class TestEarlyRejectReachesItsClient:
         try:
             head = (b"POST /api/fax/send HTTP/1.1\r\nHost: t\r\nX-Auth-Token: " + TOKEN.encode() + b"\r\n"
                     b"Content-Type: multipart/form-data; boundary=B\r\nContent-Length: 999999999\r\n\r\n")
-            assert _exchange(srv, head + self.BODY).startswith(b"HTTP/1.0 413 ")
+            data = _exchange(srv, head + self.BODY)
+            assert data.startswith(b"HTTP/1.0 413 ")
+            assert b"\r\nX-Content-Type-Options: nosniff\r\n" in data      # like the 401 (PR 8 delta)
         finally:
             srv.close()
 
