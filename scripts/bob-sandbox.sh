@@ -53,6 +53,21 @@ case "$logdir" in
   *) echo "refusing: FAX_CONSOLE_BOB_LOG_DIR must be under $logs" >&2; exit 2 ;;
 esac
 [ ! -e "$logdir" ] || { echo "refusing: $logdir exists; every start gets a new log directory" >&2; exit 2; }
+# No bind path, and no component of one, may be a symlink. bubblewrap resolves a bind's source and follows a
+# symlink at its destination, so a planted `scratch -> ..` gave Bob a read-only view of the directory above
+# the repo. That was confirmed with this host's bubblewrap 0.11.1 (the Oracle, PR #10), and deeper `..`
+# chains would reach the home directory. Checked before anything is made.
+no_link() {
+  local q=$root c IFS=/
+  for c in $1; do
+    q=$q/$c
+    [ ! -L "$q" ] || { echo "refusing: $q is a symlink; a sandbox bind path must be a real file or directory" >&2; exit 2; }
+  done
+}
+for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs docs/bob-usage.md docs/bob-runs \
+         docs/deck docs/video demo scratch; do
+  no_link "$p"
+done
 
 mkdir -p "$root/.bob/tmp"
 touch "$root/.bob/guard.log"
@@ -95,14 +110,15 @@ ro=()
 # every path the HOST later executes or sends (the Oracle via Aurora, PR #8 S2). That covers
 # docs/deck (build.sh runs fill.py on the host), docs/video (narration.mjs), demo/ (the test page the
 # host faxes to a public inbox) and scratch/ (the orchestrators' scripts). All four are made first if they
-# are missing, so they are always bound.
+# are missing, so they always exist as mount points.
 # - Otherwise Bob could create docs/deck/fill.py in a tree that lacked the directory, and a later host
 #   build would run it (the Oracle, PR #9).
 # - scratch/ is gitignored, so a scratch/ that Bob filled would not even show in `git status` (the
 #   Oracle's delta on PR #8). An empty, ignored scratch/ is the price.
+# - scratch/ is not bound from the host at all: an empty read-only directory stands in for it (below).
 for p in docs/deck docs/video demo scratch; do mkdir -p "$root/$p"; done
 for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs \
-         docs/deck docs/video demo scratch; do
+         docs/deck docs/video demo; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
 # docs/ bound onto itself is a mount point, which cannot be renamed. Renaming it would carry the
@@ -110,6 +126,9 @@ done
 docs_bind=()
 [ -d "$root/docs" ] && docs_bind=(--bind "$root/docs" "$root/docs")
 printf '{"GatewayUrl": "%s"}\n' "$BOB_GATEWAY" > "$rt/policy.json"; chmod 644 "$rt/policy.json"
+# scratch/ inside the sandbox is this empty, read-only directory, never the host's scratch/. So there is no
+# host source to follow, and Bob cannot read an orchestrator's notes (the Oracle, PR #10).
+mkdir "$rt/empty"
 # The lock is only a lock if Bob can read it: refuse to start unless it parses to exactly that one key.
 python3 -I -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p == {"GatewayUrl": sys.argv[2]} else 1)' \
   "$rt/policy.json" "$BOB_GATEWAY" || { echo "refusing: the gateway policy does not parse to its one key" >&2; exit 2; }
@@ -135,7 +154,7 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --bind "$bob_home" /home/bob \
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
     --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
-    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" \
+    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" --ro-bind "$rt/empty" "$root/scratch" \
     --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
     /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"

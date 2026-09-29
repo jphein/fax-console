@@ -325,3 +325,22 @@ def test_the_real_sandbox_refuses_a_bad_log_directory_before_touching_anything(t
     assert r.returncode == 2 and "refusing:" in r.stderr, r.stderr
     assert not (repo / ".bob").exists()                                 # refused before anything was made
     assert sorted(p.name for p in logs.iterdir()) == ["taken"]
+
+
+@pytest.mark.parametrize("rel,target", [("scratch", ".."), ("docs/deck", "../.."), ("docs", ".."),
+                                        (".venv", "..")])
+def test_the_real_sandbox_refuses_a_symlinked_bind_path(tmp_path, rel, target):
+    """bubblewrap follows a symlink at a bind path: `scratch -> ..` showed Bob the directory above the repo
+    (the Oracle, PR #10). The real scripts/bob-sandbox.sh must refuse such a tree before making anything."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).symlink_to(target)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / "state"), HOME=str(tmp_path))
+    r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                       text=True, timeout=60, check=False)
+    assert r.returncode == 2 and "is a symlink" in r.stderr, r.stderr
+    assert not (repo / ".bob").exists()                                 # refused before anything was made

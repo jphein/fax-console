@@ -63,6 +63,7 @@ for d in docs/deck docs/video demo scratch; do
   else echo "skip   must fail  write into $d/ (not present here)"; fi
 done
 probe work "write a new file in docs/"           "echo x > docs/probe.tmp && rm docs/probe.tmp"
+probe fail "see the directory above the repo"     "[ \$(ls -A .. | wc -l) -gt 1 ]"
 probe work "write a new file in the repo"        "echo x > sandbox-probe.tmp && rm sandbox-probe.tmp"
 probe work "append to the guard log"             "printf '' >> .bob/guard.log"
 probe work "run the test tools"                  ".venv/bin/python -m pytest --version && .venv/bin/ruff --version"
@@ -80,6 +81,15 @@ else
   if scripts/bob-sandbox.sh true >/dev/null 2>&1; then r=WRONG; fail=$((fail+1)); else r=ok; pass=$((pass+1)); fi
   rm -f .env
   printf '%-6s must fail  %s\n' "$r" "start with a .env in the repo root"
+fi
+# a bind path that is a symlink is followed by bubblewrap, so the sandbox must refuse to start (PR #10's Oracle)
+if [ -L scratch ] || [ -n "$(ls -A scratch 2>/dev/null)" ]; then
+  echo "skip   must fail  start with scratch/ as a symlink (scratch/ is a link or has content: not touched)"
+else
+  rmdir scratch 2>/dev/null; ln -s .. scratch
+  if scripts/bob-sandbox.sh true >/dev/null 2>&1; then r=WRONG; fail=$((fail+1)); else r=ok; pass=$((pass+1)); fi
+  rm -f scratch
+  printf '%-6s must fail  %s\n' "$r" "start with scratch/ as a symlink to the directory above"
 fi
 for d in .claude .agents; do
   if [ -e "$d" ]; then echo "skip   must fail  start with a skill in $d/ (it exists: not touched)"; continue; fi
