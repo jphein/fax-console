@@ -37,7 +37,9 @@ before publishing:
     finalizes the ledger from that copy, and publishes it in `docs/bob-runs/` only after the
     sandbox has exited and `docs/` is proven to be the same directory. Bob gets a home
     directory made fresh for every run, so nothing one run leaves there (a settings file naming
-    another gateway, say) reaches the next; its gateway is pinned to Bob's own; and it will not
+    another gateway, say) reaches the next; its gateway is locked to Bob's own by Bob's enterprise
+    policy file, `/etc/bob/policy.json`, bound read-only, which neither settings nor flags can
+    override, mid-run included; and it will not
     start while a `.env` sits in the repo root, which Bob would load, or while the repo's
     `.claude/` or `.agents/` holds anything (Bob lists the skills it finds there). Every Python
     the wrapper and the gate run on the host is isolated (`python3 -I`), so a module Bob leaves
@@ -48,7 +50,7 @@ before publishing:
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    43 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    45 probes. One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
