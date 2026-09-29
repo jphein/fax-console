@@ -376,3 +376,77 @@ def test_the_sandbox_mounts_scratch_as_an_empty_tmpfs_and_binds_no_symlink(tmp_p
     assert f"{root}/scratch" not in binds                              # never the host's scratch/
     assert all(not Path(s).is_symlink() for s in binds if s.startswith(root)), binds
     assert (repo / "scratch").is_dir() and not any((repo / "scratch").iterdir())
+
+
+def test_bob_run_refuses_a_symlinked_guard_log_before_emptying_anything(box, tmp_path):
+    """bob-run.sh empties .bob/guard.log on the host before the run: a planted link there must be refused
+    first, or the linked host file is truncated (the Oracle ab7e64d, PR #14)."""
+    repo = box[0]
+    victim = tmp_path / "host-file.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    g = repo / ".bob" / "guard.log"
+    if g.exists() or g.is_symlink():
+        g.unlink()
+    g.symlink_to(victim)
+    r = run(box, "5", "demo", "3")
+    assert r.returncode == 2 and "is a symlink" in r.stderr, r.stderr
+    assert victim.read_text(encoding="utf-8") == "keep me\n" and not stub_ran(box) and row(box, 5) is None
+
+
+SKELETON_DIRS = ("legacy", ".github", ".venv", "docs/bob-runs")
+SKELETON_FILES = ("AGENTS.md", "BASELINE.md", "LICENSE", "docs/bob-usage.md")
+
+
+def sandbox_repo(tmp_path, name):
+    """A throwaway repo with every read-only path present, the real bob-sandbox.sh and a fake sudo that
+    records bwrap's argv. Returns (repo, env, argv file)."""
+    repo = tmp_path / name / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    for d in SKELETON_DIRS:
+        (repo / d).mkdir(parents=True, exist_ok=True)
+    for f in SKELETON_FILES:
+        (repo / f).write_text("x\n", encoding="utf-8")
+    fake = tmp_path / name / "bin"
+    fake.mkdir()
+    argv = tmp_path / name / "argv"
+    (fake / "sudo").write_text(f"#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > {argv}\n",
+                               encoding="utf-8")
+    (fake / "sudo").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / name / "state"), HOME=str(tmp_path / name),
+               PATH=f"{fake}:{env['PATH']}")
+    return repo, env, argv
+
+
+def sandbox(repo, env):
+    return subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                          text=True, timeout=60, check=False)
+
+
+def test_every_bind_source_under_the_repo_is_refused_as_a_symlink(tmp_path):
+    """Generic: record every --bind/--ro-bind source under the repo from a clean start, then plant a symlink
+    at each one in turn; each start must be refused before bwrap. A bind added to the script without a
+    symlink check fails here (the Oracle ab7e64d, PR #14). The repo root, .git and scripts/ are excluded,
+    since this test needs them real to run at all; the check still covers them."""
+    repo, env, argv = sandbox_repo(tmp_path, "clean")
+    assert sandbox(repo, env).returncode == 0
+    a = argv.read_text(encoding="utf-8").splitlines()
+    root = str(repo.resolve())
+    mounts = ("--bind", "--ro-bind", "--tmpfs")
+    rels = sorted({a[j + 1][len(root) + 1:] for j, x in enumerate(a)
+                   if x in mounts and a[j + 1].startswith(root + "/")} - {".git", "scripts"})
+    must = {"docs", "scratch", ".bob", ".bob/guard.log", ".bob/tmp", "docs/deck", "demo", ".venv"}
+    assert must <= set(rels), rels
+    for k, rel in enumerate(rels):
+        r2, e2, argv2 = sandbox_repo(tmp_path, f"t{k}")
+        target = r2 / rel
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(tmp_path / "elsewhere")
+        r = sandbox(r2, e2)
+        assert r.returncode == 2 and "is a symlink" in r.stderr and not argv2.exists(), (rel, r.stderr)

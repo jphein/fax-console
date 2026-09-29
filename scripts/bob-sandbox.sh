@@ -55,8 +55,14 @@ esac
 [ ! -e "$logdir" ] || { echo "refusing: $logdir exists; every start gets a new log directory" >&2; exit 2; }
 # No bind path, and no component of one, may be a symlink. bubblewrap resolves a bind's source and follows a
 # symlink at its destination, so a planted `scratch -> ..` gave Bob a read-only view of the directory above
-# the repo. That was confirmed with this host's bubblewrap 0.11.1 (the Oracle, PR #10), and deeper `..`
-# chains would reach the home directory. Checked before anything is made.
+# the repo. Aurora's Oracle (ab7e64d) raised it as PLAUSIBLE on PR #10, and drift-gems confirmed it on this
+# host's real sandbox (bubblewrap 0.11.1). Deeper `..` chains would reach the home directory. Checked before
+# anything is made, and again right before bwrap.
+# The bind lists live here, once, and drive both the check and the binds below (the Oracle, PR #14).
+RO_BINDS=(legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs
+          docs/deck docs/video demo)             # bound read-only
+RW_BINDS=(.bob/guard.log .bob/tmp)               # bound writable inside the read-only .bob
+MOUNT_POINTS=(docs scratch)                      # docs bound onto itself; scratch/ an empty read-only tmpfs
 no_link() {
   local q=$root c IFS=/
   for c in $1; do
@@ -64,10 +70,11 @@ no_link() {
     [ ! -L "$q" ] || { echo "refusing: $q is a symlink; a sandbox bind path must be a real file or directory" >&2; exit 2; }
   done
 }
-for p in legacy .git .bob .bob/guard.log .bob/tmp scripts .github .venv AGENTS.md BASELINE.md LICENSE docs \
-         docs/bob-usage.md docs/bob-runs docs/deck docs/video demo scratch; do
-  no_link "$p"   # .bob/guard.log and .bob/tmp are WRITABLE binds: a link there would let Bob write a host file
-done
+check_links() {  # .bob/guard.log and .bob/tmp are WRITABLE binds: a link there would let Bob write a host file
+  local p
+  for p in "${RO_BINDS[@]}" "${RW_BINDS[@]}" "${MOUNT_POINTS[@]}"; do no_link "$p"; done
+}
+check_links
 
 mkdir -p "$root/.bob/tmp"
 touch "$root/.bob/guard.log"
@@ -117,10 +124,11 @@ ro=()
 #   Oracle's delta on PR #8). An empty, ignored scratch/ is the price.
 # - scratch/ is not bound from the host at all: an empty read-only tmpfs stands in for it (below).
 for p in docs/deck docs/video demo scratch; do mkdir -p "$root/$p"; done
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs \
-         docs/deck docs/video demo; do
+for p in "${RO_BINDS[@]}"; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
+rw=()
+for p in "${RW_BINDS[@]}"; do rw+=(--bind "$root/$p" "$root/$p"); done
 # docs/ bound onto itself is a mount point, which cannot be renamed. Renaming it would carry the
 # read-only ledger and run records away and let a new docs/ stand in their place (Oracle, 9/29).
 docs_bind=()
@@ -141,6 +149,7 @@ resolv=$(readlink -f /etc/resolv.conf)
 # All of IPv6 is denied: a house LAN may be reachable on-link through global IPv6 addresses that no
 # private-range list covers, and Bob needs none (its API is reached over IPv4).
 deny="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 127.0.0.0/8 ::/0"
+check_links   # again, right before bwrap: narrows the window between the check and the mounts (the Oracle, PR #14)
 sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" \
   -p "IPAddressDeny=$deny" -p "IPAddressAllow=127.0.0.53" -- \
   bwrap --die-with-parent --new-session --unshare-pid --unshare-ipc --unshare-uts --unshare-cgroup-try \
@@ -154,6 +163,6 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
     --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
     --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" --tmpfs "$root/scratch" --remount-ro "$root/scratch" \
-    --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
+    "${rw[@]}" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
     /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"

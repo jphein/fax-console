@@ -40,6 +40,12 @@ p="docs/bob-runs/$n-$slug.prompt.md"; out="docs/bob-runs/$n-$slug.jsonl"
 ledger=docs/bob-usage.md
 [ -f "$p" ] || { echo "no prompt file $p" >&2; exit 2; }
 [ -e "$out" ] && { echo "$out exists; runs are append-only" >&2; exit 2; }
+# .bob and its guard log must be real. This script empties the guard log on the host before the run and
+# copies it after, and both follow a symlink, so a planted .bob/guard.log -> <host file> would empty that
+# file before bob-sandbox.sh ever refused it (the Oracle ab7e64d, PR #14). Checked before anything runs.
+for q in .bob .bob/guard.log; do
+  [ ! -L "$q" ] || { echo "bob-run: refusing: $q is a symlink" >&2; exit 2; }
+done
 
 if [ "${BOB_TMUX:-0}" = 1 ] && [ -z "${BOB_TMUX_INNER:-}" ]; then
   # tmux windows inherit the tmux server's environment, not ours, so pass what matters.
