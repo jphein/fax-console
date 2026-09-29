@@ -450,3 +450,30 @@ def test_every_bind_source_under_the_repo_is_refused_as_a_symlink(tmp_path):
         target.symlink_to(tmp_path / "elsewhere")
         r = sandbox(r2, e2)
         assert r.returncode == 2 and "is a symlink" in r.stderr and not argv2.exists(), (rel, r.stderr)
+
+
+@pytest.mark.parametrize("rel", ["5-demo.jsonl", "5-demo.guard.jsonl"])
+def test_a_dangling_link_at_a_recording_is_refused_before_the_run(box, rel):
+    """Runs are append-only, and `[ -e ]` misses a dangling symlink; cp would refuse it only after Bob ran and
+    spent (the Oracle ab7e64d, PR #14). bob-run.sh must refuse it before anything runs."""
+    (box[0] / "docs" / "bob-runs" / rel).symlink_to(box[2] / "nowhere")
+    r = run(box, "5", "demo", "3")
+    assert r.returncode == 2 and "append-only" in r.stderr, r.stderr
+    assert not stub_ran(box) and row(box, 5) is None
+
+
+def test_the_recheck_before_bwrap_catches_a_swap_during_setup(tmp_path):
+    """The Oracle's reproducer (ab7e64d, PR #14): a fake python3 first on PATH, the one the policy check runs
+    mid-setup, turns .bob/tmp into `-> ../..` after the first check. Only the re-check right before bwrap can
+    refuse it; without that check, bwrap would get a writable bind of the directory above the repo."""
+    repo, env, argv = sandbox_repo(tmp_path, "swap")
+    fake = Path(env["PATH"].split(":")[0])
+    mark = tmp_path / "swapped"
+    (fake / "python3").write_text(
+        "#!/bin/sh\n"
+        f"if [ ! -e {mark} ]; then rm -rf .bob/tmp; ln -s ../.. .bob/tmp; : > {mark}; fi\n"
+        'exec /usr/bin/python3 "$@"\n', encoding="utf-8")
+    (fake / "python3").chmod(0o755)
+    r = sandbox(repo, env)
+    assert mark.exists(), "the swap never ran: the test would prove nothing"
+    assert r.returncode == 2 and "is a symlink" in r.stderr and not argv.exists(), r.stderr

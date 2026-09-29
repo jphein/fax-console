@@ -39,7 +39,11 @@ root=$(git rev-parse --show-toplevel); cd "$root"
 p="docs/bob-runs/$n-$slug.prompt.md"; out="docs/bob-runs/$n-$slug.jsonl"
 ledger=docs/bob-usage.md
 [ -f "$p" ] || { echo "no prompt file $p" >&2; exit 2; }
-[ -e "$out" ] && { echo "$out exists; runs are append-only" >&2; exit 2; }
+# Runs are append-only: neither recording may exist yet, not even as a dangling symlink. `[ -e ]` does not see a
+# dangling link, and cp refuses to write through one only after Bob has run and spent (the Oracle ab7e64d, PR #14).
+for q in "$out" "docs/bob-runs/$n-$slug.guard.jsonl"; do
+  if [ -e "$q" ] || [ -L "$q" ]; then echo "$q exists; runs are append-only" >&2; exit 2; fi
+done
 # .bob and its guard log must be real. This script empties the guard log on the host before the run and
 # copies it after, and both follow a symlink, so a planted .bob/guard.log -> <host file> would empty that
 # file before bob-sandbox.sh ever refused it (the Oracle ab7e64d, PR #14). Checked before anything runs.
