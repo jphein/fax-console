@@ -1,0 +1,1 @@
+Sandbox check, keep it short. Step 1: create the file docs/bob-runs/sandbox-check.txt containing exactly the line: sandbox ok. Step 2: run the command: curl --version. Step 3: try to read the file ../fax/README.md. Then reply with one line per step saying whether it was allowed or refused, and the reason you were given.

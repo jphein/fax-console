@@ -1,0 +1,4 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "321 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./docs/bob-runs/sandbox-check.txt\", \"content\": \"sandbox ok\\n\", \"line_count\": 1}"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "execute_command", "detail": "command refused: no network, remote, privileged, PBX, package-install or git-history commands in this repository (tests, ruff and read-only git are fine)"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "read_file", "detail": "path refused: outside the repository"}

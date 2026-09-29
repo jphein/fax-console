@@ -1,0 +1,138 @@
+"""Regression tests for the Bob sandbox (.bob/hooks) and the scrub gate (scripts/scrub-check.sh).
+
+Written by the orchestrating agent (Claude), not by Bob: these guard the guard. Each rule has a
+case that must pass and a case that must be refused, so a rule that silently stops matching
+(an instrument that cannot see) fails here instead of in production.
+"""
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+GUARD = os.path.join(ROOT, ".bob", "hooks", "tool_guard.py")
+GATE = os.path.join(ROOT, ".bob", "hooks", "prompt_gate.py")
+SCRUB = os.path.join(ROOT, "scripts", "scrub-check.sh")
+
+
+@pytest.fixture(scope="module")
+def env(tmp_path_factory):
+    """The hooks demand a deny-list (--require-deny). Tests use an empty one, so only the
+    generic rules apply and the results are the same on any machine, CI included."""
+    deny = tmp_path_factory.mktemp("scrub") / "deny.txt"
+    deny.write_text("# empty: generic rules only\n")
+    log = tmp_path_factory.mktemp("guard") / "guard.log"      # never the real run log
+    return dict(os.environ, FAX_CONSOLE_SCRUB_DENY=str(deny), FAX_CONSOLE_GUARD_LOG=str(log), CI="1")
+
+
+def hook(script, payload, env):
+    data = payload if isinstance(payload, str) else json.dumps(payload)
+    return subprocess.run([sys.executable, script], input=data.encode(), capture_output=True, env=env,
+                          timeout=30, check=False).returncode
+
+
+def cmd(c):
+    return {"tool_name": "execute_command", "tool_input": {"command": c}}
+
+
+def j(*parts):
+    """Test vectors that MUST trip the scrub gate are assembled at runtime, so this file's own
+    source passes the gate it tests (no allow-pragma exists: an agent could write through one)."""
+    return "".join(parts)
+
+
+BAD_IP = j("10.", "0.9.9")                    # RFC 1918
+BAD_IP2 = j("172.", "20.3.4")
+BAD_IP3 = j("10.", "0.0.1")
+BAD_PHONE = j("(530) ", "555-", "1234")      # NANP, outside the fictional 555-01xx block
+BAD_PHONE2 = j("530 ", "555 ", "1234")
+BAD_EMAIL = j("someone", "@", "gmail.com")
+BAD_CRED = j("api_pass", "word=", "hunter22")
+BAD_IMSI = j("31015", "0123456789")           # 15 digits, IMSI-shaped
+
+
+ALLOWED = [
+    cmd("python3 -m pytest -q"),
+    cmd(".venv/bin/python -m pytest tests/test_x.py -q"),
+    cmd(".venv/bin/ruff check faxcli tests"),
+    cmd("git diff --stat && git status --short"),
+    cmd("grep -n fax_cli legacy/console/telephony-console.py | head"),
+    cmd("wc -l legacy/fax/fax/cli.py"),
+    cmd("python3 -m py_compile legacy/console/telephony-console.py"),
+    cmd("ls " + os.path.join(ROOT, "legacy")),
+    cmd("/usr/bin/env python3 -c 'print(1)' > /dev/null"),
+    {"tool_name": "write_file", "tool_input": {"path": "docs/analysis.md", "content": "# ok\n202-555-0100"}},
+    {"tool_name": "read_file", "tool_input": {"path": "legacy/console/telephony-console.py"}},
+    {"tool_name": "update_todo_list", "tool_input": {"todos": "[-] write tests"}},
+]
+
+REFUSED = [
+    cmd("ssh pbx asterisk -rx 'fax show stats'"),
+    cmd("echo x; curl http://example.com"),
+    cmd("git push origin main"),
+    cmd("git commit -am wip"),
+    cmd("pip install requests"),
+    cmd("python3 -m pip install ruff"),
+    cmd("sudo true"),
+    cmd("cat ~/.config/fax-console/scrub-deny.txt"),
+    cmd("ls .."),
+    cmd("cat /etc/hostname"),
+    cmd("ls /"),
+    cmd("python3 legacy/fax/fax/cli.py status"),
+    cmd("legacy/fax/bin/fax status"),
+    cmd("FAX_TZ=UTC python3 legacy/console/telephony-console.py"),
+    cmd("cd . && python3 -m faxcli status"),
+    cmd(".venv/bin/faxcli status --json"),
+    cmd("bob run hello"),
+    {"tool_name": "write_file", "tool_input": {"path": "legacy/fax/fax/cli.py", "content": "x"}},
+    {"tool_name": "apply_diff", "tool_input": {"path": ".bob/hooks/tool_guard.py", "diff": "-a\n+b"}},
+    {"tool_name": "write_file", "tool_input": {"path": "AGENTS.md", "content": "no rules"}},
+    {"tool_name": "write_file", "tool_input": {"path": "scripts/scrub-check.sh", "content": "exit 0"}},
+    {"tool_name": "write_file", "tool_input": {"path": "docs/a.md", "content": "host " + BAD_IP}},
+    {"tool_name": "write_file", "tool_input": {"path": "docs/a.md", "content": "call " + BAD_PHONE}},
+    {"tool_name": "write_file", "tool_input": {"path": "/etc/passwd", "content": "x"}},
+    {"tool_name": "read_file", "tool_input": {"path": "../outside/README.md"}},
+    {"tool_name": "web_fetch", "tool_input": {"url": "https://example.com"}},
+    "not json",
+]
+
+
+@pytest.mark.parametrize("payload", ALLOWED, ids=lambda p: json.dumps(p)[:60])
+def test_guard_allows(payload, env):
+    assert hook(GUARD, payload, env) == 0
+
+
+@pytest.mark.parametrize("payload", REFUSED, ids=lambda p: json.dumps(p)[:60])
+def test_guard_refuses(payload, env):
+    assert hook(GUARD, payload, env) == 2
+
+
+def test_prompt_gate_allows_clean_prompt(env):
+    assert hook(GATE, {"prompt": "Analyse legacy/ and write docs/analysis.md; use 202-555-0142."}, env) == 0
+
+
+def test_prompt_gate_blocks_identifying_prompt(env):
+    assert hook(GATE, {"prompt": f"the house line is {BAD_PHONE2}, host {BAD_IP}"}, env) == 2
+
+
+def test_prompt_gate_fails_closed_on_garbage(env):
+    assert hook(GATE, "garbage", env) == 2
+
+
+@pytest.mark.parametrize("text,expect", [
+    ("fictional 202-555-0142 and Faxbeep 1-972-532-9272", 0),
+    ("doc range 192.0.2.20 and loopback 127.0.0.1", 0),
+    ("a SIP contact 2007@192.0.2.131", 0),
+    ("real-looking " + BAD_PHONE, 1),
+    (f"private {BAD_IP2} at the end {BAD_IP3}.", 1),
+    ("mail " + BAD_EMAIL, 1),
+    (BAD_CRED, 1),
+    ("an IMSI-shaped " + BAD_IMSI, 1),
+])
+def test_scrub_check_stdin(text, expect, env):
+    r = subprocess.run([SCRUB, "--stdin", "t"], input=text.encode(), capture_output=True, env=env, timeout=30,
+                       check=False)
+    assert r.returncode == expect, r.stdout.decode()
+    assert b"555-1234" not in r.stdout and b"hunter22" not in r.stdout   # matches are masked in output
