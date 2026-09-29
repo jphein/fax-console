@@ -18,20 +18,23 @@ match the rebuilt baseline.
   `bob run --format stream-json --max-cost N --disable-tool-groups skill,mcp,browser,mode`,
   wrapped by [`scripts/bob-run.sh`](../scripts/bob-run.sh). It runs in a terminal the owner
   can watch; [`scripts/bob-watch.py`](../scripts/bob-watch.py) renders the stream readably.
+  `BOB_TMUX=1` runs it in tmux session `bob` instead, so an agent's tool timeout cannot cut a
+  run short.
 - **Bob follows the repo's own rules.** [`AGENTS.md`](../AGENTS.md) holds them: the frozen
   baseline, no network or PBX access, fictional data only, and stable JSON contracts.
 - **The security boundary is an OS sandbox**, [`scripts/bob-sandbox.sh`](../scripts/bob-sandbox.sh).
   Bob's whole process tree runs inside it, including any tests Bob writes and runs:
   - **Filesystem (bubblewrap):** Bob sees this repo and nothing else of the workstation.
     `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`, `.venv/` and `AGENTS.md` are
-    read-only. Bob gets a clean home directory and a minimal `/etc`, with no hosts file and no
-    ssh config.
+    read-only, and so is the evidence: this file and `docs/bob-runs/`. `bob-run.sh` records
+    Bob's stream and keeps the ledger from outside the sandbox. Bob gets a clean home directory
+    and a minimal `/etc`, with no hosts file and no ssh config.
   - **Network (a systemd scope with BPF address filters):** the LAN, loopback, link-local and
     CGNAT ranges are denied, so the PBX and every house service are unreachable. The public
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    31 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    37 probes. One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
@@ -53,23 +56,36 @@ match the rebuilt baseline.
   `git log --grep "Assisted-by: IBM Bob"` lists them.
 
 ## Ledger
-Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 50 for the month.
+Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills them in (see **Budget** below).
 
 | # | Date (PDT) | Task | Bob's output | Tool calls | Cost | Kept / changed |
 |---|---|---|---|---|---|---|
 | – | 9/28 21:30 | Setup check ("reply ok") | one word | 0 | 0.027 | — |
 | 0 | 9/28 22:13 | [Sandbox smoke test](bob-runs/0-sandbox-smoke.prompt.md) | one file written; `curl` refused; an outside path refused | 3 | 0.083 | Proved the hooks fire in headless mode and that Bob reports refusals accurately |
 | 1 | 9/28 22:15 | [Modernization analysis](bob-runs/1-analysis.prompt.md) | [`docs/analysis.md`](analysis.md) §1–§8, 451 lines | 26 | 3.078 | Kept verbatim; 7 corrections and 6 added findings in §9 |
+| – | 9/28 22:19 | [Budget-wrapper smoke test](bob-runs/drift-smoke.prompt.md) ("reply OK", ask mode, empty workspace; pre-sandbox, real HOME) | one word ([stream](bob-runs/drift-smoke.jsonl)) | 0 | 0.016 | Proved the Bobcoin gate, the stream log and the ledger update before they touched this file |
 | 2 | 9/28 22:34 | [Isolation check](bob-runs/2-isolation-check.prompt.md) | none: the prompt gate refused the prompt, failing closed, because the private deny-list was not reachable from the clean home | 0 | 0 | Showed the gate fails closed; led to the sandbox's split between generic rules inside and the private list outside |
 | 3 | 9/28 22:44 | [Sandbox check](bob-runs/3-sandbox-check.prompt.md) | "ok", from inside the OS sandbox | 0 | 0.021 | Proved Bob works sandboxed; its prompt now lists only Bob's own six skills |
 | 4 | 9/28 23:02 | [The faxcli package](bob-runs/4-faxcli-package.prompt.md) | `faxcli/` (9 modules, ~905 lines), `pyproject.toml`, 121 tests (unit, golden, characterization) | 58 | 6.027 | Architecture kept. Review found 2 production regressions and 5 more defects (run 5) |
 | 5 | 9/28 23:26 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
 
-**Running total: 14.40 Bobcoins** (after run 5). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 14.42 Bobcoins** (after run 5 and the wrapper smoke test).
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
-measurably needs more, and any raise is recorded in this ledger with its reason.
+measurably needs more, and any raise is recorded in this ledger with its reason. `scripts/bob-run.sh`
+enforces this.
+- It prints the cycle's spend before and after each run.
+- It refuses a run that would pass 100 unless `BOB_OVERRIDE="team-lead: <reason>"` is set,
+  and it never passes 180. The 180 and the renewal day are constants in
+  [`scripts/bob_usage.py`](../scripts/bob_usage.py); only the 100 can be tuned (`BOB_SOFT_CAP`).
+  A cost or cap that is not a finite number is refused before Bob starts.
+- It keeps this table itself: a row reserved at the run's maximum before Bob starts, and the
+  measured cost after it ends. The review columns stay human-written. A cost Bob reports that is
+  not a finite number of 0 or more is an error, and the reservation keeps counting.
+- It also keeps a journal of every reservation and cost outside the repository, per user, where
+  Bob's sandbox cannot see it. So two checkouts share one budget, a deleted or edited row gives
+  no Bobcoins back, and a row that goes missing is restored (the run then exits 3).
 
 **Cap raised for run 4 (the faxcli package): 6.** Run 1 reached 3.08 on reading alone: 26 tool
 calls, ~3,300 legacy lines. Run 4 has to read the analysis, the CLI and the fixtures, write about
@@ -167,5 +183,5 @@ before it edits them. 3 would likely stop mid-fix again.
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
 | **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up. |
-| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. |
+| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. The infrastructure hardening came from a second agent, drift-gems: the Bobcoin gate, ledger and journal (`scripts/bob_usage.py`, the budget and tmux handling in `scripts/bob-run.sh`), the `--history` scan, binary review and generic rules in `scripts/scrub-check.sh`, their tests (`tests/test_scrub_*.py`, `tests/test_bob_*.py`) and the CI pins. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
