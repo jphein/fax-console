@@ -59,6 +59,9 @@ def test_app_js_reads_every_get_through_api():
     assert re.findall(r'fetch\("/api/[^"]*"', js) == ['fetch("/api/fax/send"'], "a GET fetch skips api()"
     assert 'const api = p => STATIC ? "api" + p.slice(4) + ".json" : p;' in js
     assert 'document.getElementById("faxsend").disabled=true' in js
+    # nothing computed at export time is shown as current (finding A): a recording time, a billing date
+    assert '"at "+v.fetched_at+", recorded for this static replay"' in js
+    assert 'const bill = STATIC ? (v.did_next_billing ?' in js
 
 
 # realm-sigil's README: "Static sites omit server-only fields". Spelled out here, not taken from the

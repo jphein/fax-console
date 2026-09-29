@@ -86,7 +86,11 @@ function renderVoipms(v){
      catastrophic, and the page cannot tell which — so it reports both and lets
      neither hide the other. */
   const low = v.balance_low === true;
-  const age = v.age===null||v.age===undefined ? "never"
+  /* A static replay says when the balance was recorded, and the billing date, not a countdown. Both
+     were computed at export, and "read 0s ago" or "in 32 days" on a page seen weeks later would claim a
+     freshness nobody measured (finding A). */
+  const age = STATIC ? (v.fetched_at ? "at "+v.fetched_at+", recorded for this static replay" : "never")
+            : v.age===null||v.age===undefined ? "never"
             : (v.age<90 ? v.age+"s ago"
                : (v.age<5400 ? Math.round(v.age/60)+"m ago"
                              : Math.round(v.age/3600)+"h ago"));
@@ -94,7 +98,8 @@ function renderVoipms(v){
                ? "" : `<div class="vm-sub">about <b>${v.months_left}</b> months of line
                        rental at the current DID fee &mdash; call minutes are extra and
                        are noise beside it.</div>`;
-  const bill = (v.days_to_billing===null||v.days_to_billing===undefined)
+  const bill = STATIC ? (v.did_next_billing ? `<div class="vm-sub">next billing on <b>${esc(v.did_next_billing)}</b>.</div>` : "")
+             : (v.days_to_billing===null||v.days_to_billing===undefined)
              ? "" : `<div class="vm-sub">next billing in <b>${v.days_to_billing}</b>
                      days${v.did_next_billing?` (${esc(v.did_next_billing)})`:""}.</div>`;
   /* ⚠️ THREE-STATE, like SMS `bound`: null means the poller has not fetched the
