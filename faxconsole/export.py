@@ -32,6 +32,9 @@ GET_API_ROUTES = ("/api/voipms", "/api/fax/status", "/api/fax/log", "/api/fax",
 PAGE_ASSETS = ("app.css", "app.js", "favicon.svg")
 # realm-sigil: "Static sites omit server-only fields".
 SERVER_ONLY = ("started", "uptime", "runtime", "os", "host", "pid")
+# VoIP.ms fields computed from the export's own clock: a static copy would freeze them into a countdown.
+# The page's static mode reads fetched_at and did_next_billing instead.
+VOIPMS_FROZEN = ("age", "stale", "days_to_billing", "polling")
 
 
 def utc(local: str) -> str:
@@ -74,8 +77,10 @@ def export(fixtures: str) -> dict[str, bytes]:
             body = json.loads(r.body)
             if route == "/api/version":
                 body = {k: v for k, v in body.items() if k not in SERVER_ONLY}
-            if route == "/api/voipms" and body.get("fetched_at"):
-                body["fetched_at"] = utc(body["fetched_at"])
+            if route == "/api/voipms":
+                body = {k: v for k, v in body.items() if k not in VOIPMS_FROZEN}
+                if body.get("fetched_at"):
+                    body["fetched_at"] = utc(body["fetched_at"])
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
         files["index.html"] = staticize(page.body)

@@ -63,6 +63,8 @@ def test_app_js_reads_every_get_through_api():
     # nothing computed at export time is shown as current (finding A): a recording time, a billing date
     assert '"at "+v.fetched_at+", recorded for this static replay"' in js
     assert 'const bill = STATIC ? (v.did_next_billing ?' in js
+    assert 'el.appendChild(document.createTextNode("recorded"));' in js      # the chip, never "live"
+    assert 'STATIC ? "This is a static copy, and every value on it was recorded.' in js
 
 
 # realm-sigil's README: "Static sites omit server-only fields". Spelled out here, not taken from the
@@ -78,6 +80,12 @@ def test_the_version_is_the_static_sigil(site):
 
 def test_the_voipms_time_is_utc_not_the_hosts_zone(site):
     assert json.loads(site["api/voipms.json"])["fetched_at"].endswith(" UTC")
+
+
+def test_the_voipms_json_carries_no_frozen_countdown(site):
+    v = json.loads(site["api/voipms.json"])
+    frozen = {"age", "stale", "days_to_billing", "polling"}      # spelled out, not the code's list
+    assert not frozen & set(v), frozen & set(v)
 
 
 def test_nothing_from_the_machine(site):

@@ -38,6 +38,15 @@ function ago(ms){
 function freshness(ok, why){
   const el = document.getElementById("fresh");
   if(!el) return;
+  /* A static copy measured nothing when it was drawn: its data was recorded at export. So its chip says
+     "recorded", never "live" (finding A; the Oracle, on PR 16). */
+  if(STATIC){
+    el.className = "rs-chip stale";
+    el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
+    el.appendChild(document.createTextNode("recorded"));
+    el.title = "A static copy of recorded replay data. Nothing on this page is live.";
+    return;
+  }
   if(ok){
     el.className = "rs-chip";
     el.innerHTML = "<i class=\"rs-mark ok\" aria-hidden=\"true\"></i>";
@@ -270,7 +279,9 @@ async function load(){
   fetch(api("/api/version")).then(r=>r.json()).then(v=>{
     const foot=document.getElementById("foot");
     if(foot) foot.textContent=
-      "Every live value on this page carries the command that produced it — "
+      (STATIC ? "This is a static copy, and every value on it was recorded. Each carries the command "
+                +"that produced it — "
+              : "Every live value on this page carries the command that produced it — ")
       +"open how this was read on any tile. Where a state could not be read "
       +"it says not probed rather than guessing, because a wrong green dot is "
       +"believed and an honest gap is not."
