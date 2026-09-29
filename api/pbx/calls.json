@@ -1,0 +1,22 @@
+{
+ "cellular": null,
+ "impossible": false,
+ "instruments": [
+  {
+   "name": "Asterisk channels",
+   "note": "84 calls processed since start",
+   "ok": true,
+   "raw": "Channel                                                          Location                         State   Application(Data)             \n0 active channels\n0 active calls\n84 calls processed",
+   "src": "asterisk -rx 'core show channels'",
+   "value": 0
+  },
+  {
+   "name": "MSC connections",
+   "ok": false,
+   "src": "cell-core vty 4254: show connection",
+   "why": "not probed"
+  }
+ ],
+ "subscribers": {},
+ "value": 0
+}

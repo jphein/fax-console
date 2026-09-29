@@ -1,0 +1,89 @@
+{
+ "infra": [
+  {
+   "channels": 0,
+   "contact": {
+    "status": "NonQual",
+    "uri": "sip:127.0.0.1:5069"
+   },
+   "ext": "cell-bridge",
+   "state": "Not in use"
+  },
+  {
+   "channels": 0,
+   "contact": {
+    "status": "Avail",
+    "uri": "sip:pop1.example.com"
+   },
+   "ext": "voipms",
+   "state": "Not in use"
+  },
+  {
+   "channels": 0,
+   "contact": {
+    "status": "Avail",
+    "uri": "sip:pop1.example.com"
+   },
+   "ext": "voipms-fax",
+   "state": "Not in use"
+  }
+ ],
+ "ok": true,
+ "rows": [
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2001",
+   "state": "Unavailable"
+  },
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2002",
+   "state": "Unavailable"
+  },
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2003",
+   "state": "Unavailable"
+  },
+  {
+   "channels": 0,
+   "contact": {
+    "status": "Avail",
+    "uri": "sip:2004@192.0.2.124:38540;pn-prid=REDACTED"
+   },
+   "ext": "2004",
+   "state": "Not in use"
+  },
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2005",
+   "state": "Unavailable"
+  },
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2006",
+   "state": "Unavailable"
+  },
+  {
+   "channels": 0,
+   "contact": {
+    "status": "Avail",
+    "uri": "sip:2007@192.0.2.131:5080"
+   },
+   "ext": "2007",
+   "state": "Not in use"
+  },
+  {
+   "channels": 0,
+   "contact": null,
+   "ext": "2008",
+   "state": "Unavailable"
+  }
+ ],
+ "src": "asterisk -rx 'pjsip show endpoints'"
+}

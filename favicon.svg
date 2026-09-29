@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- fax glyph: a page feeding into a machine — readable at 16px in light and dark themes -->
+  <style>
+    .body { fill: #8a6222; }
+    .feed { fill: #f4efe4; }
+    /* after the defaults: at equal specificity the later rule wins */
+    @media (prefers-color-scheme: dark) {
+      .body { fill: #d9ad5c; }
+      .feed { fill: #181d24; }
+    }
+  </style>
+  <!-- machine body -->
+  <rect class="body" x="1" y="5" width="14" height="9" rx="2"/>
+  <!-- paper feed slot -->
+  <rect class="feed" x="4" y="3" width="5" height="5" rx="1"/>
+  <!-- paper sheet coming out -->
+  <rect class="body" x="5" y="1" width="3" height="4" rx="0.5"/>
+  <!-- output tray indicator -->
+  <rect class="feed" x="3" y="10" width="10" height="1.5" rx="0.5"/>
+  <!-- keypad dots -->
+  <rect class="feed" x="10" y="7" width="1.5" height="1.5" rx="0.3"/>
+  <rect class="feed" x="12" y="7" width="1.5" height="1.5" rx="0.3"/>
+  <rect class="feed" x="10" y="9" width="1.5" height="1.5" rx="0.3"/>
+  <rect class="feed" x="12" y="9" width="1.5" height="1.5" rx="0.3"/>
+</svg>

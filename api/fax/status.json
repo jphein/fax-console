@@ -1,0 +1,30 @@
+{
+ "active_sessions": [],
+ "gs": true,
+ "obi100_registered": true,
+ "ok": true,
+ "spandsp": true,
+ "stats": {
+  "Call Dropped": 0,
+  "Completed FAXes": 3,
+  "Current Sessions": 0,
+  "Failed FAXes": 0,
+  "File Error": 0,
+  "Memory Error": 0,
+  "Negotiation Failed": 0,
+  "No FAX": 0,
+  "Protocol Error": 0,
+  "RX Protocol Error": 0,
+  "Receive Attempts": 0,
+  "Reserved Sessions": 0,
+  "Retries Exceeded": 0,
+  "Success": 3,
+  "Switched to T.38": 0,
+  "TX Protocol Error": 0,
+  "Train Failure": 0,
+  "Transmit Attempts": 4,
+  "Unknown Error": 0
+ },
+ "trunk_available": true,
+ "trunk_registered": true
+}

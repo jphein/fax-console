@@ -1,0 +1,9 @@
+{
+ "expires": "767",
+ "name": "voipms",
+ "ok": true,
+ "raw": "<Registration/ServerURI..............................>  <Auth....................>  <Status.......>\n==========================================================================================\n\n voipms/sip:pop1.example.com                             voipms-auth                 Registered        (exp. 767s)\n\nObjects found: 1",
+ "src": "asterisk -rx 'pjsip show registrations'",
+ "status": "Registered",
+ "uri": "sip:pop1.example.com"
+}

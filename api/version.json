@@ -1,0 +1,13 @@
+{
+ "branch": "unknown",
+ "built": "unknown",
+ "commit_url": "",
+ "description": "Fax panel back end \u2014 send, receive, and status",
+ "dirty": false,
+ "hash": "dev",
+ "name": "fax.realm.watch",
+ "realm": "signal",
+ "replay": true,
+ "repo": "",
+ "version": "Amplified Antenna \u00b7 dev"
+}
