@@ -69,6 +69,11 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
 measurably needs more, and any raise is recorded in this ledger with its reason.
 
+**Cap raised for run 4 (the faxcli package): 6.** Run 1 reached 3.08 on reading alone: 26 tool
+calls, ~3,300 legacy lines. Run 4 has to read the analysis, the CLI and the fixtures, write about
+1,000 lines of code and tests, and iterate on pytest until green. A run stopped by its cap
+mid-way would have to re-read everything on resume, which costs more than the headroom.
+
 ## Run notes
 
 ### Run 1: modernization analysis
