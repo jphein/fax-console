@@ -14,7 +14,6 @@ import json
 import os
 import struct as _struct
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -220,7 +219,7 @@ class TestFaxRowsCharacterization:
         text = (_FIXTURES / "cdr" / "Master.csv").read_text()
         new_rows = fax_rows(parse_cdr(text, 400), tz)
         legacy_rows = legacy_fake_run_and_open.fax_rows(local=True, limit=400)
-        for i, (new, leg) in enumerate(zip(new_rows, legacy_rows)):
+        for i, (new, leg) in enumerate(zip(new_rows, legacy_rows, strict=False)):
             for key in ("file", "direction", "number", "start_local",
                         "lastapp", "disposition", "billsec", "start"):
                 assert new[key] == leg[key], (
@@ -285,7 +284,7 @@ class TestCmdLogCharacterization:
         assert new_obj["ok"] is True
         assert leg_obj["ok"] is True
         assert len(new_obj["rows"]) == len(leg_obj["rows"])
-        for i, (new_r, leg_r) in enumerate(zip(new_obj["rows"], leg_obj["rows"])):
+        for i, (new_r, leg_r) in enumerate(zip(new_obj["rows"], leg_obj["rows"], strict=False)):
             for key in ("file", "direction", "number", "start_local",
                         "disposition", "billsec", "start", "lastapp"):
                 assert new_r[key] == leg_r[key], (
@@ -313,8 +312,6 @@ class TestCmdSendDryRunCharacterization:
         """New --dry-run output has the same required fields as legacy."""
         pdf = tmp_path / "test.pdf"
         pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
-        tif_out = tmp_path / "out.tif"
-
         # Patch legacy.SPOOL so the TIFF goes to tmp_path (not /var/spool/...)
         monkeypatch.setattr(legacy, "SPOOL", str(tmp_path))
 
@@ -351,8 +348,8 @@ class TestCmdSendDryRunCharacterization:
 
         buf_new = io.StringIO()
         rc = main(
-            ["--local", "--json", "send", str(pdf), "12025550142", "--dry-run"],
-            transport=ReplayTransport(),
+            ["--json", "send", str(pdf), "12025550142", "--dry-run"],
+            transport=ReplayTransport(spool_dir=tmp_path),
             stdout=buf_new,
         )
         assert rc == 0

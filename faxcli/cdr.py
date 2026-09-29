@@ -28,7 +28,7 @@ def parse_cdr(text: str, limit: int = 200) -> list[dict]:
     out = []
     for r in rows[-limit:]:
         if len(r) >= len(CDR_COLS):
-            out.append(dict(zip(CDR_COLS, r)))
+            out.append(dict(zip(CDR_COLS, r, strict=False)))
     return out
 
 

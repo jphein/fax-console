@@ -19,21 +19,28 @@ from faxcli import cdr as cdr_mod
 from faxcli import outcome as outcome_mod
 from faxcli.models import DryRunResult, LogResult, LogRow, SendResult, StatusResult
 from faxcli.numbers import InvalidNumber, normalize
-from faxcli.transport import LocalTransport, Reading, ReplayTransport, SshTransport, Transport
+from faxcli.transport import EXCHANGE, LocalTransport, Reading, SshTransport, Transport
 
 TRUNK = "voipms-fax"
 TEST_NUMBER = "19725329272"  # Faxbeep, public test receiver
 SPOOL = "/var/spool/asterisk/fax"
 
+# Default test page (legacy/fax/fax/cli.py:257 used docs/test-page.pdf; we use demo/)
+_DEFAULT_TEST_PAGE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "demo", "test-page.pdf"
+)
+
 
 def _on_exchange() -> bool:
-    return socket.gethostname().split(".")[0] == "pbx"
+    # Compare the short hostname against EXCHANGE, which respects FAX_EXCHANGE_HOST
+    # (legacy/fax/fax/cli.py:36).
+    return socket.gethostname().split(".")[0] == EXCHANGE.split(".")[0]
 
 
 def _make_transport(local: bool) -> Transport:
     if local or _on_exchange():
         return LocalTransport()
-    return SshTransport()
+    return SshTransport(host=EXCHANGE)
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +58,6 @@ def cmd_status(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> 
     gs_reading = transport.which_gs()
 
     failed = [k for k, v in readings.items() if not v.ok]
-    all_ok = not failed and gs_reading.ok  # gs failure is not fatal but reported
 
     # Parse what we have (empty string for failed reads — safe defaults)
     stats = ast_mod.parse_stats(readings["fax show stats"].text)
@@ -177,50 +183,39 @@ def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
     label = re.sub(r"[^A-Za-z0-9_-]+", "-", a.label or os.path.splitext(os.path.basename(a.pdf))[0])[:40]
     name = f"{stamp}-{label}-{number}.tif"
 
-    # Determine spool location; pdf_to_tiff is pure I/O, not in transport
     from faxcli.tiff import count_pages_from_path  # noqa: PLC0415
 
     local = a.local or _on_exchange()
     localtif = os.path.join("/tmp" if not local else SPOOL, name)
-
-    import subprocess  # noqa: PLC0415
-
-    subprocess.run(
-        ["gs", "-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=tiffg4", "-r204x196",
-         "-dFIXEDMEDIA", "-dPDFFitPage", "-sPAPERSIZE=letter",
-         f"-sOutputFile={localtif}", a.pdf],
-        check=True,
-        timeout=120,
-    )
-    pages = count_pages_from_path(localtif)
     spooled = os.path.join(SPOOL, name)
 
-    if not local:
-        subprocess.run(
-            ["scp", "-q", "-o", "BatchMode=yes", localtif, f"pbx:/tmp/{name}"],
-            check=True, timeout=60,
-        )
-        subprocess.run(
-            ["ssh"] + ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "pbx",
-                       f"sudo -n install -o asterisk -g asterisk -m 644 /tmp/{name} {spooled}"],
-            check=True, timeout=60,
-        )
-        subprocess.run(
-            ["ssh"] + ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "pbx",
-                       f"rm -f /tmp/{name}"],
-            timeout=60,
-        )
-        os.unlink(localtif)
+    render_reading = transport.render(a.pdf, localtif)
+    if not render_reading.ok:
+        print(f"error: render failed: {render_reading.why}", file=sys.stderr)
+        return 1
+    # render() may write to a redirected path (e.g. ReplayTransport with spool_dir)
+    actual_localtif = render_reading.text
+
+    pages = count_pages_from_path(actual_localtif)
+
+    spool_reading = transport.spool(actual_localtif, name, spooled)
+    if not spool_reading.ok:
+        print(f"error: spool failed: {spool_reading.why}", file=sys.stderr)
+        return 1
+    # SSH: spool() returns spooled (the remote path); local/replay: returns actual_localtif
+    effective_tif = spool_reading.text if spool_reading.text else spooled
+
+    transport.cleanup(actual_localtif)
 
     if a.dry_run:
-        result = DryRunResult(ok=True, dry_run=True, number=number, pages=pages, tif=spooled)
+        result = DryRunResult(ok=True, dry_run=True, number=number, pages=pages, tif=effective_tif)
         if getattr(a, "json", False):
             print(json.dumps(result.to_json()), file=stdout)
         else:
-            print(f"dry run: {pages} page(s) spooled as {spooled}; not dialed", file=stdout)
+            print(f"dry run: {pages} page(s) spooled as {effective_tif}; not dialed", file=stdout)
         return 0
 
-    cli_cmd = f"channel originate PJSIP/{number}@{TRUNK} application SendFax {spooled},f"
+    cli_cmd = f"channel originate PJSIP/{number}@{TRUNK} application SendFax {effective_tif},f"
     before_reading = transport.asterisk("fax show stats")
     before = ast_mod.parse_stats(before_reading.text)
     originate_reading = transport.asterisk(cli_cmd)
@@ -231,7 +226,7 @@ def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
         "number": number,
         "label": label,
         "pages": pages,
-        "tif": spooled,
+        "tif": effective_tif,
         "originate": out_text,
         "started": dt.datetime.now().isoformat(timespec="seconds"),
     }
@@ -253,7 +248,7 @@ def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
         for row in cdr_mod.fax_rows(
             cdr_mod.parse_cdr(transport.read_cdr(100).text, 100), tz
         ):
-            if spooled.endswith(row.get("file", "\0")):
+            if effective_tif.endswith(row.get("file", "\0")):
                 res.update({k: row[k] for k in ("start", "answer", "end", "billsec", "disposition")})
                 break
         job["result"] = res
@@ -275,10 +270,13 @@ def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
         wait_suffix = ""
         if a.wait and "result" in job:
             r = job["result"]
-            wait_suffix = f"\nresult: {r.get('outcome', '?')} · call {r.get('disposition', '?')} {r.get('billsec', '?')}s"
+            outcome = r.get("outcome", "?")
+            disp = r.get("disposition", "?")
+            secs = r.get("billsec", "?")
+            wait_suffix = f"\nresult: {outcome} · call {disp} {secs}s"
         else:
             wait_suffix = "\nuse `fax log` to see the outcome"
-        print(f"dialing {number} with {pages} page(s) → {spooled}{wait_suffix}", file=stdout)
+        print(f"dialing {number} with {pages} page(s) → {effective_tif}{wait_suffix}", file=stdout)
     return 0
 
 
@@ -290,7 +288,15 @@ def cmd_test(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
     a.number = TEST_NUMBER
     a.label = "faxtest"
     if not getattr(a, "pdf", None):
-        a.pdf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs", "test-page.pdf")
+        # Default test page: demo/test-page.pdf (legacy used docs/test-page.pdf)
+        a.pdf = _DEFAULT_TEST_PAGE
+    if not os.path.isfile(a.pdf):
+        print(
+            f"error: test page not found: {a.pdf}\n"
+            "Place the test page at demo/test-page.pdf or pass --pdf explicitly.",
+            file=sys.stderr,
+        )
+        return 1
     if not a.wait:
         a.wait = 90
     print("sending the test page to Faxbeep (public inbox: faxbeep.com)", file=stdout)
@@ -301,8 +307,11 @@ def cmd_test(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
 # main
 # ---------------------------------------------------------------------------
 
-def main(argv: list[str] | None = None, transport: Transport | None = None,
-         stdout: IO[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    transport: Transport | None = None,
+    stdout: IO[str] | None = None,
+) -> int:
     if stdout is None:
         stdout = sys.stdout
 

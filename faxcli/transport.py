@@ -5,8 +5,11 @@ an SshTransport, and a ReplayTransport for tests.
 """
 from __future__ import annotations
 
+import contextlib
 import os
+import shlex
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -16,6 +19,9 @@ SUDO = ["sudo", "-n"]
 
 ASTERISK_FIXTURE_DIR = Path("tests/fixtures/asterisk")
 CDR_FIXTURE_PATH = Path("tests/fixtures/cdr/Master.csv")
+
+# Default PBX hostname — overridden by FAX_EXCHANGE_HOST (legacy/fax/fax/cli.py:24)
+EXCHANGE = os.environ.get("FAX_EXCHANGE_HOST", "pbx")
 
 
 @dataclass(frozen=True)
@@ -31,11 +37,11 @@ class Reading:
     why: str = ""
 
     @classmethod
-    def success(cls, text: str) -> "Reading":
+    def success(cls, text: str) -> Reading:
         return cls(ok=True, text=text)
 
     @classmethod
-    def failure(cls, why: str) -> "Reading":
+    def failure(cls, why: str) -> Reading:
         return cls(ok=False, text="", why=why)
 
 
@@ -54,17 +60,51 @@ class Transport(Protocol):
         """Return the path of ghostscript if available, else failure."""
         ...
 
+    def render(self, pdf: str, tif: str) -> Reading:
+        """Convert a PDF to a TIFF via ghostscript. tif is the destination path."""
+        ...
+
+    def spool(self, localtif: str, name: str, spooled: str) -> Reading:
+        """Copy localtif to the spool and install it at spooled."""
+        ...
+
+    def cleanup(self, localtif: str) -> None:
+        """Remove a temporary local TIFF after spooling."""
+        ...
+
+
+def _default_is_asterisk_user() -> bool:
+    """Return True if the effective user is 'asterisk' (legacy/fax/fax/cli.py:69-74)."""
+    try:
+        import pwd  # noqa: PLC0415
+        return pwd.getpwuid(os.geteuid()).pw_name == "asterisk"
+    except Exception:
+        return False
+
 
 class LocalTransport:
     """Runs Asterisk CLI commands locally (no SSH).
 
     Used when --local is set or the host is the PBX.
+    The *is_asterisk_user* callable is injectable so tests do not depend on
+    the real OS user (legacy/fax/fax/cli.py:62-74).
     """
+
+    def __init__(
+        self,
+        is_asterisk_user: Callable[[], bool] = _default_is_asterisk_user,
+    ) -> None:
+        self._is_asterisk_user = is_asterisk_user
+
+    def _sudo_prefix(self) -> list[str]:
+        # asterisk.ctl is 755: the asterisk user needs no sudo;
+        # other users do (legacy/fax/fax/cli.py:62-64).
+        return [] if self._is_asterisk_user() else SUDO
 
     def asterisk(self, cmd: str) -> Reading:
         try:
             r = subprocess.run(
-                SUDO + ["asterisk", "-rx", cmd],
+                self._sudo_prefix() + ["asterisk", "-rx", cmd],
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -97,15 +137,43 @@ class LocalTransport:
         except Exception as exc:
             return Reading.failure(str(exc))
 
+    def render(self, pdf: str, tif: str) -> Reading:
+        try:
+            subprocess.run(
+                ["gs", "-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=tiffg4", "-r204x196",
+                 "-dFIXEDMEDIA", "-dPDFFitPage", "-sPAPERSIZE=letter",
+                 f"-sOutputFile={tif}", pdf],
+                check=True,
+                timeout=120,
+            )
+            return Reading.success(tif)
+        except subprocess.TimeoutExpired:
+            return Reading.failure("gs timed out")
+        except subprocess.CalledProcessError as exc:
+            return Reading.failure(f"gs failed: {exc}")
+        except Exception as exc:
+            return Reading.failure(str(exc))
+
+    def spool(self, localtif: str, name: str, spooled: str) -> Reading:
+        # Local: TIFF is already in the spool dir, nothing to copy
+        return Reading.success(spooled)
+
+    def cleanup(self, localtif: str) -> None:
+        # Local: TIFF stays at its destination; nothing to remove
+        pass
+
 
 class SshTransport:
     """Runs Asterisk CLI commands via SSH."""
 
-    def __init__(self, host: str = "pbx"):
+    def __init__(self, host: str = EXCHANGE) -> None:
         self.host = host
 
     def _ssh(self, argv: list[str]) -> Reading:
-        full = ["ssh"] + SSH_OPTS + [self.host, " ".join(argv)]
+        # Quote every remote argument so the remote shell treats each as one
+        # word (legacy/fax/fax/cli.py:55: shlex.quote).
+        remote_cmd = " ".join(shlex.quote(a) for a in argv)
+        full = ["ssh"] + SSH_OPTS + [self.host, remote_cmd]
         try:
             r = subprocess.run(full, capture_output=True, text=True, timeout=60)
             if r.returncode == 0:
@@ -127,6 +195,44 @@ class SshTransport:
     def which_gs(self) -> Reading:
         return self._ssh(["which", "gs"])
 
+    def render(self, pdf: str, tif: str) -> Reading:
+        try:
+            subprocess.run(
+                ["gs", "-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=tiffg4", "-r204x196",
+                 "-dFIXEDMEDIA", "-dPDFFitPage", "-sPAPERSIZE=letter",
+                 f"-sOutputFile={tif}", pdf],
+                check=True,
+                timeout=120,
+            )
+            return Reading.success(tif)
+        except subprocess.TimeoutExpired:
+            return Reading.failure("gs timed out")
+        except subprocess.CalledProcessError as exc:
+            return Reading.failure(f"gs failed: {exc}")
+        except Exception as exc:
+            return Reading.failure(str(exc))
+
+    def spool(self, localtif: str, name: str, spooled: str) -> Reading:
+        try:
+            subprocess.run(
+                ["scp", "-q", "-o", "BatchMode=yes", localtif, f"{self.host}:/tmp/{name}"],
+                check=True, timeout=60,
+            )
+            self._ssh(SUDO + ["install", "-o", "asterisk", "-g", "asterisk", "-m", "644",
+                               f"/tmp/{name}", spooled])
+            self._ssh(["rm", "-f", f"/tmp/{name}"])
+            return Reading.success(spooled)
+        except subprocess.TimeoutExpired:
+            return Reading.failure("scp timed out")
+        except subprocess.CalledProcessError as exc:
+            return Reading.failure(f"scp failed: {exc}")
+        except Exception as exc:
+            return Reading.failure(str(exc))
+
+    def cleanup(self, localtif: str) -> None:
+        with contextlib.suppress(OSError):
+            os.unlink(localtif)
+
 
 class ReplayTransport:
     """Serves recorded fixtures from the tests/fixtures/ directories.
@@ -136,6 +242,8 @@ class ReplayTransport:
       ``pjsip show endpoint voipms-fax`` → ``asterisk/pjsip_show_endpoint_voipms-fax.txt``
 
     Failures can be injected by passing a set of command strings to *fail_commands*.
+
+    For send tests, *spool_dir* is the directory where render() writes the TIFF.
     """
 
     def __init__(
@@ -145,12 +253,14 @@ class ReplayTransport:
         fail_commands: set[str] | None = None,
         fail_cdr: bool = False,
         fail_gs: bool = False,
+        spool_dir: Path | str | None = None,
     ):
         self._ast_dir = Path(fixture_dir) if fixture_dir else ASTERISK_FIXTURE_DIR
         self._cdr_path = Path(cdr_path) if cdr_path else CDR_FIXTURE_PATH
         self._fail_cmds: set[str] = fail_commands or set()
         self._fail_cdr = fail_cdr
         self._fail_gs = fail_gs
+        self._spool_dir = Path(spool_dir) if spool_dir else None
 
     def _cmd_to_filename(self, cmd: str) -> str:
         return cmd.replace(" ", "_") + ".txt"
@@ -177,3 +287,30 @@ class ReplayTransport:
         if self._fail_gs:
             return Reading.failure("injected gs failure")
         return Reading.success("/usr/bin/gs")
+
+    def render(self, pdf: str, tif: str) -> Reading:
+        """Write a minimal 1-page TIFF.
+
+        If *spool_dir* was given at construction time, the TIFF is written
+        into that directory so tests do not need /var/spool/asterisk/fax/.
+        Returns the actual path written.
+        """
+        import struct  # noqa: PLC0415
+        magic = b"II"
+        version = struct.pack("<H", 42)
+        ifd_off = struct.pack("<I", 8)
+        ifd = struct.pack("<H", 0) + struct.pack("<I", 0)
+        dest = str(self._spool_dir / Path(tif).name) if self._spool_dir else tif
+        try:
+            with open(dest, "wb") as f:
+                f.write(magic + version + ifd_off + ifd)
+            return Reading.success(dest)
+        except OSError as exc:
+            return Reading.failure(str(exc))
+
+    def spool(self, localtif: str, name: str, spooled: str) -> Reading:
+        """In replay mode the TIFF stays where render() wrote it."""
+        return Reading.success(localtif)
+
+    def cleanup(self, localtif: str) -> None:
+        """Nothing to clean up in replay mode."""

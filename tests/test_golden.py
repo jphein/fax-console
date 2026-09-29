@@ -26,11 +26,13 @@ def run_main(args, transport):
 
 class TestGoldenStatus:
     @pytest.fixture(scope="class")
-    def golden(self):
+    @classmethod
+    def golden(cls):
         return json.loads((GOLDEN / "status.json").read_text())
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         transport = ReplayTransport()
         return run_main(["--json", "status"], transport)
 
@@ -65,11 +67,13 @@ class TestGoldenStatus:
 
 class TestGoldenLog:
     @pytest.fixture(scope="class")
-    def golden(self):
+    @classmethod
+    def golden(cls):
         return json.loads((GOLDEN / "log.json").read_text())
 
     @pytest.fixture(scope="class")
-    def result(self):
+    @classmethod
+    def result(cls):
         transport = ReplayTransport()
         return run_main(["--json", "log", "--limit", "400"], transport)
 

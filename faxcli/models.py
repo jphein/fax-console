@@ -5,8 +5,8 @@ legacy key order (AGENTS.md §4).  Additional keys may be appended.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections import OrderedDict
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -76,7 +76,7 @@ class LogRow:
     start_local: str
 
     @classmethod
-    def from_dict(cls, d: dict) -> "LogRow":
+    def from_dict(cls, d: dict) -> LogRow:
         return cls(**{k: d[k] for k in cls.__dataclass_fields__})
 
     def to_json(self) -> dict:

@@ -92,7 +92,7 @@ Receive Attempts     : 0
 Completed FAXes      : 3
 Failed FAXes         : 0
 
-Spandsp G.711       
+Spandsp G.711
 Success              : 3
 Switched to T.38     : 0
 """
@@ -214,7 +214,8 @@ class TestAsteriskHelpers:
 
 class TestCdrParsing:
     @pytest.fixture(scope="class")
-    def master_csv(self):
+    @classmethod
+    def master_csv(cls):
         return (FIXTURES / "cdr" / "Master.csv").read_text()
 
     def test_parse_cdr_has_rows(self, master_csv):
@@ -354,10 +355,7 @@ def _make_tiff(byte_order: str, pages: int) -> bytes:
     fmt_short = bo + "H"
     fmt_int = bo + "I"
 
-    if bo == "<":
-        magic = b"II"
-    else:
-        magic = b"MM"
+    magic = b"II" if bo == "<" else b"MM"
     version = struct.pack(fmt_short, 42)
 
     # Each IFD: entry count (2) + 0 entries + next IFD offset (4)
