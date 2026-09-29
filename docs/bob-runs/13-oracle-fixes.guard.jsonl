@@ -1,0 +1,53 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "3951 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./BASELINE.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxconsole\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/api.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_part1_review.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_run12.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2940-2975\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_run11_review.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -20\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/__main__.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/voipms.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"[-] Item 1: Read no POST body before the gate (server.py do_POST early auth+size check + tests)\\n[ ] Item 2: Replay mode path masking for error strings (routes.py masker + test_replay_surfa"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/server.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:16\\n-------\\nfrom __future__ import annotations\\n\\nimport concurrent.futures\\nimport contextlib\\nimp"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_part1_review.py\", \"range\": \"244-298\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./tests/test_run13_item1.py\", \"content\": \"\\\"\\\"\\\"tests/test_run13_item1.py \\u2014 early POST gate (run-13 item 1).\\n\\nVerifies that server.py's do_POST checks the "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_run13_item1.py -v 2>&1\", \"timeout_seconds\": 30}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -5\", \"timeout_seconds\": 90}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "glob", "detail": "{\"pattern\": \"WORKLOG.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./WORKLOG.md\", \"content\": \"# Run 13 work log\\n\\n| # | Item | Files changed | Tests |\\n|---|------|--------------|-------|\\n| 1 | Early POST gate: `do_POST` checks"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"[x] Item 1: Read no POST body before the gate (server.py do_POST early auth+size check + tests)\\n[-] Item 2: Replay mode path masking for error strings (routes.py masker + test_replay_surfa"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"410-430\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/routes.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:410\\n-------\\ndef _public_path(config: Config, path: str) -> str:\\n    \\\"\\\"\\\"How a runtime path is s"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"220-295\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"210-220\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"336-410\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:214\\n-------\\ndef _route_voipms(config: Config) -> Response:\\n    \\\"\\\"\\\"GET /api/voipms \\u2014 VoIP.ms poller snapshot (legacy e:2859\\u20132861).\\\"\\\"\\\"\\n    if co"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"1-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\", \"range\": \"80-95\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:16\\n-------\\nfrom faxconsole.routes import Config, Response, _write_authorized, handle\\n=======\\nfrom faxconsole.routes import Config, Response, _mask_error, _wri"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures/asterisk\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures/voipms\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:43\\n-------\\n_ALL_GET_ROUTES = [\\n    \\\"/api/fax/status\\\",\\n    \\\"/api/fax/log\\\",\\n    \\\"/api/fax\\\",\\n    \\\"/api/pbx/trunk\\\",\\n    \\\"/api/pbx/calls\\\",\\n    \\\"/api"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"range\": \"1-35\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"range\": \"190-210\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"range\": \"210-212\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:11\\n-------\\nfrom __future__ import annotations\\n\\nimport json\\nimport os\\nimport re\\nimport socket\\nfrom pathlib import Path\\n\\nimport pytest\\n\\nfrom faxcli.tran"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"_make_config\", \"path\": \"./tests/test_replay_surface.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"range\": \"108-195\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:113\\n-------\\n    def test_all_get_routes_are_clean(self, tmp_path):\\n        cfg = _make_config(tmp_path)\\n        tmpdir = str(tmp_path)\\n        for route in _"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"range\": \"205-220\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "insert_content", "detail": "{\"path\": \"./tests/test_replay_surface.py\", \"line\": 0, \"content\": \"\\n\\n# ---------------------------------------------------------------------------\\n# New tests for run-13 "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_replay_surface.py -v 2>&1\", \"timeout_seconds\": 60}"}

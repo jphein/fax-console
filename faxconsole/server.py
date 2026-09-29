@@ -23,7 +23,7 @@ import socket
 import threading
 from typing import Any
 
-from faxconsole.routes import Config, Response, handle
+from faxconsole.routes import Config, Response, _mask_error, _write_authorized, handle
 
 POOL_SIZE = 8   # fixed worker count
 BACKLOG = 4     # extra waiting slots beyond the pool
@@ -84,9 +84,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         try:
             resp = handle(method, self.path, headers, body, self.config)
         except Exception as exc:
+            detail = _mask_error(self.config, str(exc))
             resp = Response(
                 status=500,
-                body=json.dumps({"ok": False, "detail": str(exc)}).encode(),
+                body=json.dumps({"ok": False, "detail": detail}).encode(),
             )
         self._send(resp)
 
@@ -105,11 +106,34 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self._dispatch("GET", b"")
 
     def do_POST(self) -> None:
+        # FIRST, before any route matching or body read: check the write token
+        # (legacy e:2953–2957: "FIRST, before any route matching or body read").
+        # An unauthenticated client that declares a huge Content-Length must be
+        # rejected before rfile.read(n) reserves n bytes.
+        headers = {k.lower(): v for k, v in self.headers.items()}
+        auth_err = _write_authorized(headers, self.config)
+        if auth_err is not None:
+            self.close_connection = True   # unread body desyncs a reused connection
+            self._send(auth_err)
+            return
+
+        # Size cap: reject before reading (legacy e:2960–2961).
         try:
             n = int(self.headers.get("Content-Length", 0) or 0)
         except (ValueError, TypeError):
             n = 0
-        body = self.rfile.read(n) if n > 0 else b""
+        cap = self.config.max_bytes + 65536  # PDF cap + multipart allowance
+        if n > cap:
+            self.close_connection = True
+            self._send(Response(
+                status=413,
+                body=json.dumps({"ok": False, "detail": "upload too large (15 MB max)"}).encode(),
+            ))
+            return
+
+        # Read the body in bounded chunks: never more than the cap.
+        to_read = min(n, cap) if n > 0 else 0
+        body = self.rfile.read(to_read) if to_read > 0 else b""
         self._dispatch("POST", body)
 
 

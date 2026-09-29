@@ -215,7 +215,11 @@ def _route_voipms(config: Config) -> Response:
     """GET /api/voipms — VoIP.ms poller snapshot (legacy e:2859–2861)."""
     if config.voipms is None:
         return _err(503, {"ok": False, "detail": "VoIP.ms poller not configured"})
-    return _ok(config.voipms.snapshot())
+    snap = config.voipms.snapshot()
+    if config.replay and snap.get("error"):
+        snap = dict(snap)
+        snap["error"] = _mask_error(config, snap["error"])
+    return _ok(snap)
 
 
 def _route_status(config: Config) -> Response:
@@ -227,7 +231,11 @@ def _route_status(config: Config) -> Response:
     try:
         obj = json.loads(text.splitlines()[-1])
     except Exception as e:
-        return _err(500, {"ok": False, "why": f"unparseable status output: {e}"})
+        why = _mask_error(config, f"unparseable status output: {e}")
+        return _err(500, {"ok": False, "why": why})
+    if config.replay and obj.get("why"):
+        obj = dict(obj)
+        obj["why"] = _mask_error(config, obj["why"])
     return _ok(obj)
 
 
@@ -238,6 +246,7 @@ def _route_log(path: str, config: Config) -> Response:
         limit = int(qs.get("limit", ["20"])[0])
     except (ValueError, IndexError):
         limit = 20
+    limit = max(1, min(limit, 1000))  # clamp: 1..1000 (item 3)
     a = argparse.Namespace(json=True, limit=limit)
     buf = io.StringIO()
     cli_mod.cmd_log(a, config.transport, buf)
@@ -245,7 +254,11 @@ def _route_log(path: str, config: Config) -> Response:
     try:
         obj = json.loads(text.splitlines()[-1])
     except Exception as e:
-        return _err(500, {"ok": False, "why": f"unparseable log output: {e}"})
+        why = _mask_error(config, f"unparseable log output: {e}")
+        return _err(500, {"ok": False, "why": why})
+    if config.replay and obj.get("why"):
+        obj = dict(obj)
+        obj["why"] = _mask_error(config, obj["why"])
     return _ok(obj)
 
 
@@ -258,7 +271,7 @@ def _route_fax_state(config: Config) -> Response:
     try:
         st: dict = json.loads(buf_st.getvalue().strip().splitlines()[-1])
     except Exception as e:
-        st = {"ok": False, "why": f"unparseable status: {e}"}
+        st = {"ok": False, "why": _mask_error(config, f"unparseable status: {e}")}
 
     # Get log (25 rows, matching legacy fax_state e:2032)
     a_lg = argparse.Namespace(json=True, limit=25)
@@ -267,15 +280,25 @@ def _route_fax_state(config: Config) -> Response:
     try:
         lg: dict = json.loads(buf_lg.getvalue().strip().splitlines()[-1])
     except Exception as e:
-        lg = {"ok": False, "why": f"unparseable log: {e}", "rows": []}
+        lg = {"ok": False, "why": _mask_error(config, f"unparseable log: {e}"), "rows": []}
+
+    # Mask why fields from the CLI's own error output (e.g. CDR read failure with a path)
+    if config.replay:
+        if st.get("why"):
+            st = dict(st)
+            st["why"] = _mask_error(config, st["why"])
+        if lg.get("why"):
+            lg = dict(lg)
+            lg["why"] = _mask_error(config, lg["why"])
 
     spool = "replay:spool" if config.replay else config.spool
     inbox = "replay:inbox" if config.replay else config.inbox
+    combined_why = st.get("why") or lg.get("why")
     result = {
         "ok": bool(st.get("ok")) and bool(lg.get("ok")),
         "status": st,
         "log": lg.get("rows", []),
-        "why": st.get("why") or lg.get("why"),
+        "why": combined_why,
         "src": "faxcli --local --json status | log --limit 25",
         "spool": spool,
         "inbox": inbox,
@@ -371,9 +394,10 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
         with open(path, "wb") as fh:
             fh.write(data)
     except OSError as e:
-        return {"ok": False, "detail": f"could not store the PDF: {e}"}
+        return {"ok": False, "detail": _mask_error(config, f"could not store the PDF: {e}")}
 
     # Call faxcli.api.send directly (no argparse, no JSON round-trip)
+    from faxcli.transport import LocalTransport as _LocalTransport  # noqa: PLC0415
     try:
         result = api_send(
             path,
@@ -382,12 +406,12 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
             dry_run=config.replay,   # replay → always dry run
             wait=0,
             transport=config.transport,
-            local=True,              # console always spool-local
+            local=isinstance(config.transport, _LocalTransport),  # item 3: local only for LocalTransport
         )
     except InvalidNumber as exc:
         return {"ok": False, "detail": str(exc)}
     except SendError as exc:
-        return {"ok": False, "detail": exc.reason}
+        return {"ok": False, "detail": _mask_error(config, exc.reason)}
 
     r = result.to_json()
     r["ok"] = True
@@ -423,6 +447,27 @@ def _public_path(config: Config, path: str) -> str:
     if os.path.isabs(path):
         return "replay:" + os.path.basename(path)
     return path
+
+
+# _ABS_PATH_RE finds the longest absolute path token in an error string.
+# Matches a '/' followed by non-whitespace, non-quote characters.
+_ABS_PATH_RE = re.compile(r"(/[^\s'\"]+)")
+
+
+def _mask_error(config: Config, text: str) -> str:
+    """In replay mode, replace every absolute path inside *text* using the
+    same rules as ``_public_path``: replay-root-relative paths become
+    ``replay:/…`` and other absolute paths become ``replay:<basename>``.
+
+    In live mode the text is returned unchanged.
+    """
+    if not config.replay:
+        return text
+
+    def _replace(m: re.Match) -> str:
+        return _public_path(config, m.group(1))
+
+    return _ABS_PATH_RE.sub(_replace, text)
 
 
 def _route_version(config: Config | None = None) -> Response:

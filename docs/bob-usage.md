@@ -127,8 +127,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
 | 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | Kept: all seven items. Bob stopped at the cap with the suite red, having not yet updated `build()`'s test callers, and the replay-path mask leaked when inbox and spool share no directory. The reviewer fixed both, plus a second `TRUNK` definition |
 | 12 | 9/29 09:44 | [Faxcli fixes](bob-runs/12-faxcli-fixes.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.10).) | 48 | 5.100 | Kept: the three deliberate fixes, the hardening and `docs/changes.md`. Review reverted a replay transport that claimed successful originates, and fixed a temp dir that leaked on a failed render and a CDR limit of 0 that returned every line |
+| 13 | 9/29 10:42 | [Oracle fixes](bob-runs/13-oracle-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.19).) | 52 | 6.191 | review pending |
 
-**Running total: 56.92 Bobcoins** (after run 12).
+**Running total: 63.12 Bobcoins** (after run 13).
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
