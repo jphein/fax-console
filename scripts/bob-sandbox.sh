@@ -28,8 +28,9 @@ touch "$root/.bob/guard.log"
 [ -f "$bob_home/.bob/settings/settings.json" ] ||
   printf '{"licenseConsent": true, "bobShell": {"autoUpdate": false}}\n' > "$bob_home/.bob/settings/settings.json"
 printf '{"version": 1, "folders": {"%s": "TRUST_FOLDER"}}\n' "$root" > "$bob_home/.bob/trustedFolders.json"
-for d in skills plugins rules; do
-  [ -z "$(ls -A "$bob_home/.bob/$d" 2>/dev/null)" ] || { echo "refusing: $bob_home/.bob/$d is not empty" >&2; exit 2; }
+# Bob lists every skill it can find in its prompt: nothing but its own settings may live in this home.
+for d in .bob/skills .bob/plugins .bob/rules .claude .agents; do
+  [ -z "$(ls -A "$bob_home/$d" 2>/dev/null)" ] || { echo "refusing: $bob_home/$d is not empty" >&2; exit 2; }
 done
 
 # Secrets reach the sandbox through a mode-600 file, never argv (argv is visible in ps).
