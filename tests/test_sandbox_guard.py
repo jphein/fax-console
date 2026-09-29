@@ -19,10 +19,11 @@ SCRUB = os.path.join(ROOT, "scripts", "scrub-check.sh")
 
 @pytest.fixture(scope="module")
 def env(tmp_path_factory):
-    """The hooks demand a deny-list (--require-deny). Tests use an empty one, so only the
-    generic rules apply and the results are the same on any machine, CI included."""
+    """The hooks demand a deny-list (--require-deny), and a list with no entries is refused. Tests
+    use a one-entry list that matches nothing real, so only the generic rules decide and the
+    results are the same on any machine, CI included."""
     deny = tmp_path_factory.mktemp("scrub") / "deny.txt"
-    deny.write_text("# empty: generic rules only\n")
+    deny.write_text("# one entry that matches nothing real: generic rules decide\nzz-no-real-value-zz\n")
     log = tmp_path_factory.mktemp("guard") / "guard.log"      # never the real run log
     return dict(os.environ, FAX_CONSOLE_SCRUB_DENY=str(deny), FAX_CONSOLE_GUARD_LOG=str(log), CI="1")
 

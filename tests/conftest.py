@@ -8,6 +8,9 @@ import subprocess
 
 import pytest
 
+TOOLING_TESTS = {"test_sandbox_guard.py", "test_scrub_history.py", "test_scrub_rules.py",
+                 "test_bob_usage.py", "test_bob_run.py"}
+
 
 @pytest.fixture(autouse=True)
 def _block_real_subprocesses(monkeypatch, request):
@@ -18,11 +21,13 @@ def _block_real_subprocesses(monkeypatch, request):
 
     Tests marked ``allow_subprocesses`` may install their own fake for
     subprocess.run — but Popen and os.system remain blocked even for them.
-    The sandbox_guard tests call subprocess intentionally via their own
-    fixtures and are excluded entirely.
+    The tooling tests (TOOLING_TESTS) call subprocess intentionally, on throwaway
+    repositories, and are excluded entirely.
     """
-    # Skip the guard for tests in test_sandbox_guard.py (they run guards themselves)
-    if request.fspath.basename == "test_sandbox_guard.py":
+    # Skip the guard for the tests of the repository's own tooling: they run the sandbox hooks, the
+    # scrub gate and the Bob wrapper as processes, on throwaway repositories and files, by design.
+    # The guard is for the package's tests, which must never reach a real PBX.
+    if request.fspath.basename in TOOLING_TESTS:
         yield
         return
 
