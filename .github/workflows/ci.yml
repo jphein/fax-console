@@ -53,3 +53,37 @@ jobs:
       - name: ruff (the top-level legacy/ is the frozen baseline and is not linted)
         run: ruff check . --extend-exclude ./legacy
       - run: python -m pytest -q
+  sandbox:
+    # Every isolation probe in scripts/sandbox-probe.sh, run against the REAL scripts/bob-sandbox.sh with a real
+    # bubblewrap. Until now these ran only by hand on the workstation (measured feasible 2026-09-29: run 36628864083).
+    # The runner's bubblewrap is Ubuntu 24.04's (0.9.0), not the workstation's build, so this proves the sandbox
+    # script, not a particular bwrap. The counts are asserted exactly, so a probe that silently stops running fails.
+    name: sandbox isolation (real bubblewrap)
+    runs-on: ubuntu-24.04          # pinned: the AppArmor user-namespace step below is specific to this image
+    timeout-minutes: 15
+    env:
+      EXPECT_OK: "51"              # every probe but the one declared CI skip; bump it when a probe is added
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with:
+          persist-credentials: false
+      - name: bubblewrap, and unprivileged user namespaces for it (24.04's AppArmor restricts them; disposable runner)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: the repo's venv (a probe runs its test tools) and a placeholder at Bob's install path (bound, never run)
+        run: |
+          python3 -m venv .venv && .venv/bin/pip install -q pytest "ruff==0.16.9"
+          mkdir -p "$HOME/.npm-global/lib/node_modules/bobshell/dist"
+          : > "$HOME/.npm-global/lib/node_modules/bobshell/dist/bob.js"
+      - name: every isolation probe against the real sandbox
+        run: |
+          SANDBOX_PROBE_CI=1 timeout 600 bash scripts/sandbox-probe.sh | tee probe.out
+          ok=$(grep -c '^ok ' probe.out || true)
+          wrong=$(grep -c '^WRONG' probe.out || true)
+          skips=$(grep '^skip' probe.out || true)
+          echo "probes as expected: $ok (expected $EXPECT_OK); WRONG: $wrong; skips: ${skips:-none}"
+          [ "$wrong" -eq 0 ] || { echo "::error::a sandbox probe came out WRONG"; exit 1; }
+          [ "$ok" -eq "$EXPECT_OK" ] || { echo "::error::expected $EXPECT_OK probes as expected, got $ok"; exit 1; }
+          [ "$(printf '%s\n' "$skips" | grep -c .)" -eq 1 ] && printf '%s' "$skips" | grep -q 'the bob CLI starts' \
+            || { echo "::error::only the declared Bob-CLI skip may skip; got: ${skips:-none}"; exit 1; }
