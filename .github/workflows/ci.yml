@@ -3,6 +3,9 @@ on:
   push:
     # gh-pages holds the static replay demo and no code (scripts/publish-pages.sh)
     branches-ignore: [gh-pages]
+    # A branch filter alone stops tag pushes from triggering this workflow (GitHub's filter rules), and the
+    # scrub gate must see every tag that is published (the Oracle, on #17)
+    tags: ['**']
   pull_request:
 permissions:
   contents: read
@@ -62,7 +65,7 @@ jobs:
     runs-on: ubuntu-24.04          # pinned: the AppArmor user-namespace step below is specific to this image
     timeout-minutes: 15
     env:
-      EXPECT_OK: "51"              # every probe but the one declared CI skip; bump it when a probe is added
+      EXPECT_OK: "55"              # every probe but the one declared CI skip; bump it when a probe is added
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:

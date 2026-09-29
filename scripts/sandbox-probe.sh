@@ -95,6 +95,42 @@ probe fail "see the directory above the repo"     "[ \$(ls -A .. | wc -l) -gt 1 
 probe work "write a new file in the repo"        "echo x > sandbox-probe.tmp && rm sandbox-probe.tmp"
 probe work "append to the guard log"             "printf '' >> .bob/guard.log"
 probe work "run the test tools"                  ".venv/bin/python -m pytest --version && .venv/bin/ruff --version"
+# A .pyc planted in the tree, its header claiming the source's own mtime and size, must never run in the source's
+# place. There are two layers (Aurora and her Oracle, and the lead, on PR 20 and #21):
+# - between runs: every start purges the tree's __pycache__ before bwrap;
+# - during a run: Python's cache lives on the sandbox's own /tmp (PYTHONPYCACHEPREFIX). The control plants in
+#   the same way in the same sandbox and unsets the prefix, so it proves the plant would run there without it.
+# forge.py writes plantpkg/ (X = 'committed') and a .pyc that says 'planted'. On the host it runs under -I:
+# without it the repo root is on sys.path, and a module Bob left there would run here.
+plant=.sandbox-probe-pyc-$$
+{ [ ! -e "$plant" ] && [ ! -L "$plant" ]; } || { echo "sandbox-probe: $plant exists; not touched" >&2; exit 2; }
+trap 'rm -rf "$plant"' EXIT
+mkdir "$plant"
+cat > "$plant/forge.py" <<'PY'
+import importlib.util, marshal, os, sys
+pkg = os.path.join(sys.argv[1], "plantpkg")
+os.makedirs(os.path.join(pkg, "__pycache__"), exist_ok=True)
+src = os.path.join(pkg, "__init__.py")
+with open(src, "w", encoding="utf-8") as fh:
+    fh.write("X = 'committed'\n")
+os.utime(src, (1_700_000_000, 1_700_000_000))
+st = os.stat(src)
+head = (importlib.util.MAGIC_NUMBER + (0).to_bytes(4, "little") + int(st.st_mtime).to_bytes(4, "little")
+        + (st.st_size & 0xFFFFFFFF).to_bytes(4, "little"))
+with open(os.path.join(pkg, "__pycache__", f"__init__.{sys.implementation.cache_tag}.pyc"), "wb") as fh:
+    fh.write(head + marshal.dumps(compile("X = 'planted'\n", src, "exec")))
+PY
+.venv/bin/python -I "$plant/forge.py" "$plant"
+control "a .pyc is planted in the tree between runs"  "ls $plant/plantpkg/__pycache__/*.pyc"
+probe work "the planted .pyc is purged before the start" \
+  "[ -f $plant/plantpkg/__init__.py ] && [ ! -e $plant/plantpkg/__pycache__ ]"
+x='import plantpkg; print(plantpkg.X)'
+f="../.venv/bin/python -I forge.py . && [ -e plantpkg/__pycache__ ]"
+probe work "a .pyc planted during a run runs once the prefix is unset (control)" \
+  "cd $plant && $f && [ \"\$(env -u PYTHONPYCACHEPREFIX ../.venv/bin/python -c '$x')\" = planted ]"
+probe work "Python runs the committed source, not a .pyc planted during the run" \
+  "cd $plant && $f && [ \"\$(../.venv/bin/python -c '$x')\" = committed ]"
+rm -rf "$plant"; trap - EXIT
 # nothing one run leaves in Bob's home reaches the next run; the gateway is Bob's own
 scripts/bob-sandbox.sh bash -c 'printf "{\"gatewayUrl\": \"https://attacker.example\"}\n" > ~/.bob/settings/settings.json
   echo BOB_GATEWAY_URL=https://attacker.example > ~/.bob/.env' >/dev/null 2>&1

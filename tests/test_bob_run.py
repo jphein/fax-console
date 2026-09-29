@@ -477,3 +477,121 @@ def test_the_recheck_before_bwrap_catches_a_swap_during_setup(tmp_path):
     r = sandbox(repo, env)
     assert mark.exists(), "the swap never ran: the test would prove nothing"
     assert r.returncode == 2 and "is a symlink" in r.stderr and not argv.exists(), r.stderr
+
+
+def test_the_sandbox_env_keeps_python_bytecode_on_its_own_tmp(tmp_path):
+    """Python trusts a __pycache__ entry whose header claims its source's mtime and size, and Bob can write
+    the tree. So the environment bob-sandbox.sh sets after --clearenv sends every Python cache read and write
+    to /tmp/pycache, and that /tmp must be the start's own fresh tmpfs, never a bind, so nothing cached there
+    outlives it (Aurora, after PR 20). scripts/sandbox-probe.sh plants a forged .pyc against the real
+    sandbox."""
+    repo, env, argv = sandbox_repo(tmp_path, "pyc")
+    kept = tmp_path / "pyc" / "env"
+    fake = Path(env["PATH"].split(":")[0])
+    (fake / "sudo").write_text(              # it also keeps the env file (bob-sandbox.sh deletes it on exit)
+        "#!/bin/sh\nprev=\nfor a in \"$@\"; do printf '%s\\n' \"$a\"\n"
+        f"  [ \"$a\" = /run/bob-env ] && cp \"$prev\" {kept}; prev=$a\ndone > {argv}\n", encoding="utf-8")
+    r = sandbox(repo, env)
+    assert r.returncode == 0 and kept.exists(), r.stderr
+    assert "export PYTHONPYCACHEPREFIX=/tmp/pycache" in kept.read_text(encoding="utf-8").splitlines()
+    a = argv.read_text(encoding="utf-8").splitlines()
+    assert "--clearenv" in a and any(x == "--tmpfs" and a[j + 1] == "/tmp" for j, x in enumerate(a[:-1])), a
+    # No bwrap op puts host content at /, /tmp or the cache: every bind, link, data-file and overlay form,
+    # with the offset of its destination (the Oracle's Low on #21). This test's own repo lives under /tmp,
+    # so only those paths are checked.
+    dest_at = {"--bind": 2, "--bind-try": 2, "--dev-bind": 2, "--dev-bind-try": 2, "--ro-bind": 2,
+               "--ro-bind-try": 2, "--symlink": 2, "--file": 2, "--bind-data": 2, "--ro-bind-data": 2,
+               "--overlay": 3, "--tmp-overlay": 1, "--ro-overlay": 1}
+    dests = [a[j + dest_at[x]] for j, x in enumerate(a) if x in dest_at and j + dest_at[x] < len(a)]
+    assert "/home/bob" in dests                                        # the table does read destinations
+    bad = ("/", "/tmp", "/tmp/pycache")
+    assert not [d for d in dests if d in bad or d.startswith("/tmp/pycache/")], dests
+
+
+def test_every_start_purges_the_trees_pycache_before_bwrap(tmp_path):
+    """A .pyc left in the tree must not survive into a start (the lead and Aurora's Oracle, on #21):
+    - every __pycache__ directory, and any symlink named __pycache__, is gone before bwrap runs;
+    - a link's own target, and a __pycache__ reached only through a linked directory, are outside the tree
+      and stay untouched;
+    - .venv/ (read-only to Bob) and scratch/ (never written) are not walked."""
+    repo, env, argv = sandbox_repo(tmp_path, "purge")
+    outside = tmp_path / "purge" / "outside"
+    (outside / "__pycache__").mkdir(parents=True)
+    (outside / "__pycache__" / "keep.pyc").write_bytes(b"outside")
+    (outside / "data.txt").write_text("keep\n", encoding="utf-8")
+    plants = [repo / "__pycache__", repo / "faxconsole" / "__pycache__", repo / "a" / "b" / "__pycache__",
+              repo / ".bob" / "tmp" / "__pycache__"]
+    for p in plants:
+        p.mkdir(parents=True)
+        (p / "m.cpython-314.pyc").write_bytes(b"planted")
+    (repo / "faxconsole" / "m.py").write_text("X = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    link = repo / "tests" / "__pycache__"
+    link.symlink_to(outside)                                          # the link goes; its target stays
+    (repo / "linked").symlink_to(outside)                             # not the tree's: never walked into
+    kept = [repo / ".venv" / "lib" / "__pycache__" / "k.pyc", repo / "scratch" / "__pycache__" / "k.pyc"]
+    for k in kept:
+        k.parent.mkdir(parents=True)
+        k.write_bytes(b"kept")
+    r = sandbox(repo, env)
+    assert r.returncode == 0 and argv.exists(), r.stderr
+    assert not [p for p in plants if p.exists()] and not link.is_symlink() and not link.exists()
+    assert (outside / "__pycache__" / "keep.pyc").exists() and (outside / "data.txt").exists()
+    assert (repo / "linked").is_symlink() and (repo / "faxconsole" / "m.py").exists()
+    assert all(k.exists() for k in kept), kept
+
+
+def test_a_tracked_file_in_a_pycache_stops_the_start_and_nothing_is_purged(tmp_path):
+    """Only cache artifacts are purged: a __pycache__ that holds a tracked file is not one. The start stops
+    before bwrap, and since every check runs before the first deletion, nothing is deleted (the lead, on
+    #21)."""
+    repo, env, argv = sandbox_repo(tmp_path, "tracked")
+    # Caches around the tracked one, in several directories: a purge that deleted as it went would, in almost
+    # any walk order, have removed one of them before reaching the tracked file.
+    caches = [repo / d / "__pycache__" / "m.cpython-314.pyc" for d in ("aa", "faxconsole", "tests", "zz")]
+    for c in caches:
+        c.parent.mkdir(parents=True)
+        c.write_bytes(b"cache")
+    tracked = repo / "mm" / "__pycache__" / "notes.txt"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(tracked)], cwd=repo, check=True)
+    r = sandbox(repo, env)
+    assert r.returncode == 2 and "holds a tracked file" in r.stderr and not argv.exists(), r.stderr
+    assert tracked.exists() and all(c.exists() for c in caches)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list a mode-000 directory, so find would not fail")
+def test_a_failed_pycache_listing_stops_the_start_and_nothing_is_purged(tmp_path):
+    """The purge fails closed: if find cannot list the whole tree, the start stops before bwrap and nothing is
+    deleted (the standing Oracle, on #21). A directory nobody may read makes find fail."""
+    repo, env, argv = sandbox_repo(tmp_path, "unlisted")
+    cache = repo / "faxconsole" / "__pycache__" / "m.cpython-314.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"cache")
+    locked = repo / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        r = sandbox(repo, env)
+    finally:
+        locked.chmod(0o755)
+    assert r.returncode == 2 and "could not all be listed" in r.stderr and not argv.exists(), r.stderr
+    assert cache.exists()
+
+
+def test_an_unreadable_git_index_stops_the_start_and_nothing_is_purged(tmp_path):
+    """The tracked-file check fails closed too. When git cannot read its index, ls-files prints nothing and
+    fails; ignoring that failure read as "nothing tracked", and a tracked file was purged (Aurora's Oracle,
+    on #21). Now the start stops before bwrap, and nothing is deleted."""
+    repo, env, argv = sandbox_repo(tmp_path, "badindex")
+    tracked = repo / "pkg" / "__pycache__" / "notes.txt"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(tracked)], cwd=repo, check=True)
+    (repo / ".git" / "index").write_bytes(b"DIRC-short")                # a truncated index
+    control = subprocess.run(["git", "ls-files"], cwd=repo, capture_output=True, check=False)
+    assert control.returncode != 0, "git still reads the index: the test would prove nothing"
+    r = sandbox(repo, env)
+    assert r.returncode == 2 and "cannot check" in r.stderr and not argv.exists(), r.stderr
+    assert tracked.exists()
