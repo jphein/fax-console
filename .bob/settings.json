@@ -9,10 +9,10 @@
   },
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "python3 .bob/hooks/prompt_gate.py", "timeout": 30 } ] }
+      { "hooks": [ { "type": "command", "command": "python3 -I .bob/hooks/prompt_gate.py", "timeout": 30 } ] }
     ],
     "PreToolUse": [
-      { "hooks": [ { "type": "command", "command": "python3 .bob/hooks/tool_guard.py", "timeout": 30 } ] }
+      { "hooks": [ { "type": "command", "command": "python3 -I .bob/hooks/tool_guard.py", "timeout": 30 } ] }
     ]
   }
 }

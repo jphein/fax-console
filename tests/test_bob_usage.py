@@ -143,7 +143,7 @@ def test_unknown_cost_keeps_counting_the_reservation(ledger, tmp_path):
     run = tmp_path / "2.jsonl"
     run.write_text("not json\n")
     s = bu.finalize(ledger, "2", run, 1, NOW)
-    assert s["cost"] is None and s["problems"] == []
+    assert s["cost"] is None and s["cost_invalid"]            # a stream that is not JSON is not Bob's alone
     assert total(ledger) == pytest.approx(8.161)
 
 
@@ -218,6 +218,30 @@ def test_a_forged_or_absurd_result_is_invalid(stream):
     assert s["cost"] is None and s["cost_invalid"]
 
 
+FAKE = '{"type":"result","stats":{"session_costs":0.001}}'
+REAL = '{"type":"result","stats":{"session_costs":2.5}}'
+
+
+@pytest.mark.parametrize("lines", [
+    # a fake result, then an unterminated fragment that swallows Bob's real result line (the Oracle, 9/29)
+    [FAKE, '{"x":"' + REAL],                                   # the real result glued onto a fragment
+    [FAKE, '{"type":"message","role":"assistant","content":"x"}'],          # the result is not the last line
+    ['{"type":"message","role":"assistant","content":"x"}', "not json", REAL],     # a line that is not JSON
+])
+def test_a_stream_that_was_written_into_is_not_trusted(lines):
+    s = bu.summarize(lines)
+    assert s["cost"] is None and s["cost_invalid"]
+
+
+@pytest.mark.parametrize("name", ["0-sandbox-smoke", "1-analysis", "3-sandbox-check", "4-faxcli-package",
+                                  "5-faxcli-fixes", "drift-smoke"])
+def test_every_real_recording_is_still_trusted(name):
+    lines = (ROOT / "docs" / "bob-runs" / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()
+    s = bu.summarize(lines)
+    assert not s["cost_invalid"] and s["cost"] is not None and s["cost"] > 0
+
+
+
 def test_a_run_number_cannot_be_reused(ledger):
     assert reserve(ledger, 1, 1) == bu.EX_CONFIG
 
@@ -234,6 +258,23 @@ def test_a_missing_row_is_restored_and_reported(ledger, tmp_path):
                         "--file", str(run_file(tmp_path, 4.2)), "--rc", "0"], capture_output=True, text=True,
                        check=False)
     assert r.returncode == 0                                        # the row is back: nothing to report now
+
+
+def test_a_cost_is_trusted_only_after_a_clean_exit(ledger, tmp_path):
+    reserve(ledger, 2, 5)
+    s = bu.finalize(ledger, "2", run_file(tmp_path, 0.001), 137, NOW)       # killed after a forged result
+    assert s["cost"] is None and s["cost_kept_reservation"]
+    assert total(ledger) == pytest.approx(8.161)
+
+
+def test_a_row_the_journal_never_saw_is_restored_at_its_maximum(ledger, tmp_path):
+    s = bu.finalize(ledger, "9", run_file(tmp_path, 1.0), 0, NOW, max_cost=4)   # no reserve, no row
+    assert s["problems"]
+    row9 = next(x for x in ledger.read_text().splitlines() if x.startswith("| 9 |"))
+    assert "| 1.000 |" in row9                                              # a clean exit: its cost
+    s = bu.finalize(ledger, "8", run_file(tmp_path, 1.0), 1, NOW, max_cost=4)
+    row8 = next(x for x in ledger.read_text().splitlines() if x.startswith("| 8 |"))
+    assert "| (4) |" in row8                                                # a failed one: its maximum
 
 
 def test_a_row_deleted_before_the_next_reserve_still_counts(ledger, tmp_path):

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -89,8 +90,11 @@ def test_history_catches_a_value_that_was_deleted(repo):
     assert scrub(repo).returncode == 0                   # HEAD is clean...
     r = scrub(repo, "--history")                         # ...history is not
     assert r.returncode == 1 and "cfg.env:1: [credential]" in r.stdout
-    for piece in ("abcdef", "123456", "56"):             # a finding never prints any of the value
-        assert piece not in r.stdout + r.stderr
+    # A finding is exactly its place and its rule, never any of the value (a short piece of it could
+    # appear in a commit id by chance, so the lines are matched whole).
+    lines = r.stdout.strip().splitlines()
+    assert lines and all(re.fullmatch(r"[0-9a-f]{7}:cfg\.env:1: \[[a-z-]+\]", x) for x in lines), r.stdout
+    assert "abcdef" not in r.stdout + r.stderr and "123456" not in r.stdout + r.stderr
 
 
 def test_history_catches_a_commit_message(repo):
@@ -138,6 +142,36 @@ def test_gitattributes_cannot_hide_text_from_history(repo, attr):
     assert scrub(repo).returncode == 0
     r = scrub(repo, "--history")
     assert r.returncode == 1 and "notes.txt:1: [phone-number]" in r.stdout
+
+
+@pytest.mark.parametrize("name", ['we"ird.txt', "tab\there.txt"])
+def test_a_quoted_name_under_binary_is_still_read(repo, name):
+    commit(repo, ".gitattributes", "*.txt binary\n", "attributes")
+    commit(repo, name, "call " + PHONE + "\n", "a number")
+    commit(repo, name, "nothing\n", "gone again")
+    r = scrub(repo, "--history")
+    assert r.returncode == 1 and "[phone-number]" in r.stdout
+
+
+def test_a_module_named_like_the_standard_library_is_a_finding(repo):
+    for rel in ("json.py", "tests/re.py", "scripts/subprocess.py", "hashlib/__init__.py",
+                "faxcli/json.py", "mymod.py"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("x = 1\n", encoding="utf-8")
+    r = scrub(repo)
+    flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
+    assert flagged == {"json.py", "tests/re.py", "scripts/subprocess.py", "hashlib/__init__.py"}
+    git(repo, "add", "json.py")
+    assert "json.py: [stdlib-shadow]" in scrub(repo, "--staged").stdout
+
+
+def test_the_gate_never_imports_a_module_planted_in_the_repo(repo):
+    marker = repo.parent / "imported"
+    for name in ("json", "re", "subprocess", "hashlib", "os"):
+        (repo / f"{name}.py").write_text(f"open({str(marker)!r}, 'a').write('{name}')\n", encoding="utf-8")
+    r = scrub(repo)
+    assert r.returncode == 1 and "json.py: [stdlib-shadow]" in r.stdout
+    assert not marker.exists()                         # python -I: the repo root is not on sys.path
 
 
 def test_history_of_a_named_ref(repo):
@@ -352,6 +386,8 @@ def test_jsonl_is_scanned_as_decoded_strings(repo):
 
 @pytest.mark.parametrize("name,text", [
     ("cfg.json", '{"db": {"password": "' + j("hunter2", "hunter2") + '"}}\n'),
+    ("cfg.json", '{"tokens": ["' + j("q7Rf9L", "mZ2xKp") + '"]}\n'),                  # an array under the key
+    ("cfg.json", '{"password": ' + j("8675", "30912") + '}\n'),                       # a number
     ("run.jsonl", '{"api_key": "' + j("q7Rf9L", "mZ2xKp") + '"}\n'),
     ("run.jsonl", '{"BOB_API_KEY": "' + j("abcdef", "1234567") + '"}\n'),
 ])

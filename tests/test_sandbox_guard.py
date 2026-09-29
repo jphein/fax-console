@@ -30,7 +30,7 @@ def env(tmp_path_factory):
 
 def hook(script, payload, env):
     data = payload if isinstance(payload, str) else json.dumps(payload)
-    return subprocess.run([sys.executable, script], input=data.encode(), capture_output=True, env=env,
+    return subprocess.run([sys.executable, "-I", script], input=data.encode(), capture_output=True, env=env,
                           timeout=30, check=False).returncode
 
 

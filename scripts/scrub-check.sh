@@ -70,19 +70,21 @@ CODE_RECEIVERS = {"self", "cls", "args", "opts", "options", "cfg", "config", "co
 # Home directories that name no person: CI runners, package managers, the sandbox, placeholders.
 PUBLIC_HOMES = {"bob", "runner", "linuxbrew", "user", "username", "you", "me", "name", "ubuntu",
                 "vscode", "codespace", "example", "shared", "someone"}
-SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "token", "credential",
+SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "token", "tokens", "credential",
                 "credentials"}
 SECRET_JOINED = ("apikey", "accesskey", "privatekey", "secretkey")
 PLACEHOLDER = re.compile(
     r"^(?:<.*>|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%\(?\w*\)?s|\{\w*\}|x{3,}|\*{3,}|\.{3}|…|changeme"
-    r"|change[_-]me|example[\w-]*|dummy[\w-]*|fake[\w-]*|test[\w-]*|wrong[\w-]*|bogus[\w-]*|invalid[\w-]*"
-    r"|none|null|nil|redacted|placeholder|your[\w-]*"
+    # the word, then word-like segments only: test-token, test-password-99, not test_9Qx7Lm2PzAbC
+    r"|change[_-]me|(?:example|dummy|fake|test|wrong|bogus|invalid|your)(?:[-_.](?:[a-z]+\d*|\d{1,6}))*"
+    r"|none|null|nil|redacted|placeholder"
     r"|false|true|secret|password|token)$", re.IGNORECASE)
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 # A key that ends in one of these describes a secret without holding one: token_type, secret_name.
 DESCRIPTORS = {"name", "names", "type", "kind", "id", "ids", "path", "file", "dir", "url", "uri", "header",
                "field", "label", "prefix", "env", "var", "length", "len", "count", "ttl", "expiry", "expires",
-               "format", "mode", "scope", "endpoint", "hint", "policy", "version", "source", "store", "backend"}
+               "format", "mode", "scope", "endpoint", "hint", "policy", "version", "source", "store", "backend",
+               "iterations", "size", "rounds", "bits", "seconds", "limit"}
 # In these files an unquoted value is a literal, however much it looks like a code name.
 CONFIG_KINDS = (".env", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".properties")
 # The owner's commit address, published on every commit (GitHub shows it), kept as a SHA-256 so the gate
@@ -189,9 +191,11 @@ def secret_value(m, kind=""):
         return False                                   # compass=, bypass=, max_tokens=
     if parts and parts[-1] in DESCRIPTORS:
         return False                                   # token_type = "bearer": about a secret, not one
-    if (len(v) < 6 or v.isdigit() or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
+    if v.isdigit() and not (parts[-1] in SECRET_WORDS - {"tokens"} or joined.endswith(SECRET_JOINED)):
+        return False                                   # a number is a secret only under a secret's own name
+    if (len(v) < 6 or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
             or v.startswith(("/", "~/", "./", "../"))):
-        return False                                   # a flag, a TTL, a placeholder, a URL, a path
+        return False                                   # a flag, a placeholder, a URL, a path
     if quoted:
         return True                                    # a quoted literal is a value, whatever it says
     if m.string[m.end():m.end() + 1] in ("(", "["):
@@ -325,8 +329,9 @@ def json_strings(obj):
     if isinstance(obj, (_Pairs, dict)):
         for k, v in (obj if isinstance(obj, _Pairs) else obj.items()):
             yield str(k)
-            if isinstance(v, (str, int, float, bool)):
-                yield f'{k}: "{v}"'
+            for item in (v if isinstance(v, list) else [v]):
+                if isinstance(item, (str, int, float, bool)):
+                    yield f'{k}: "{item}"'
             yield from json_strings(v)
     elif isinstance(obj, list):
         for v in obj:
@@ -494,6 +499,7 @@ def history(rules, rev="HEAD"):
                 rem_old = int(h.group(1)) if h.group(1) is not None else 1
                 rem_new = int(h.group(3)) if h.group(3) is not None else 1
                 lineno = int(h.group(2)) - 1
+    added_at = {(c[:7], pth) for c, pth in added}     # where step 1 saw lines; a quoted name is not here
     for (c, pth), lines in added.items():
         if pth.lower().endswith(".json"):
             continue                                        # fragments of JSON: see step 2
@@ -511,7 +517,8 @@ def history(rules, rev="HEAD"):
             meta, p = t.decode().split(), toks[i + 1].decode("utf-8", "replace")
             names.add(p)
             if len(meta) >= 5 and not meta[4].startswith("D") and meta[1] != "160000":
-                blobs.setdefault(meta[3], (f"{c}:{p}", p, (c, p) in as_binary))   # not deleted, not a submodule
+                unseen = (c, p) in as_binary or (c, p) not in added_at
+                blobs.setdefault(meta[3], (f"{c}:{p}", p, unseen))   # not deleted, not a submodule
             i += 2
             continue
         if t:
@@ -544,6 +551,25 @@ def history(rules, rev="HEAD"):
     return items, hits
 
 
+STDLIB = set(getattr(sys, "stdlib_module_names", ())) | {"sitecustomize", "usercustomize"}
+PATH_DIRS = ("", "tests", "scripts")      # the repo root (python -c/-m), and where pytest and scripts run
+
+
+def shadow_findings(paths):
+    """A .py file or package named like a standard-library module in a directory Python puts first
+    on sys.path is imported instead of the real one, by the next tool that runs there: a planted
+    json.py at the repo root would run on the host, or fake a clean CI (the Oracle, 9/29 01:40)."""
+    hits = []
+    for p in paths:
+        parts = p.split("/")
+        if parts[-1].endswith(".py") and "/".join(parts[:-1]) in PATH_DIRS and parts[-1][:-3] in STDLIB:
+            hits.append(f"{p}: [stdlib-shadow]")
+        elif (len(parts) >= 2 and parts[-1] == "__init__.py" and "/".join(parts[:-2]) in PATH_DIRS
+              and parts[-2] in STDLIB):
+            hits.append(f"{p}: [stdlib-shadow]")
+    return hits
+
+
 def masked(hit, rules):
     """A finding's location with any matched value in it (a file or tag name) replaced by ***."""
     where, sep, what = hit.rpartition(": [")
@@ -572,11 +598,13 @@ def main(argv):
                  if p and os.path.isfile(p)]
         items = [(p, p, open(p, "rb").read()) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
+        hits += shadow_findings(names)
     elif argv[0] == "--staged":
         names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT").decode().split("\0")
                  if p]
         items = [(p, p, git("cat-file", "blob", f":{p}")) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
+        hits += shadow_findings(names)
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", None, open(argv[1], "rb").read())]
     elif argv[0] == "--stdin" and len(argv) == 2:
@@ -616,4 +644,6 @@ def main(argv):
 sys.exit(main(sys.argv[1:]))
 PY
 )
-exec python3 -c "$PROG" "$@"
+# -I (isolated): the current directory is the repo root, which Bob can write; a json.py there must
+# not be imported by the gate, here or in the hooks and CI that run it.
+exec python3 -I -c "$PROG" "$@"

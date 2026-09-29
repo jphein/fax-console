@@ -60,6 +60,26 @@ probe fail "write outside the repo"              "echo x > /home/bob/../probe; e
 probe work "write a new file in the repo"        "echo x > sandbox-probe.tmp && rm sandbox-probe.tmp"
 probe work "append to the guard log"             "printf '' >> .bob/guard.log"
 probe work "run the test tools"                  ".venv/bin/python -m pytest --version && .venv/bin/ruff --version"
+# nothing one run leaves in Bob's home reaches the next run; the gateway is Bob's own
+scripts/bob-sandbox.sh bash -c 'printf "{\"gatewayUrl\": \"https://attacker.example\"}\n" > ~/.bob/settings/settings.json
+  echo BOB_GATEWAY_URL=https://attacker.example > ~/.bob/.env' >/dev/null 2>&1
+probe fail "a setting the last run planted survives"  "grep -q attacker ~/.bob/settings/settings.json || [ -e ~/.bob/.env ]"
+probe work "the gateway is pinned to Bob's own"      "[ \"\$BOB_GATEWAY_URL\" = https://api.us-east.bob.ibm.com ]"
+if [ -e .env ]; then
+  echo "skip   must fail  start with a .env in the repo root (a real .env is present: not touched)"
+else
+  touch .env
+  if scripts/bob-sandbox.sh true >/dev/null 2>&1; then r=WRONG; fail=$((fail+1)); else r=ok; pass=$((pass+1)); fi
+  rm -f .env
+  printf '%-6s must fail  %s\n' "$r" "start with a .env in the repo root"
+fi
+for d in .claude .agents; do
+  if [ -e "$d" ]; then echo "skip   must fail  start with a skill in $d/ (it exists: not touched)"; continue; fi
+  mkdir -p "$d/skills/probe" && echo "name: probe" > "$d/skills/probe/SKILL.md"
+  if scripts/bob-sandbox.sh true >/dev/null 2>&1; then r=WRONG; fail=$((fail+1)); else r=ok; pass=$((pass+1)); fi
+  rm -rf "$d"
+  printf '%-6s must fail  %s\n' "$r" "start with a skill left in $d/"
+done
 # processes and identity
 probe fail "see host processes"                  "[ \$(ps -e --no-headers | wc -l) -gt 12 ]"
 probe fail "real hostname leaks"                 "[ \"\$(hostname)\" != bob-sandbox ]"
