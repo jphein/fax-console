@@ -51,7 +51,10 @@ def staticize(page: bytes) -> bytes:
     html = page.decode("utf-8")
     csp = "; ".join(d for d in _CSP.split("; ") if not d.startswith("frame-ancestors"))
     for old, new in (('<html lang="en">', '<html lang="en" data-static="1">'),
-                     ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">')):
+                     ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">'),
+                     # the live replay's banner promises a dry run, and a static copy cannot even do that
+                     ("a send is a dry run and nothing is dialled",
+                      "this static copy cannot send, so run it locally for a dry run; nothing is dialled")):
         if html.count(old) != 1:
             raise ValueError(f"export: the page must hold {old!r} exactly once")
         html = html.replace(old, new)

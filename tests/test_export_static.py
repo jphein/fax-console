@@ -49,6 +49,7 @@ def test_each_api_file_is_the_routes_json_and_shows_no_failure(site):
 def test_the_page_is_static_and_keeps_its_csp(site):
     html = site["index.html"].decode()
     assert '<html lang="en" data-static="1">' in html
+    assert "a send is a dry run" not in html and "this static copy cannot send" in html
     m = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
     assert m and "script-src 'self'" in m.group(1) and "frame-ancestors" not in m.group(1)
     assert 'href="/' not in html and 'src="/' not in html          # Pages serves it under /fax-console/
