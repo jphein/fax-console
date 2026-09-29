@@ -188,3 +188,17 @@ into memory while the SSH path was bounded.
 - new: `test_new_read_cdr_honours_limit`,
   `test_new_read_cdr_limit_larger_than_file`
 - review: `TestReviewOfRun12::test_read_cdr_limit_zero_is_nothing_and_a_limit_is_the_tail`
+
+---
+
+## Item 6: a log limit of 0 or less returns no rows (review of PR 8)
+
+**Legacy** (`legacy/fax/fax/cli.py:167`): `rows[-limit:]`. For `limit=0` that is `rows[-0:]`, which is
+every row.
+
+**faxcli** (`faxcli/cdr.py`): `parse_cdr` returns no rows for a limit of 0 or less, as `tail -n 0` does.
+The replay transport now agrees with the local and ssh ones, which already returned nothing. The
+console's route also clamps its `limit` to 1..1000 (run 13).
+
+**Tests**: `tests/test_review_run13.py::test_a_limit_of_zero_or_less_is_no_rows_whichever_transport_read_the_text`
+

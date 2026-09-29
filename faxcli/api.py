@@ -63,7 +63,7 @@ def send(
         :class:`~faxcli.models.SendResult`.
 
     Raises:
-        :class:`~faxcli.numbers.InvalidNumber`: if *number* cannot be normalised.
+        :class:`~faxcli.phone_numbers.InvalidNumber`: if *number* cannot be normalised.
         :class:`SendError`: for any other failure (file missing, render error, …).
     """
     # Normalise number (raises InvalidNumber on failure — callers catch it)
@@ -75,9 +75,13 @@ def send(
 
     # PDF header check
     if pdf.lower().endswith(".pdf"):
-        with open(pdf, "rb") as f:
-            if f.read(5) != b"%PDF-":
-                raise SendError("not a PDF")
+        try:
+            with open(pdf, "rb") as f:
+                head = f.read(5)
+        except OSError as e:          # a directory, no permission: typed, never a bare traceback
+            raise SendError(f"could not read the PDF: {e.strerror or e}") from None
+        if head != b"%PDF-":
+            raise SendError("not a PDF")
 
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")  # noqa: DTZ005
     resolved_label = re.sub(
@@ -92,7 +96,10 @@ def send(
         localtif = os.path.join(SPOOL, name)
         _tmpdir = None
     else:
-        _tmpdir = tempfile.mkdtemp()
+        try:
+            _tmpdir = tempfile.mkdtemp()
+        except OSError as e:
+            raise SendError(f"could not make a temp dir for the render: {e.strerror or e}") from None
         localtif = os.path.join(_tmpdir, name)
     spooled = os.path.join(SPOOL, name)
 

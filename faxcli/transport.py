@@ -229,7 +229,7 @@ class SshTransport:
         remote_tmp = f"/tmp/{name}"
         try:
             subprocess.run(
-                ["scp", "-q", "-o", "BatchMode=yes", localtif, f"{self.host}:{remote_tmp}"],
+                ["scp", "-q", "-o", "BatchMode=yes", "--", localtif, f"{self.host}:{remote_tmp}"],
                 check=True, timeout=60,
             )
         except subprocess.TimeoutExpired:
@@ -304,7 +304,12 @@ class ReplayTransport:
     def which_gs(self) -> Reading:
         if self._fail_gs:
             return Reading.failure("injected gs failure")
-        return Reading.success("/usr/bin/gs")
+        # The recorded `which gs` from the PBX, like every other replayed reading: never a fabricated
+        # success (the review of PR 8 found "/usr/bin/gs" returned from nothing; finding A's pattern).
+        try:
+            return Reading.success((self._ast_dir / "which_gs.txt").read_text().strip())
+        except OSError:
+            return Reading.failure("no recorded which_gs fixture")
 
     def render(self, pdf: str, tif: str) -> Reading:
         """Write a minimal 1-page TIFF.

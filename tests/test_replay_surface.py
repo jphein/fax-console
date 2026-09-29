@@ -15,7 +15,6 @@ import os
 import re
 import shutil
 import socket
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -55,7 +54,7 @@ _ALL_GET_ROUTES = [
 ]
 
 
-def _make_config(tmp_path, *, voipms: bool = False) -> tuple["Config", "VoipMsPoller | None"]:
+def _make_config(tmp_path, *, voipms: bool = False) -> tuple[Config, VoipMsPoller | None]:
     spool = str(tmp_path / "spool")
     os.makedirs(spool, exist_ok=True)
     transport = ReplayTransport(

@@ -105,6 +105,27 @@ class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self._dispatch("GET", b"")
 
+    def _linger(self) -> None:
+        """After an early 401 or 413, read and drop what the client already sent, then let it close.
+
+        Closing with unread input makes the kernel reset the connection (a TCP RST; ECONNRESET on
+        AF_UNIX), and a client that sent its body before reading, as a browser upload does, would see
+        a reset instead of the answer. This is the review of run 13, the same class as run 7's 503.
+        It is bounded: at most 1 MiB, at most 1 s, and it never holds a buffer beyond 64 KiB.
+        """
+        import time  # noqa: PLC0415
+        sock = self.connection
+        with contextlib.suppress(OSError):
+            self.wfile.flush()
+            sock.shutdown(socket.SHUT_WR)
+            sock.settimeout(0.25)
+            deadline, got = time.monotonic() + 1.0, 0
+            while got < (1 << 20) and time.monotonic() < deadline:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                got += len(chunk)
+
     def do_POST(self) -> None:
         # FIRST, before any route matching or body read: check the write token
         # (legacy e:2953–2957: "FIRST, before any route matching or body read").
@@ -115,6 +136,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if auth_err is not None:
             self.close_connection = True   # unread body desyncs a reused connection
             self._send(auth_err)
+            self._linger()
             return
 
         # Size cap: reject before reading (legacy e:2960–2961).
@@ -129,6 +151,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 status=413,
                 body=json.dumps({"ok": False, "detail": "upload too large (15 MB max)"}).encode(),
             ))
+            self._linger()
             return
 
         # Read the body in bounded chunks: never more than the cap.
