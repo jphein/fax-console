@@ -5,6 +5,7 @@ an SshTransport, and a ReplayTransport for tests.
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import os
 import shlex
@@ -128,8 +129,11 @@ class LocalTransport:
         from faxcli.cdr import CDR as _CDR_PATH  # noqa: PLC0415
 
         try:
+            if limit <= 0:                     # `tail -n 0`: nothing (lines[-0:] would be every line)
+                return Reading.success("")
             with open(_CDR_PATH, newline="") as f:
-                return Reading.success(f.read())
+                tail = collections.deque(f, maxlen=limit)   # the CDR only grows: keep the tail only
+            return Reading.success("".join(tail))
         except OSError as exc:
             return Reading.failure(str(exc))
 
@@ -180,7 +184,9 @@ class SshTransport:
         # Quote every remote argument so the remote shell treats each as one
         # word (legacy/fax/fax/cli.py:55: shlex.quote).
         remote_cmd = " ".join(shlex.quote(a) for a in argv)
-        full = ["ssh"] + SSH_OPTS + [self.host, remote_cmd]
+        # "--" separates ssh options from the host, so a host that starts with
+        # "-" cannot be interpreted as an ssh option.
+        full = ["ssh"] + SSH_OPTS + ["--", self.host, remote_cmd]
         try:
             r = subprocess.run(full, capture_output=True, text=True, timeout=60)
             if r.returncode == 0:
@@ -223,7 +229,7 @@ class SshTransport:
         remote_tmp = f"/tmp/{name}"
         try:
             subprocess.run(
-                ["scp", "-q", "-o", "BatchMode=yes", localtif, f"{self.host}:{remote_tmp}"],
+                ["scp", "-q", "-o", "BatchMode=yes", "--", localtif, f"{self.host}:{remote_tmp}"],
                 check=True, timeout=60,
             )
         except subprocess.TimeoutExpired:
@@ -298,7 +304,12 @@ class ReplayTransport:
     def which_gs(self) -> Reading:
         if self._fail_gs:
             return Reading.failure("injected gs failure")
-        return Reading.success("/usr/bin/gs")
+        # The recorded `which gs` from the PBX, like every other replayed reading: never a fabricated
+        # success (the review of PR 8 found "/usr/bin/gs" returned from nothing; finding A's pattern).
+        try:
+            return Reading.success((self._ast_dir / "which_gs.txt").read_text().strip())
+        except OSError:
+            return Reading.failure("no recorded which_gs fixture")
 
     def render(self, pdf: str, tif: str) -> Reading:
         """Write a minimal 1-page TIFF.

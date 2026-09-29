@@ -142,14 +142,14 @@ NORM_INVALID = [
 class TestNormNumberCharacterization:
     @pytest.mark.parametrize("s,expected", NORM_CORPUS)
     def test_valid_agrees(self, legacy, s, expected):
-        from faxcli.numbers import normalize
+        from faxcli.phone_numbers import normalize
         assert normalize(s) == expected
         result = legacy.norm_number(s)
         assert result == expected
 
     @pytest.mark.parametrize("s", NORM_INVALID)
     def test_invalid_both_reject(self, legacy, s):
-        from faxcli.numbers import InvalidNumber, normalize
+        from faxcli.phone_numbers import InvalidNumber, normalize
         with pytest.raises(InvalidNumber):
             normalize(s)
         with pytest.raises(SystemExit):
@@ -157,7 +157,7 @@ class TestNormNumberCharacterization:
 
     @pytest.mark.parametrize("code", ["911", "988", "211", "311", "411", "511", "611", "711", "811"])
     def test_blocked_codes_both_reject(self, legacy, code):
-        from faxcli.numbers import InvalidNumber, normalize
+        from faxcli.phone_numbers import InvalidNumber, normalize
         num = f"1{code}5550100"
         with pytest.raises(InvalidNumber):
             normalize(num)

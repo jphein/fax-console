@@ -1,0 +1,49 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "2415 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Read AGENTS.md, docs/analysis.md \\u00a79, and faxcli/ package\\n[ ] Item 1: Failed originate \\u2192 raise SendError, CLI prints and exits non-zero\\n[ ] Item 2: Failed \\\"before\\\" stats "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\", \"recursive\": true}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./docs/analysis.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/api.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/models.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/outcome.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cdr.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/asterisk.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\", \"recursive\": false}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/fax/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./WORKLOG.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1 | tail -20\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_unit.py\", \"range\": \"1-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\", \"recursive\": true}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/cdr/Master.csv\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"ls ./docs/changes.md 2>/dev/null && echo exists || echo missing\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_run11_review.py\", \"range\": \"1-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/analysis.md \\u00a79, and faxcli/ package\\n[-] Item 1: Failed originate \\u2192 raise SendError, CLI prints and exits non-zero\\n[ ] Item 2: Failed \\\"before\\\" stats "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxcli/api.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\n\\\"\\\"\\\"faxcli.api \\u2014 typed send API.\\n\\n``send(pdf, number, *, label=None, dry_run=False, wa"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:1\\n-------\\n\\\"\\\"\\\"faxcli.outcome \\u2014 judge a send from before/after fax show stats counters.\\n\\nPure function; no I/O.\\n\\\"\\\"\\\"\\n\\n\\ndef judge(before: dict[str,"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:127\\n-------\\n    def read_cdr(self, limit: int) -> Reading:\\n        from faxcli.cdr import CDR as _CDR_PATH  # noqa: PLC0415\\n\\n        try:\\n            with o"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1 | tail -30\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/analysis.md \\u00a79, and faxcli/ package\\n[x] Item 1: Failed originate \\u2192 raise SendError, CLI prints and exits non-zero\\n[x] Item 2: Failed \\\"before\\\" stats "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/fax/cli.py\", \"range\": \"100,135,156\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./tests/test_run12.py\", \"line_count\": 352, \"content\": \"\\\"\\\"\\\"tests/test_run12.py \\u2014 deliberate behaviour fixes (run 12).\\n\\nFor each numbered item:\\n  * a cha"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest tests/test_run12.py -v 2>&1 | tail -60\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"ls ./tests/fixtures/asterisk/\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"channel originate\", \"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"path\": \"./tests\", \"pattern\": \"test_failed_spool_never_originates\\\\|test_successful_send\\\"\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"path\": \"./tests\", \"pattern\": \"ReplayTransport.*send\\\\|send.*ReplayTransport\\\"\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"path\": \"./tests\", \"pattern\": \"cmd.*send.*without.*dry.run\\\\|originate.*fixture\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:280\\n-------\\n    def asterisk(self, cmd: str) -> Reading:\\n        if cmd in self._fail_cmds:\\n            return Reading.failure(f\\\"injected failure for {cmd!r}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest tests/test_run12.py -v 2>&1 | tail -40\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1 | tail -10\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:18\\n-------\\nimport importlib.util\\nimport io\\nimport json\\nimport os\\nimport subprocess\\nimport sys\\nfrom pathlib import Path\\n=======\\nimport importlib.util\\nim"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_run12.py\", \"range\": \"575-635\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:589\\n-------\\n        monkeypatch.setattr(builtins, \\\"open\\\", fake_open)\\n        rows = legacy.cdr_rows(local=True, limit=1)\\n        # Legacy: reads the whole f"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"cd . && .venv/bin/python -m pytest -q 2>&1 | tail -5\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read AGENTS.md, docs/analysis.md \\u00a79, and faxcli/ package\\n[x] Item 1: Failed originate \\u2192 raise SendError, CLI prints and exits non-zero\\n[x] Item 2: Failed \\\"before\\\" stats "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./docs/changes.md\", \"content\": \"# Deliberate behaviour changes\\n\\nEvery entry here records a case where `faxcli` consciously diverges from\\n`legacy/fax/fax/cli.py"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"# Work log\\n\\n## Run 12\\n\\n**Item 1 \\u2014 Failed originate raises SendError.**\\n`faxcli/api.py`, `faxcli/cli.py` (SendError already defined); `tests/test_run12.py` (4 tests).\\n793 tests "}

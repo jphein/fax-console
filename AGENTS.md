@@ -20,7 +20,10 @@ code. Read `BASELINE.md` before touching anything.
    block (e.g. `202-555-0142`). The public test receivers Faxbeep (`1-972-532-9272`) and HP
    are the only exceptions. IP addresses must be in `192.0.2.0/24` or loopback. Hostnames
    must be `pbx` or `*.example.com`. No person names. `scripts/scrub-check.sh` gates every
-   write and every commit.
+   write and every commit. A test vector that must trip the gate is assembled at runtime
+   (see `j()` in `tests/test_sandbox_guard.py`), and it is always a **fictional stand-in of the
+   right shape**. Never use a real value from the house: no real hostnames, numbers, addresses,
+   names or accounts, even split up.
 4. **Keep the JSON contracts stable.** The console consumes the CLI's `--json` output:
    - `status` → `{ok, spandsp, trunk_registered, trunk_available, obi100_registered, active_sessions[], stats{}, gs}`
    - `log` → `{ok, rows[]}`. Each row has `start_local, direction, number, disposition, billsec, file` plus the raw CDR columns.

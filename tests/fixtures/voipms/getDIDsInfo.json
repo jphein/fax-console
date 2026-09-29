@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "dids": [
+    {
+      "did": "2025550100",
+      "description": "House fax line",
+      "sms_enabled": "0",
+      "e911": "0",
+      "next_billing": "2026-11-01",
+      "routing": "fax:000000_house"
+    }
+  ]
+}

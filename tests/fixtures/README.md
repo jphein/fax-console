@@ -5,6 +5,8 @@
 only: nothing was sent, dialled or changed. The file name is the command, with spaces turned
 into underscores.
 
+`asterisk/which_gs.txt` is the one exception in that directory: the output of `which gs` on the PBX, from the same read-only capture (9/28 22:25), with nothing else kept. The replay transport serves it instead of inventing "/usr/bin/gs" (the review of PR 8).
+
 `cdr/Master.csv` is the fax call log in Asterisk's `cdr-csv` format (18 quoted columns, UTC
 times):
 - the **15 fax-related rows** are recorded (the `from-fax` MX922 calls, the `SendFAX`

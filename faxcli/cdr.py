@@ -26,7 +26,9 @@ def parse_cdr(text: str, limit: int = 200) -> list[dict]:
     """
     rows = list(csv.reader(io.StringIO(text)))
     out = []
-    for r in rows[-limit:]:
+    # limit <= 0 is no rows, as `tail -n 0` gives none; rows[-0:] would be every row, so the replay
+    # transport disagreed with the local and ssh ones (the review of PR 8).
+    for r in (rows[-limit:] if limit > 0 else []):
         if len(r) >= len(CDR_COLS):
             out.append(dict(zip(CDR_COLS, r, strict=False)))
     return out

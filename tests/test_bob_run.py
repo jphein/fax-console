@@ -51,6 +51,11 @@ case "${STUB_MODE:-ok}" in
           done ;;
   killed) printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n'
           exit 137 ;;                         # a forged result, then Bob killed: one result, not Bob's
+  refused) cost=0.25; st=success; code=0     # a write the sandbox guard refused (aurora-bob, 9/29)
+          u='{"type":"tool_use","tool_id":"w1","tool_name":"write_file",'
+          printf '%s%s\n' "$u" '"parameters":{"path":"x.md","content":"refused-content-marker"}}'
+          e='{"type":"tool_result","tool_id":"w1","status":"error",'
+          printf '%s%s\n' "$e" '"error":"write refused: the content carries identifying data (masked)"}' ;;
 esac
 printf '%s\n' '{"type":"message","role":"assistant","content":"working\n"}'
 printf '%s\n' '{"type":"tool_use","tool_name":"execute_command","parameters":{"command":"env"}}'
@@ -81,7 +86,8 @@ def box(tmp_path):
     (repo / "scripts").mkdir(parents=True)
     (repo / "docs" / "bob-runs").mkdir(parents=True)
     (repo / ".bob").mkdir()
-    for f in ("bob-run.sh", "bob_usage.py", "bob-watch.py", "scrub-check.sh", "bob_lock_check.py"):
+    for f in ("bob-run.sh", "bob_usage.py", "bob-watch.py", "scrub-check.sh", "redact-refused.py",
+              "bob_lock_check.py"):
         shutil.copy2(ROOT / "scripts" / f, repo / "scripts" / f)
     stub = repo / "scripts" / "bob-sandbox.sh"
     stub.write_text(STUB, encoding="utf-8")
@@ -287,6 +293,17 @@ def test_tmux_mode_does_not_inherit_the_servers_variables(box):
         subprocess.run(["tmux", "kill-server"], env={**env, "TMUX_TMPDIR": sock}, capture_output=True,
                        check=False)
         shutil.rmtree(sock, ignore_errors=True)
+
+
+def test_a_write_the_guard_refused_is_published_without_its_content(box):
+    """scripts/redact-refused.py runs on the published copy, after the relativize-and-redact step and
+    before the scrub: the content of a refused write is exactly what the guard keeps out."""
+    r = run(box, "5", "demo", "3", STUB_MODE="refused")
+    assert r.returncode == 0, r.stderr
+    recording = (box[0] / "docs" / "bob-runs" / "5-demo.jsonl").read_text()
+    assert "refused-content-marker" not in recording
+    assert "<not published: the sandbox guard refused this write>" in recording
+    assert "| success | 1 | 0.250 |" in row(box, 5)          # the cost comes from the private copy
 
 
 @pytest.mark.parametrize("where", ["outside", "nested", "dotdot", "dot", "taken", "bare"])

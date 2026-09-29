@@ -6,24 +6,19 @@ All pure logic is in the other faxcli.* modules.
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import os
-import re
 import socket
 import sys
 from typing import IO, Any
 
 from faxcli import asterisk as ast_mod
 from faxcli import cdr as cdr_mod
-from faxcli import outcome as outcome_mod
-from faxcli.models import DryRunResult, LogResult, LogRow, SendResult, StatusResult
-from faxcli.numbers import InvalidNumber, normalize
+from faxcli.models import DryRunResult, LogResult, LogRow, StatusResult
+from faxcli.phone_numbers import InvalidNumber
 from faxcli.transport import LocalTransport, Reading, SshTransport, Transport, exchange_host
 
-TRUNK = "voipms-fax"
 TEST_NUMBER = "19725329272"  # Faxbeep, public test receiver
-SPOOL = "/var/spool/asterisk/fax"
 
 # Default test page (legacy/fax/fax/cli.py:257 used docs/test-page.pdf; we use demo/)
 _DEFAULT_TEST_PAGE = os.path.join(
@@ -163,120 +158,67 @@ def cmd_log(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> int
 # ---------------------------------------------------------------------------
 
 def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> int:
+    """Thin printer over :func:`faxcli.api.send`.
+
+    The printed JSON is identical to before (characterization tests prove it).
+    """
+    from faxcli.api import SendError, send  # noqa: PLC0415
+
+    local = getattr(a, "local", False) or _on_exchange()
     try:
-        number = normalize(a.number)
+        result = send(
+            a.pdf,
+            a.number,
+            label=a.label,
+            dry_run=getattr(a, "dry_run", False),
+            wait=getattr(a, "wait", 0),
+            transport=transport,
+            local=local,
+        )
     except InvalidNumber as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-
-    if not os.path.isfile(a.pdf):
-        print(f"error: no such file: {a.pdf}", file=sys.stderr)
+    except SendError as exc:
+        print(f"error: {exc.reason}", file=sys.stderr)
         return 1
-
-    if a.pdf.lower().endswith(".pdf"):
-        with open(a.pdf, "rb") as f:
-            if f.read(5) != b"%PDF-":
-                print("error: not a PDF", file=sys.stderr)
-                return 1
-
-    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    label = re.sub(r"[^A-Za-z0-9_-]+", "-", a.label or os.path.splitext(os.path.basename(a.pdf))[0])[:40]
-    name = f"{stamp}-{label}-{number}.tif"
-
-    from faxcli.tiff import count_pages_from_path  # noqa: PLC0415
-
-    local = a.local or _on_exchange()
-    localtif = os.path.join("/tmp" if not local else SPOOL, name)
-    spooled = os.path.join(SPOOL, name)
-
-    render_reading = transport.render(a.pdf, localtif)
-    if not render_reading.ok:
-        print(f"error: render failed: {render_reading.why}", file=sys.stderr)
-        return 1
-    # render() may write to a redirected path (e.g. ReplayTransport with spool_dir)
-    actual_localtif = render_reading.text
-
-    pages = count_pages_from_path(actual_localtif)
-
-    spool_reading = transport.spool(actual_localtif, name, spooled)
-    if not spool_reading.ok:
-        print(f"error: spool failed: {spool_reading.why}", file=sys.stderr)
-        return 1
-    # SSH: spool() returns spooled (the remote path); local/replay: returns actual_localtif
-    effective_tif = spool_reading.text if spool_reading.text else spooled
-
-    transport.cleanup(actual_localtif)
-
-    if a.dry_run:
-        result = DryRunResult(ok=True, dry_run=True, number=number, pages=pages, tif=effective_tif)
-        if getattr(a, "json", False):
-            print(json.dumps(result.to_json()), file=stdout)
-        else:
-            print(f"dry run: {pages} page(s) spooled as {effective_tif}; not dialed", file=stdout)
-        return 0
-
-    cli_cmd = f"channel originate PJSIP/{number}@{TRUNK} application SendFax {effective_tif},f"
-    before_reading = transport.asterisk("fax show stats")
-    before = ast_mod.parse_stats(before_reading.text)
-    originate_reading = transport.asterisk(cli_cmd)
-    out_text = originate_reading.text.strip() if originate_reading.ok else ""
-
-    job: dict[str, Any] = {
-        "ok": True,
-        "number": number,
-        "label": label,
-        "pages": pages,
-        "tif": effective_tif,
-        "originate": out_text,
-        "started": dt.datetime.now().isoformat(timespec="seconds"),
-    }
-
-    if a.wait:
-        import time  # noqa: PLC0415
-
-        end = time.time() + a.wait
-        time.sleep(4)
-        while time.time() < end:
-            ch_reading = transport.asterisk("core show channels concise")
-            if not ast_mod.trunk_channel_up(ch_reading.text, TRUNK):
-                break
-            time.sleep(3)
-        after_reading = transport.asterisk("fax show stats")
-        after = ast_mod.parse_stats(after_reading.text)
-        res = outcome_mod.judge(before, after)
-        tz = os.environ.get("FAX_TZ", "America/Los_Angeles")
-        for row in cdr_mod.fax_rows(
-            cdr_mod.parse_cdr(transport.read_cdr(100).text, 100), tz
-        ):
-            if effective_tif.endswith(row.get("file", "\0")):
-                res.update({k: row[k] for k in ("start", "answer", "end", "billsec", "disposition")})
-                break
-        job["result"] = res
-
-    send_result = SendResult(
-        ok=True,
-        number=job["number"],
-        label=job["label"],
-        pages=job["pages"],
-        tif=job["tif"],
-        originate=job["originate"],
-        started=job["started"],
-        result=job.get("result"),
-    )
 
     if getattr(a, "json", False):
-        print(json.dumps(send_result.to_json()), file=stdout)
+        print(json.dumps(result.to_json()), file=stdout)
     else:
-        wait_suffix = ""
-        if a.wait and "result" in job:
-            r = job["result"]
-            outcome = r.get("outcome", "?")
-            disp = r.get("disposition", "?")
-            secs = r.get("billsec", "?")
-            wait_suffix = f"\nresult: {outcome} · call {disp} {secs}s"
+        if isinstance(result, DryRunResult):
+            print(
+                f"dry run: {result.pages} page(s) spooled as {result.tif}; not dialed",
+                file=stdout,
+            )
         else:
-            wait_suffix = "\nuse `fax log` to see the outcome"
-        print(f"dialing {number} with {pages} page(s) → {effective_tif}{wait_suffix}", file=stdout)
+            wait_val = getattr(a, "wait", 0)
+            if wait_val and result.result is not None:
+                r = result.result
+                outcome = r.get("outcome", "?")
+                disp = r.get("disposition", "?")
+                secs = r.get("billsec", "?")
+                wait_suffix = f"\nresult: {outcome} · call {disp} {secs}s"
+            else:
+                wait_suffix = "\nuse `fax log` to see the outcome"
+            print(
+                f"dialing {result.number} with {result.pages} page(s) → {result.tif}{wait_suffix}",
+                file=stdout,
+            )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# cmd_inbound
+# ---------------------------------------------------------------------------
+
+def cmd_inbound(a: argparse.Namespace, _transport: Transport, stdout: IO[str]) -> int:
+    """Print the generated dialplan and hook script to stdout; never writes a file."""
+    from faxcli.inbound import InboundConfig, render_dialplan, render_hook  # noqa: PLC0415
+
+    cfg = InboundConfig()
+    print(render_dialplan(cfg), end="", file=stdout)
+    print("", file=stdout)  # blank separator
+    print(render_hook(cfg), end="", file=stdout)
     return 0
 
 
@@ -340,6 +282,10 @@ def main(
     q.add_argument("--wait", type=int, default=90)
     q.add_argument("--dry-run", action="store_true")
     q.set_defaults(fn=cmd_test, label=None)
+
+    q = s.add_parser("inbound", help="print generated inbound-fax dialplan and hook script")
+    q.add_argument("--render", action="store_true", help="print dialplan and hook (always on)")
+    q.set_defaults(fn=cmd_inbound)
 
     a = p.parse_args(argv)
 

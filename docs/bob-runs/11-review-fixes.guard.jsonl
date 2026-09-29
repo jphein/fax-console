@@ -1,0 +1,57 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "2930 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./BASELINE.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxconsole\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/__main__.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/api.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/numbers.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_adapter.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_routes.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_part1_review.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_send.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "glob", "detail": "{\"pattern\": \"WORKLOG.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1 | tail -20\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/conftest.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] 1. Replay public surface: mask temp dir as `replay:` prefix in /api/fax response, add replay scan test\\n[ ] 2. Headers: add X-Content-Type-Options: nosniff to all responses\\n[ ] 3. se"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"247-396\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/version.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"head -5 tests/fixtures/cdr/Master.csv\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"ls tests/fixtures/asterisk/ | head -20\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"grep -r \\\"spool\\\\|inbox\\\\|/tmp\\\\|/var\\\\|/home\\\" tests/fixtures/cdr/Master.csv | head -5\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"grep -r \\\"spool\\\\|inbox\\\\|/tmp\\\\|/var\\\\|/home\\\" tests/fixtures/asterisk/*.txt | head -5\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/routes.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:267\\n-------\\n    result = {\\n        \\\"ok\\\": bool(st.get(\\\"ok\\\")) and bool(lg.get(\\\"ok\\\")),\\n      "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/server.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:156\\n-------\\n            def process_request(self, request: Any, client_address: Any) -> None:\\n   "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:28\\n-------\\ndef build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:\\n    \\\"\\\"\\\"Parse *argv*, wire up transports and pollers, and return ``"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:28\\n-------\\ndef build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:\\n    \\\"\\\"\\\"Parse *argv*, wire up transports and pollers, and return ``"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:62\\n-------\\n        tmpdir = tempfile.mkdtemp(prefix=\\\"faxconsole-replay-\\\")\\n\\n        # VoIP.ms poller backed by fixture JSON; creds not needed in replay mode."}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"TRUNK\", \"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"path\": \".\", \"pattern\": \"faxcli\\\\.numbers|from faxcli.numbers|from faxcli import numbers\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:15\\n-------\\nfrom faxcli import asterisk as ast_mod\\nfrom faxcli import cdr as cdr_mod\\nfrom faxcli.models import DryRunResult, LogResult, LogRow, StatusResult\\nf"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"path\": \"./faxcli/cli.py\", \"pattern\": \"TRUNK\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:15\\n-------\\nfrom faxcli import asterisk as ast_mod\\nfrom faxcli import cdr as cdr_mod\\nfrom faxcli.api import TRUNK\\nfrom faxcli.phone_numbers import InvalidNumb"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:22\\n-------\\nfrom faxcli.numbers import normalize\\n=======\\nfrom faxcli.phone_numbers import normalize\\n>>>>>>> REPLACE\\n\", \"path\": \"."}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:42\\n-------\\nfrom faxcli.numbers import InvalidNumber\\n=======\\nfrom faxcli.phone_numbers import InvalidNumber\\n>>>>>>> REPLACE\\n\\n<<<<<<< SEARCH\\n:start_line:339"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "search_and_replace", "detail": "{\"path\": \"./tests/test_unit.py\", \"search\": \"from faxcli.numbers import InvalidNumber, normalize\", \"replace\": \"from faxcli.phone_numbers import InvalidNumber, normalize\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "search_and_replace", "detail": "{\"path\": \"./tests/test_part1_review.py\", \"search\": \"from faxcli.numbers import InvalidNumber\", \"replace\": \"from faxcli.phone_numbers import InvalidNumber\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\", \"range\": \"140-165\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "search_and_replace", "detail": "{\"path\": \"./tests/test_characterization.py\", \"search\": \"        from faxcli.numbers import normalize\\n        assert normalize(s) == expected\", \"replace\": \"        from fax"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "search_and_replace", "detail": "{\"path\": \"./tests/test_characterization.py\", \"search\": \"        from faxcli.numbers import InvalidNumber, normalize\\n        with pytest.raises(InvalidNumber):\\n           "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "search_and_replace", "detail": "{\"path\": \"./tests/test_characterization.py\", \"search\": \"        from faxcli.numbers import InvalidNumber, normalize\\n        num = f\\\"1{code}5550100\\\"\", \"replace\": \"       "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\", \"range\": \"143-165\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:143\\n-------\\n    @pytest.mark.parametrize(\\\"s,expected\\\", NORM_CORPUS)\\n    def test_valid_agrees(self, legacy, s, expected):\\n        from faxcli.numbers import"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./faxcli/phone_numbers.py\", \"content\": \"\\\"\\\"\\\"faxcli.phone_numbers \\u2014 phone-number normalisation.\\n\\nPure function; never exits the process. Callers (e.g. cli"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"rm ./faxcli/numbers.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:113\\n-------\\ndef _call_handler(config: Config, method: str, path: str,\\n                  headers: dict | None = None,\\n                  body: bytes = b\\\"\\\") ->"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "write refused: the content carries identifying data (masked): <write>:27: [credential-assignment]"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_replay_surface.py \\u2014 replay mode leaks no runtime paths or host identity.\\n\\nEvery GET route and one dry-run POST are checked: no response body may contain\\n  - the t"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_run11_review.py \\u2014 tests for the run-11 review fixes.\\n\\nCovers:\\n  3. server.py: socket timeout on the handler; pool.submit RuntimeError releases permit.\\n  4. __mai"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_replay_surface.py tests/test_run11_review.py -v 2>&1 | head -80\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:72\\n-------\\n    def test_pool_submit_raises_releases_permit(self, tmp_path):\\n        \\\"\\\"\\\"If pool.submit raises RuntimeError the semaphore permit is released.\\"}

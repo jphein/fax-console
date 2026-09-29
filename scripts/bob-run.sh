@@ -121,6 +121,9 @@ for f in files:
         t = t.replace(key, "***")
     open(f, "w", encoding="utf-8").write(t)
 PY
+# A write the sandbox guard refused is never published: its content is what the guard keeps out. It runs
+# on the published copy, before the scrub below; finalize reads the private copy, so costs are unaffected.
+python3 -I scripts/redact-refused.py "$out"
 fin=0
 python3 -I scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" --max-cost "$cost" \
     >/dev/null || fin=$?
