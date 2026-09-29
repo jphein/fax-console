@@ -98,6 +98,10 @@ mid-way would have to re-read everything on resume, which costs more than the he
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
 
+**Cap for run 7 (the VoIP.ms poller plus run 6's review items): 10.** Runs 4–6 each spent their full
+cap (6, 5, 8). Run 7 combines two planned pieces of work to avoid a second full re-read, so it is
+capped at the sum of their plan caps (6 + 4). That is under the 15 that needs the lead's word.
+
 ## Run notes
 
 ### Run 1: modernization analysis
