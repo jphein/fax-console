@@ -86,6 +86,8 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 00:13 | 7 | `0b7f46c4` | run 6's review items (replay isolation, typed send API, bounded queue) and the VoIP.ms poller | Part 1 kept; the poller's tests were refused by the guard, so run 8 finishes it | 10.225 |
 | 00:40 | 8 | `eeebacd0` | finished the VoIP.ms port: 4 fixes, replay wiring with cleanup, 50 tests and the legacy characterization | kept; the first run under its cap with its summary; review strengthened 7 tests | 4.975 |
 | 01:05 | 9 | `5a76155a` | the page: Live state, PSTN account and Fax, served by `handle()` with a CSP; dark and light; 41 tests | kept; review found the public demo would publish its host's name (fixed), a dark theme that never reached the favicon or form controls, and tests blind to CSP breakage | 4.615 |
+| 01:26 | 10 | `afc9c5e2` | the inbound-fax design as generated config: the dialplan, the hook and `fax inbound --render`; 56 tests | kept; Bob found the caller-ID injection in the legacy design unaided; review narrowed its filter and rebuilt the hostile tests | 3.362 |
+| 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered; 2 against a planted gateway failed as designed | the flag pin was not proven, so it was not used; then all runs held (see Budget) | 0.065 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below the table.
@@ -103,8 +105,10 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below t
 | 7 | 9/29 00:13 | [Run 6's review and the VoIP.ms poller](bob-runs/7-voipms-and-replay.prompt.md) | replay temp dir, `Config(replay=True)` check, `--ssh` host, `faxcli/api.py` (typed send), a bounded queue with 503; `faxconsole/voipms.py` (391 lines), 3 synthesized fixtures, `GET /api/voipms`; 16 tests | 69 | 10.225 | Part 1 kept. Review: the 503 test bound TCP and was vacuous, and the 503 was lost to a reset (fixed by the reviewer). The poller's tests were refused by the guard; run 8 finishes them |
 | 8 | 9/29 00:40 | [Finish the VoIP.ms port](bob-runs/8-voipms-finish.prompt.md) | the 4 review fixes in `voipms.py`; `fixture_http`; `build(argv)` with cleanup and SIGTERM; 50 tests, 17 of them characterization against the legacy poller; a work log ([worklog](bob-runs/8-voipms-finish.worklog.md)) | 46 | 4.975 | Kept. Review: 5 perturbations left Bob's tests green (two mechanisms masked each other, a vacuous `__cause__` check, 12 chosen fields); fixed with whole-snapshot equality. The credentials error text had changed from legacy's (fixed) |
 | 9 | 9/29 01:05 | [The page](bob-runs/9-page.prompt.md) | `faxconsole/static/` (index.html, app.css, app.js, favicon.svg), served by `handle()` with a CSP and nosniff; replay banner from `/api/version`; 41 tests; a work log ([worklog](bob-runs/9-page.worklog.md)) | 44 | 4.615 | Kept. Review (a visual check, light and dark, on a static export): the sigil's `host` would publish the demo host's name (fixed); the favicon's dark rules never applied; native controls stayed light; the tests missed inline handlers, a weakened `script-src` and a 503 |
+| 10 | 9/29 01:26 | [The inbound dialplan](bob-runs/10-inbound.prompt.md) | `faxcli/inbound.py` (`render_dialplan`, `render_hook`), `fax inbound --render`; 56 tests; a work log ([worklog](bob-runs/10-inbound.worklog.md)) | 42 | 3.362 | Kept. Bob found the legacy design's caller-ID injection (into `System()` and a file path) unaided and wrapped it in `FILTER()`. Review: the filter admitted `-` (argument injection into the notify program), the log line used the raw value, the hook's spool check passed `..`, and the hostile tests could not fail on the real risk. All fixed |
+| – | 9/29 01:35 | Gateway-pin controls | Tiny sandboxed runs testing whether `--gateway-url` beats a redirect: an outside env var is dropped by the sandbox (both answered "ok"); a planted `settings.gatewayUrl` breaks the run, with the flag or without | 3 answered, 2 failed | 0.065 | The flag was not proven; the fix is PR 5's environment pin |
 
-**Running total: 42.24 Bobcoins** (after run 9). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 45.67 Bobcoins** (after run 10 and the gateway controls). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
@@ -118,6 +122,14 @@ mid-way would have to re-read everything on resume, which costs more than the he
 **Cap for run 5 (review fixes): 5.** Run 4 spent its full 6 and stopped before its own lint and
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
+
+**Runs on hold (9/29 01:40).** The independent review found two ways a Bob run could reach the workstation or
+its API key, in this branch's older wrapper as well:
+- a gateway URL planted in the persistent Bob home, which the next run would obey;
+- a stdlib-named Python file at the repo root, which a host-side `python3 -c` would import.
+Nothing was planted: every check of the clones is clean, and run 10's live connections went only to IBM's
+gateway. No Bob run starts until PR 5 lands (a fresh Bob home per run, the gateway pinned in the environment,
+`python3 -I` everywhere, and a scrub finding for stdlib-named files) and this branch is rebased onto it.
 
 **Cap for run 10 (the inbound dialplan as generated config): 5.** The plan said 4. Runs 8 and 9 spent
 4.97 and 4.61 on similar-sized scopes (a module, about 300 lines of tests, a work log), so 4 would likely
@@ -329,10 +341,32 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
   connections". It is part of the characterized JSON contract.
 - **Cost.** 4.61.
 
+### Run 10: the inbound dialplan
+- **What Bob did.** Bob rendered option A of the legacy inbound design (a second DID for fax, so the house
+  line is never touched) as text: the dialplan context, the hook script, and `fax inbound --render`.
+  - Asked only to treat caller-controlled channel variables as untrusted, Bob found the risk the design
+    carried: `${CALLERID(num)}` reached `System()`, which Asterisk runs through a shell, and a file path.
+    It wrapped both in `FILTER()` and documented why.
+  - It wrote 56 tests and finished under its cap (3.36 of 5), with its work log.
+- **Kept.** The design and the fix's structure.
+- **Rejected or fixed, with reasons.**
+  - **The filter kept `-`, space and parentheses.** A hyphen lets a caller send `--flag`, which the hook's
+    notify program may parse as an option even when quoted. It is now digits and `+`, which is what a trunk
+    delivers.
+  - **The log line used the raw value**, so a newline could forge log lines. It is filtered too.
+  - **The hook's spool check passed a `..` path.** In a `case` pattern `*` matches `/`. Dot segments are
+    now refused.
+  - **The hostile tests compared the rendered text with hostile strings.** The caller's value arrives at
+    run time, so half of them could never fail, and on Bob's own code a filter that let `/`, `.` and `=`
+    through passed all twelve. The new tests expand the dialplan through a model of Asterisk, with a
+    positive control, and check what a path, a shell and a log line receive. Four perturbations each go
+    red.
+- **Cost.** 3.36.
+
 ## Who wrote what
 | Author | What |
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
-| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests and its page (runs 6–9), except the reviewer fixes named in the run notes. |
+| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py`, `faxcli/inbound.py` and `faxconsole/` with their tests and its page (runs 6–10), except the reviewer fixes named in the run notes. |
 | Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`, the network guard and the process guard's hardening in `tests/conftest.py`), review notes (`docs/analysis.md` §9), and this file. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
