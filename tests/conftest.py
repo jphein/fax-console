@@ -39,7 +39,8 @@ def _network_guard_for_the_whole_session():
     how Bob reaches its API. So the rules "tests never open a TCP port" and "tests never reach a network"
     are enforced here. AF_UNIX sockets and socketpair() are untouched.
     """
-    names = ("bind", "connect", "connect_ex", "sendto", "sendmsg")
+    # listen() on an unbound IP socket autobinds a real port (the Oracle's delta on PR 8)
+    names = ("bind", "connect", "connect_ex", "sendto", "sendmsg", "listen")
     real = {name: getattr(socket.socket, name) for name in names}
 
     def guard(name):
@@ -52,7 +53,8 @@ def _network_guard_for_the_whole_session():
     mp = pytest.MonkeyPatch()
     for name in names:
         mp.setattr(socket.socket, name, guard(name))
-    mp.setattr(socket, "getaddrinfo", lambda host, *a, **k: _trip(f"socket.getaddrinfo({host!r})"))
+    for resolver in ("getaddrinfo", "gethostbyname", "gethostbyname_ex", "gethostbyaddr", "getnameinfo"):
+        mp.setattr(socket, resolver, lambda host, *a, _r=resolver, **k: _trip(f"socket.{_r}({host!r})"))
     yield
     mp.undo()
     late = [t for t in _TRIPS if t[0].startswith("<after ")]

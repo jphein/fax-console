@@ -58,7 +58,9 @@ def build(
     cleanup_fns: list[Callable[[], None]] = []
 
     if a.replay:
-        replay_dir = Path(a.replay)
+        # Absolute from here on, so every error message carries the one string the masker replaces:
+        # a relative --replay reached error text as given, and only absolute paths were masked.
+        replay_dir = Path(os.path.abspath(a.replay))
         # Replay mode: use a single temp dir for both spool and inbox so no
         # real paths are touched.  Removed on cleanup.
         tmpdir = tempfile.mkdtemp(prefix="faxconsole-replay-")
@@ -86,6 +88,7 @@ def build(
             replay=True,
             voipms=voipms_poller,
             replay_root=tmpdir,
+            replay_fixture_dir=str(replay_dir),   # the same string that every fixture path starts with
         )
 
         def _cleanup() -> None:
