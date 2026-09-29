@@ -104,6 +104,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 09:00 | – | – | the policy control for PR 6, in a throwaway clone ("reply ok"): a gateway planted in Bob's settings broke the run without the policy file and not with it; the baseline answered | the read-only policy locks the gateway; runs resume after PR 6 merges | 0.044 |
 | 09:26 | 11 | `d01d3024` | review fixes: the public replay surface, headers, the server's timeout and permit, the entry point, the replay spool, the `numbers.py` rename | kept; the first run through the PR 5 wrapper and under the PR 6 lock (its log shows the policy loaded and all 46 requests to IBM); stopped at the cap with the suite red, finished by the reviewer | 6.100 |
 | 09:44 | 12 | `8b678162` | deliberate fixes to legacy behaviours (a failed originate, a failed stats read, an empty CDR field), hardening, and `docs/changes.md` | kept; review reverted a replay transport that claimed an originate it could not replay, and closed a temp-dir leak and a limit bug | 5.100 |
+| 10:42 | 13 | `34d99a86` | the independent review's must-fixes on PR 8: no POST body read before the token and size gate, and machine paths masked in replay error text; the log limit clamped | kept; its own log passed PR 7's lock check; review made the early 401/413 reach its client and closed the rest | 6.191 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills them in (see **Budget** below).
@@ -127,7 +128,7 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
 | 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | Kept: all seven items. Bob stopped at the cap with the suite red, having not yet updated `build()`'s test callers, and the replay-path mask leaked when inbox and spool share no directory. The reviewer fixed both, plus a second `TRUNK` definition |
 | 12 | 9/29 09:44 | [Faxcli fixes](bob-runs/12-faxcli-fixes.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.10).) | 48 | 5.100 | Kept: the three deliberate fixes, the hardening and `docs/changes.md`. Review reverted a replay transport that claimed successful originates, and fixed a temp dir that leaked on a failed render and a CDR limit of 0 that returned every line |
-| 13 | 9/29 10:42 | [Oracle fixes](bob-runs/13-oracle-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.19).) | 52 | 6.191 | review pending |
+| 13 | 9/29 10:42 | [Oracle fixes](bob-runs/13-oracle-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.19).) | 52 | 6.191 | Kept: both must-fixes (no POST body read before the gate; replay error text masked) and part of the live-mode items. The reviewer fixed the early 401/413 being lost to a reset, and closed the items not reached at the cap |
 
 **Running total: 63.12 Bobcoins** (after run 13).
 
@@ -379,6 +380,8 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
     query's `prefers-color-scheme:dark` as a declaration.
 - **For the lead.** The Active-calls tile and the backend keep legacy's instrument name "MSC
   connections". It is part of the characterized JSON contract.
+  - **The lead's ruling: keep it.** MSC is generic 3GPP vocabulary, not a house component name, and
+    the text is verbatim from the frozen excerpt.
 - **Cost.** 4.61.
 
 ### Run 10: the inbound dialplan
@@ -444,6 +447,27 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
     though `docs/changes.md` said otherwise. A deque keeps only the tail, and the document now matches the
     code.
 - **Cost.** 5.10, the full cap.
+
+### Run 13: the independent review's must-fixes
+- **What Bob did.** The independent review of PR 8 found two must-fixes, and Bob fixed both.
+  - **The server read a POST body before checking the token or the size,** so anyone on the public demo
+    could make it reserve a declared 400 MB. `do_POST` now answers 401 or 413 before reading, as legacy
+    did.
+  - **Replay error text still carried machine paths.** Every `why`, `detail` and `error` now goes through
+    one masker.
+  - It also clamped the log limit, and made sends local only for a `LocalTransport`. Its own log passed
+    PR 7's lock check.
+- **Kept.** Both fixes.
+- **Rejected or fixed, with reasons.**
+  - **The early 401 or 413 closed with the client's body unread,** so the kernel reset the connection and
+    a browser uploading a PDF would see a reset, not the answer. It is the same class as run 7's 503. The
+    handler now lingers: it reads and drops at most 1 MiB for at most 1 s.
+    - The first test was blind: on Python 3.14 the 128 KiB buffered header read swallows a 64 KiB body.
+      It now streams 768 KiB from a thread.
+  - **Items not reached at the cap,** closed by the reviewer: scp's `--`; replay's `which_gs`, which now
+    serves the recorded fixture instead of inventing "/usr/bin/gs"; a limit of 0 or less giving no rows in
+    every transport; typed errors for an unreadable PDF and a failed `mkdtemp`.
+- **Cost.** 6.19, the full cap.
 
 ## Who wrote what
 | Author | What |
