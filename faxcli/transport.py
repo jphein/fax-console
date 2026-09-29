@@ -129,7 +129,8 @@ class LocalTransport:
 
         try:
             with open(_CDR_PATH, newline="") as f:
-                return Reading.success(f.read())
+                lines = f.readlines()
+            return Reading.success("".join(lines[-limit:]))
         except OSError as exc:
             return Reading.failure(str(exc))
 
@@ -180,7 +181,9 @@ class SshTransport:
         # Quote every remote argument so the remote shell treats each as one
         # word (legacy/fax/fax/cli.py:55: shlex.quote).
         remote_cmd = " ".join(shlex.quote(a) for a in argv)
-        full = ["ssh"] + SSH_OPTS + [self.host, remote_cmd]
+        # "--" separates ssh options from the host, so a host that starts with
+        # "-" cannot be interpreted as an ssh option.
+        full = ["ssh"] + SSH_OPTS + ["--", self.host, remote_cmd]
         try:
             r = subprocess.run(full, capture_output=True, text=True, timeout=60)
             if r.returncode == 0:
@@ -280,6 +283,10 @@ class ReplayTransport:
     def asterisk(self, cmd: str) -> Reading:
         if cmd in self._fail_cmds:
             return Reading.failure(f"injected failure for {cmd!r}")
+        # channel originate has a dynamic TIFF path; no fixture can cover it.
+        # Return success with empty text (mirrors Asterisk's actual output format).
+        if cmd.startswith("channel originate "):
+            return Reading.success("")
         fname = self._cmd_to_filename(cmd)
         path = self._ast_dir / fname
         try:

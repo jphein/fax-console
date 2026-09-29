@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import os
 import re
+import tempfile
 
 from faxcli import asterisk as ast_mod
 from faxcli import cdr as cdr_mod
@@ -87,7 +88,12 @@ def send(
 
     from faxcli.tiff import count_pages_from_path  # noqa: PLC0415
 
-    localtif = os.path.join("/tmp" if not local else SPOOL, name)
+    if local:
+        localtif = os.path.join(SPOOL, name)
+        _tmpdir = None
+    else:
+        _tmpdir = tempfile.mkdtemp()
+        localtif = os.path.join(_tmpdir, name)
     spooled = os.path.join(SPOOL, name)
 
     render_reading = transport.render(pdf, localtif)
@@ -99,19 +105,28 @@ def send(
 
     spool_reading = transport.spool(actual_localtif, name, spooled)
     if not spool_reading.ok:
+        if _tmpdir:
+            import shutil  # noqa: PLC0415
+            shutil.rmtree(_tmpdir, ignore_errors=True)
         raise SendError(f"spool failed: {spool_reading.why}")
     effective_tif = spool_reading.text if spool_reading.text else spooled
 
     transport.cleanup(actual_localtif)
+    if _tmpdir:
+        import shutil  # noqa: PLC0415
+        shutil.rmtree(_tmpdir, ignore_errors=True)
 
     if dry_run:
         return DryRunResult(ok=True, dry_run=True, number=number, pages=pages, tif=effective_tif)
 
     cli_cmd = f"channel originate PJSIP/{number}@{TRUNK} application SendFax {effective_tif},f"
     before_reading = transport.asterisk("fax show stats")
-    before = ast_mod.parse_stats(before_reading.text)
+    before_ok = before_reading.ok
+    before = ast_mod.parse_stats(before_reading.text) if before_ok else {}
     originate_reading = transport.asterisk(cli_cmd)
-    out_text = originate_reading.text.strip() if originate_reading.ok else ""
+    if not originate_reading.ok:
+        raise SendError(f"originate failed: {originate_reading.why}")
+    out_text = originate_reading.text.strip()
 
     job_result: dict | None = None
 
@@ -126,13 +141,14 @@ def send(
                 break
             time.sleep(3)
         after_reading = transport.asterisk("fax show stats")
-        after = ast_mod.parse_stats(after_reading.text)
-        res = outcome_mod.judge(before, after)
+        after = ast_mod.parse_stats(after_reading.text) if after_reading.ok else {}
+        res = outcome_mod.judge(before, after, before_ok=before_ok, after_ok=after_reading.ok)
         tz = os.environ.get("FAX_TZ", "America/Los_Angeles")
         for row in cdr_mod.fax_rows(
             cdr_mod.parse_cdr(transport.read_cdr(100).text, 100), tz
         ):
-            if effective_tif.endswith(row.get("file", "\0")):
+            file_field = row.get("file", "")
+            if file_field and effective_tif.endswith(file_field):
                 res.update({k: row[k] for k in ("start", "answer", "end", "billsec", "disposition")})
                 break
         job_result = res
