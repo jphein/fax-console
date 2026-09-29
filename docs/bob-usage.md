@@ -99,6 +99,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 01:05 | 9 | `5a76155a` | the page: Live state, PSTN account and Fax, served by `handle()` with a CSP; dark and light; 41 tests | kept; review found the public demo would publish its host's name (fixed), a dark theme that never reached the favicon or form controls, and tests blind to CSP breakage | 4.615 |
 | 01:26 | 10 | `afc9c5e2` | the inbound-fax design as generated config: the dialplan, the hook and `fax inbound --render`; 56 tests | kept; Bob found the caller-ID injection in the legacy design unaided; review narrowed its filter and rebuilt the hostile tests | 3.362 |
 | 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered, since the sandbox drops an outside gateway variable; a gateway planted in Bob's settings broke the run with `--gateway-url` and without it | the flag does not pin the gateway, so it was not used; then all runs held (see Budget) | 0.065 |
+| 09:00 | – | – | the policy control for PR 6, in a throwaway clone ("reply ok"): a gateway planted in Bob's settings broke the run without the policy file and not with it; the baseline answered | the read-only policy locks the gateway; runs resume after PR 6 merges | 0.044 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills them in (see **Budget** below).
@@ -119,8 +120,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | 9 | 9/29 01:05 | [The page](bob-runs/9-page.prompt.md) | `faxconsole/static/` (index.html, app.css, app.js, favicon.svg), served by `handle()` with a CSP and nosniff; replay banner from `/api/version`; 41 tests; a work log ([worklog](bob-runs/9-page.worklog.md)) | 44 | 4.615 | Kept. Review (a visual check, light and dark, on a static export): the sigil's `host` would publish the demo host's name (fixed); the favicon's dark rules never applied; native controls stayed light; the tests missed inline handlers, a weakened `script-src` and a 503 |
 | 10 | 9/29 01:26 | [The inbound dialplan](bob-runs/10-inbound.prompt.md) | `faxcli/inbound.py` (`render_dialplan`, `render_hook`), `fax inbound --render`; 56 tests; a work log ([worklog](bob-runs/10-inbound.worklog.md)) | 42 | 3.362 | Kept. Bob found the legacy design's caller-ID injection (into `System()` and a file path) unaided and wrapped it in `FILTER()`. Review: the filter admitted `-` (argument injection into the notify program), the log line used the raw value, the hook's spool check passed `..`, and the hostile tests could not fail on the real risk. All fixed |
 | – | 9/29 01:35 | Gateway-pin controls | Tiny sandboxed runs testing whether `--gateway-url` beats a redirect: an outside env var is dropped by the sandbox (both answered "ok"); a planted `settings.gatewayUrl` breaks the run, with the flag or without | 3 answered, 2 failed | 0.065 | The flag was not proven; the fix is PR 5's environment pin |
+| – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
 
-**Running total: 45.68 Bobcoins** (after run 10 and the gateway controls).
+**Running total: 45.73 Bobcoins** (after run 10 and the controls for PRs 5 and 6).
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
