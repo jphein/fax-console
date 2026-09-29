@@ -10,6 +10,10 @@
 #            while it runs, and copied into docs/bob-runs/ only after the sandbox exits, and only if
 #            docs/ is still the same directory (exit 3 otherwise; nothing is touched).
 # Bob runs inside scripts/bob-sandbox.sh (the OS sandbox); the .bob/ hooks audit inside it. Rules: AGENTS.md.
+# Gateway lock, checked on every run (#7): the sandbox saves Bob's own log to a directory named here,
+#   and scripts/bob_lock_check.py must find the policy loaded and every request on the pinned origin.
+#   Otherwise the run fails (exit 4) and keeps counting at its reservation. It is a regression check:
+#   Bob writes that log itself, and the read-only policy file is the lock.
 # Every Python here runs with -I (isolated): Bob can write the repo root, and without -I a json.py it
 # left there would be imported by these host-side steps, with the API key in the environment.
 #
@@ -78,11 +82,12 @@ source "${BOB_ENV:-$HOME/.config/bob-shell/env}"
 priv=${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/runs
 mkdir -p "$priv"; chmod 700 "$priv"
 rec="$priv/$(date +%Y%m%dT%H%M%S)-$$-$n-$slug.jsonl"; install -m 600 /dev/null "$rec"
+logdir="${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/bob-logs/$(date +%Y%m%dT%H%M%S)-$$-$n-$slug"
 sig() { stat -c '%d:%i' docs docs/bob-runs "$ledger" 2>/dev/null | tr '\n' ' '; }
 before=$(sig)
 : > .bob/guard.log
 set +e      # a failed run must still leave its guard log and its ledger row
-scripts/bob-sandbox.sh bob run --format stream-json --max-cost "$cost" --accept-license \
+FAX_CONSOLE_BOB_LOG_DIR="$logdir" scripts/bob-sandbox.sh bob run --format stream-json --max-cost "$cost" --accept-license \
     --disable-tool-groups skill,mcp,browser,mode "$(cat "$p")" | tee "$rec" | python3 -I scripts/bob-watch.py
 rc=${PIPESTATUS[0]}
 set -e
@@ -91,6 +96,13 @@ if [ "$(sig)" != "$before" ]; then
   echo "bob-run: nothing was copied or finalized; the reservation keeps counting in the journal." >&2
   echo "bob-run: Bob's stream is kept at $rec. Restore docs/ by hand before anything else." >&2
   exit 3
+fi
+# The gateway lock, from Bob's own log for this run (counts and origins only; see the header).
+lock=0
+python3 -I scripts/bob_lock_check.py "$logdir" || lock=$?
+if [ "$lock" -ne 0 ]; then
+  echo "bob-run: run $n FAILED the gateway-lock check on Bob's own log ($logdir); its reservation keeps counting" >&2
+  [ "$rc" -ne 0 ] || rc=4
 fi
 cp "$rec" "$out"
 cp .bob/guard.log "docs/bob-runs/$n-$slug.guard.jsonl"
