@@ -207,15 +207,18 @@ def secret_value(m, kind=""):
 
 
 HEX = frozenset("0123456789abcdef")
-ID_LENGTHS = (40, 64)                                  # a full SHA-1 or SHA-256 git object id
+# Full hex ids: 32 = Bob Shell's task_id (every docs/bob-runs transcript carries one) and MD5,
+# 40 = a SHA-1 git object id, 64 = a SHA-256 one.
+ID_LENGTHS = (32, 40, 64)
 
 
 def in_object_id(m):
-    """True if the match is digits inside a full git object id: 40 or 64 lowercase hex characters,
+    """True if the match is digits inside a full hex id: 32, 40 or 64 lowercase hex characters,
     at least one of them a letter, with no letter, digit or underscore on either side.
     GitHub's pull_request merge message ("Merge <40 hex> into <40 hex>") tripped the phone rule
     on a 10-digit run inside the head's id (the Oracle, PR #6, 2026-09-29). A revert message
-    ("This reverts commit <40 hex>") or a blob id in REVIEWED_BINARIES can do the same.
+    ("This reverts commit <40 hex>"), a blob id in REVIEWED_BINARIES or a Bob transcript's
+    32-hex task_id can do the same (the Oracle: a few percent of runs).
     Abbreviated ids are not exempt: a 10-12 character one could be a phone number with two hex
     letters glued on, and git abbreviates this repo's ids to 7, too short for 10 digits.
     Uppercase hex, any other length, or a run glued to a word stays a finding."""

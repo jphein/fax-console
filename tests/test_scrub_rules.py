@@ -81,6 +81,7 @@ CAUGHT = [
     ("phone-number", j("cafe", "202", "555", "0299", "beef" * 6, "ccc")),        # 41 hex: no git id
     ("phone-number", j("xcafe", "202", "555", "0299", "beef" * 6, "cc")),        # 40 hex glued to a word
     ("imsi-imei-shape", j("ab", "31015", "0123456789", "cdef" * 5, "abcd")),     # 41 hex: no git id
+    ("phone-number", j('{"task_id":"', "ab", "202", "555", "0299", "cdef" * 5, 'a"}')),  # 33 hex
 ]
 
 PASSED = [
@@ -127,6 +128,7 @@ PASSED = [
     j("This reverts commit ", "cafe", "202", "555", "0299", "beef" * 6, "cc."),
     j("https://github.com/o/r/commit/", "ab", "31015", "0123456789", "cdef" * 5, "abc"),   # IMSI shape
     j('    "', "cafe", "202", "555", "0299", "beef" * 12, 'cc": "a 64-hex id",'),
+    j('{"type":"result","task_id":"', "ab", "202", "555", "0299", "cdef" * 5, '"}'),   # Bob's 32 hex
 ]
 
 
