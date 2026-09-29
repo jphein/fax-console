@@ -153,6 +153,27 @@ def test_a_quoted_name_under_binary_is_still_read(repo, name):
     assert r.returncode == 1 and "[phone-number]" in r.stdout
 
 
+def test_a_module_named_like_the_standard_library_is_a_finding(repo):
+    for rel in ("json.py", "tests/re.py", "scripts/subprocess.py", "hashlib/__init__.py",
+                "faxcli/json.py", "mymod.py"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("x = 1\n", encoding="utf-8")
+    r = scrub(repo)
+    flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
+    assert flagged == {"json.py", "tests/re.py", "scripts/subprocess.py", "hashlib/__init__.py"}
+    git(repo, "add", "json.py")
+    assert "json.py: [stdlib-shadow]" in scrub(repo, "--staged").stdout
+
+
+def test_the_gate_never_imports_a_module_planted_in_the_repo(repo):
+    marker = repo.parent / "imported"
+    for name in ("json", "re", "subprocess", "hashlib", "os"):
+        (repo / f"{name}.py").write_text(f"open({str(marker)!r}, 'a').write('{name}')\n", encoding="utf-8")
+    r = scrub(repo)
+    assert r.returncode == 1 and "json.py: [stdlib-shadow]" in r.stdout
+    assert not marker.exists()                         # python -I: the repo root is not on sys.path
+
+
 def test_history_of_a_named_ref(repo):
     git(repo, "switch", "-q", "-c", "side")
     commit(repo, "s.env", j("BOB_API_KEY", "=", "abcdef123456\n"), "side secret")

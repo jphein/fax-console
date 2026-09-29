@@ -32,14 +32,17 @@ match the rebuilt baseline.
     sandbox has exited and `docs/` is proven to be the same directory. Bob gets a home
     directory made fresh for every run, so nothing one run leaves there (a settings file naming
     another gateway, say) reaches the next; its gateway is pinned to Bob's own; and it will not
-    start while a `.env` sits in the repo root, which Bob would load. It also gets a minimal
+    start while a `.env` sits in the repo root, which Bob would load, or while the repo's
+    `.claude/` or `.agents/` holds anything (Bob lists the skills it finds there). Every Python
+    the wrapper and the gate run on the host is isolated (`python3 -I`), so a module Bob leaves
+    at the repo root is never imported outside the sandbox. It also gets a minimal
     `/etc`, with no hosts file and no ssh config.
   - **Network (a systemd scope with BPF address filters):** the LAN, loopback, link-local and
     CGNAT ranges are denied, so the PBX and every house service are unreachable. The public
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    41 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    43 probes. One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system

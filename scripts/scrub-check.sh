@@ -546,6 +546,25 @@ def history(rules, rev="HEAD"):
     return items, hits
 
 
+STDLIB = set(getattr(sys, "stdlib_module_names", ())) | {"sitecustomize", "usercustomize"}
+PATH_DIRS = ("", "tests", "scripts")      # the repo root (python -c/-m), and where pytest and scripts run
+
+
+def shadow_findings(paths):
+    """A .py file or package named like a standard-library module in a directory Python puts first
+    on sys.path is imported instead of the real one, by the next tool that runs there: a planted
+    json.py at the repo root would run on the host, or fake a clean CI (the Oracle, 9/29 01:40)."""
+    hits = []
+    for p in paths:
+        parts = p.split("/")
+        if parts[-1].endswith(".py") and "/".join(parts[:-1]) in PATH_DIRS and parts[-1][:-3] in STDLIB:
+            hits.append(f"{p}: [stdlib-shadow]")
+        elif (len(parts) >= 2 and parts[-1] == "__init__.py" and "/".join(parts[:-2]) in PATH_DIRS
+              and parts[-2] in STDLIB):
+            hits.append(f"{p}: [stdlib-shadow]")
+    return hits
+
+
 def masked(hit, rules):
     """A finding's location with any matched value in it (a file or tag name) replaced by ***."""
     where, sep, what = hit.rpartition(": [")
@@ -574,11 +593,13 @@ def main(argv):
                  if p and os.path.isfile(p)]
         items = [(p, p, open(p, "rb").read()) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
+        hits += shadow_findings(names)
     elif argv[0] == "--staged":
         names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT").decode().split("\0")
                  if p]
         items = [(p, p, git("cat-file", "blob", f":{p}")) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
+        hits += shadow_findings(names)
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", None, open(argv[1], "rb").read())]
     elif argv[0] == "--stdin" and len(argv) == 2:
@@ -618,4 +639,6 @@ def main(argv):
 sys.exit(main(sys.argv[1:]))
 PY
 )
-exec python3 -c "$PROG" "$@"
+# -I (isolated): the current directory is the repo root, which Bob can write; a json.py there must
+# not be imported by the gate, here or in the hooks and CI that run it.
+exec python3 -I -c "$PROG" "$@"

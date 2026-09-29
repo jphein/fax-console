@@ -10,6 +10,8 @@
 #            while it runs, and copied into docs/bob-runs/ only after the sandbox exits, and only if
 #            docs/ is still the same directory (exit 3 otherwise; nothing is touched).
 # Bob runs inside scripts/bob-sandbox.sh (the OS sandbox); the .bob/ hooks audit inside it. Rules: AGENTS.md.
+# Every Python here runs with -I (isolated): Bob can write the repo root, and without -I a json.py it
+# left there would be imported by these host-side steps, with the API key in the environment.
 #
 # Budget (see "Budget" in docs/bob-usage.md; the rules are in scripts/bob_usage.py):
 #   * refuses (exit 75) when this billing cycle's total + MAX_COST would pass the soft cap
@@ -64,8 +66,8 @@ if [ "${BOB_TMUX:-0}" = 1 ] && [ -z "${BOB_TMUX_INNER:-}" ]; then
 fi
 
 scripts/scrub-check.sh --paths "$p" --require-deny
-python3 scripts/bob_usage.py status "$ledger"
-python3 scripts/bob_usage.py reserve "$ledger" --n "$n" --slug "$slug" --max-cost "$cost" \
+python3 -I scripts/bob_usage.py status "$ledger"
+python3 -I scripts/bob_usage.py reserve "$ledger" --n "$n" --slug "$slug" --max-cost "$cost" \
     ${BOB_OVERRIDE:+--override "$BOB_OVERRIDE"}
 # shellcheck disable=SC1090
 source "${BOB_ENV:-$HOME/.config/bob-shell/env}"
@@ -81,7 +83,7 @@ before=$(sig)
 : > .bob/guard.log
 set +e      # a failed run must still leave its guard log and its ledger row
 scripts/bob-sandbox.sh bob run --format stream-json --max-cost "$cost" --accept-license \
-    --disable-tool-groups skill,mcp,browser,mode "$(cat "$p")" | tee "$rec" | python3 scripts/bob-watch.py
+    --disable-tool-groups skill,mcp,browser,mode "$(cat "$p")" | tee "$rec" | python3 -I scripts/bob-watch.py
 rc=${PIPESTATUS[0]}
 set -e
 if [ "$(sig)" != "$before" ]; then
@@ -94,7 +96,7 @@ cp "$rec" "$out"
 cp .bob/guard.log "docs/bob-runs/$n-$slug.guard.jsonl"
 # The recording is published: relativize the repo path, then any other path in the account's
 # home (a refused write outside the repo names it), and make sure no API key can survive in it.
-python3 - "$root" "$out" "docs/bob-runs/$n-$slug.guard.jsonl" <<'PY'
+python3 -I - "$root" "$out" "docs/bob-runs/$n-$slug.guard.jsonl" <<'PY'
 import os, sys
 root, files = sys.argv[1], sys.argv[2:]
 key = os.environ.get("BOB_API_KEY", "")
@@ -108,11 +110,11 @@ for f in files:
     open(f, "w", encoding="utf-8").write(t)
 PY
 fin=0
-python3 scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" --max-cost "$cost" \
+python3 -I scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" --max-cost "$cost" \
     >/dev/null || fin=$?
 rm -f "$rec"    # the published, redacted copy in docs/bob-runs/ is the record from here on
 scripts/scrub-check.sh --paths "$out" "docs/bob-runs/$n-$slug.guard.jsonl" --require-deny
-python3 - "$out" <<'PY'
+python3 -I - "$out" <<'PY'
 import json, sys
 r, bad = [], 0
 for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
@@ -125,7 +127,7 @@ s = (r[-1].get("stats") if r and isinstance(r[-1], dict) else {}) or {}
 print(f"run cost: {s.get('session_costs')}  tool calls: {s.get('tool_calls')}  task: {s.get('task_id')}"
       + (f"  ({bad} malformed result line(s))" if bad else ""))
 PY
-python3 scripts/bob_usage.py status "$ledger"
+python3 -I scripts/bob_usage.py status "$ledger"
 if [ "$fin" -ne 0 ]; then
   echo "bob-run: the ledger needed attention for run $n (finalize exit $fin; see its message above)" >&2
   [ "$rc" -ne 0 ] || rc=$fin

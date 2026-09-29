@@ -73,6 +73,13 @@ else
   rm -f .env
   printf '%-6s must fail  %s\n' "$r" "start with a .env in the repo root"
 fi
+for d in .claude .agents; do
+  if [ -e "$d" ]; then echo "skip   must fail  start with a skill in $d/ (it exists: not touched)"; continue; fi
+  mkdir -p "$d/skills/probe" && echo "name: probe" > "$d/skills/probe/SKILL.md"
+  if scripts/bob-sandbox.sh true >/dev/null 2>&1; then r=WRONG; fail=$((fail+1)); else r=ok; pass=$((pass+1)); fi
+  rm -rf "$d"
+  printf '%-6s must fail  %s\n' "$r" "start with a skill left in $d/"
+done
 # processes and identity
 probe fail "see host processes"                  "[ \$(ps -e --no-headers | wc -l) -gt 12 ]"
 probe fail "real hostname leaks"                 "[ \"\$(hostname)\" != bob-sandbox ]"

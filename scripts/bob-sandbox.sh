@@ -32,6 +32,11 @@ BOB_GATEWAY=https://api.us-east.bob.ibm.com
 BOB_WEB_LOGIN=https://bob.ibm.com
 # Bob Shell loads a .env from its working directory, the repo root, and that could set other values.
 [ ! -e "$root/.env" ] || { echo "refusing: $root/.env exists, and Bob would load it" >&2; exit 2; }
+# It also lists every skill it finds in the workspace (.claude/skills, .agents/skills) in its prompt, and
+# the repo is writable: a skill one run leaves there would steer the next (the Oracle, 9/29 01:4x).
+for d in .claude .agents; do
+  [ -z "$(ls -A "$root/$d" 2>/dev/null)" ] || { echo "refusing: $root/$d is not empty; Bob would read skills there" >&2; exit 2; }
+done
 [ -z "${BOB_HOME:-}" ] || echo "bob-sandbox: BOB_HOME is ignored: Bob's home is made fresh for every start" >&2
 
 mkdir -p "$root/.bob/tmp"
