@@ -30,6 +30,7 @@ for f in files:
         t = t.replace(key, "***")
     open(f, "w", encoding="utf-8").write(t)
 PY
+python3 scripts/redact-refused.py "$out"   # a write the guard refused is never published
 scripts/scrub-check.sh --paths "$out" "docs/bob-runs/$n-$slug.guard.jsonl" --require-deny
 python3 - "$out" <<'PY'
 import json, sys
