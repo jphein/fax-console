@@ -328,12 +328,20 @@ def reserve(path: Path, n: str, slug: str, max_cost, override: str | None, now: 
     return 0
 
 
-def finalize(path: Path, n: str, run_file: Path, rc: int, now: datetime | None = None) -> dict:
+def finalize(path: Path, n: str, run_file: Path, rc: int, now: datetime | None = None,
+             max_cost: float | None = None) -> dict:
     """Record the run's measured figures. The result carries `problems`: a restored row or an
-    invalid cost. Either one makes the command exit 3."""
+    invalid cost. Either one makes the command exit 3.
+
+    A cost is taken from the stream only when Bob exited 0. A killed or failed run can end with a
+    result line that Bob never wrote (a process inside the sandbox can write to Bob's stdout and then
+    kill it: the Oracle, 9/29), so it keeps counting at its reservation."""
     now = now or datetime.now().astimezone()
     s = summarize(run_file.read_text(encoding="utf-8", errors="replace").splitlines()
                   if run_file.exists() else [])
+    if rc and s["cost"] is not None:
+        s["cost"] = None                          # not trusted after a non-zero exit: the reservation counts
+        s["cost_kept_reservation"] = True
     problems = []
     if s["cost_invalid"]:
         problems.append("Bob reported a cost that is not a finite number >= 0; the reservation still counts")
@@ -359,8 +367,10 @@ def finalize(path: Path, n: str, run_file: Path, rc: int, now: datetime | None =
             key = mine[-1] if mine else None
             slug = key[2] if key else "unknown"
             reserved = runs[key]["reserved"] if key else None
+            if reserved is None and max_cost is not None:
+                reserved = finite(max_cost, "--max-cost", lo_open=True, hi=HARD_CAP)
             cost = (f"{s['cost']:.3f}" if s["cost"] is not None
-                    else f"({reserved:g})" if reserved is not None else "(unknown)")
+                    else f"({reserved:g})" if reserved is not None else f"({HARD_CAP:g})")
             link = f"[{_title(slug)}](bob-runs/{n}-{slug}.prompt.md)"
             note = "restored by finalize: this row had gone missing"
             lines.insert(end, f"| {n} | {now:%-m/%-d %H:%M} | {link} | {out.replace('|', '/')} | "
@@ -393,6 +403,7 @@ def main(argv=None) -> int:
     fz.add_argument("--n", required=True)
     fz.add_argument("--file", type=Path, required=True)
     fz.add_argument("--rc", type=int, required=True)
+    fz.add_argument("--max-cost", help="the run's reservation, for a row the journal never saw")
     sm = sub.add_parser("summarize")
     sm.add_argument("file", type=Path)
     a = ap.parse_args(argv)
@@ -411,7 +422,7 @@ def main(argv=None) -> int:
         if a.cmd == "reserve":
             return reserve(a.usage, a.n, a.slug, a.max_cost, a.override, now, CYCLE_DAY, soft, HARD_CAP)
         if a.cmd == "finalize":
-            s = finalize(a.usage, a.n, a.file, a.rc, now)
+            s = finalize(a.usage, a.n, a.file, a.rc, now, a.max_cost)
             print(json.dumps(s))
             for p in s["problems"]:
                 print(f"bob-usage: finalize: {p}", file=sys.stderr)

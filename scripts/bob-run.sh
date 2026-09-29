@@ -17,7 +17,8 @@
 #   * never passes the 180-Bobcoin allotment, a constant that no variable changes;
 #   * refuses (exit 2) a run number, slug or MAX_COST that is not well formed, before anything runs;
 #   * exits 3 when the run's ledger row went missing (it is restored) or Bob reported an
-#     invalid cost (the reservation keeps counting);
+#     invalid cost (the reservation keeps counting); a run that exits non-zero keeps counting at
+#     its reservation too, since a killed run's last result line may not be Bob's;
 #   * the cycle total is printed before and after every run.
 # BOB_TMUX=1 runs the task in a window of tmux session `bob` (watch it: tmux attach -t bob). A
 #   caller that dies, such as an agent's tool timeout, then cannot kill the run or lose its
@@ -107,7 +108,8 @@ for f in files:
     open(f, "w", encoding="utf-8").write(t)
 PY
 fin=0
-python3 scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" >/dev/null || fin=$?
+python3 scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" --max-cost "$cost" \
+    >/dev/null || fin=$?
 rm -f "$rec"    # the published, redacted copy in docs/bob-runs/ is the record from here on
 scripts/scrub-check.sh --paths "$out" "docs/bob-runs/$n-$slug.guard.jsonl" --require-deny
 python3 - "$out" <<'PY'

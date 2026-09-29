@@ -236,6 +236,23 @@ def test_a_missing_row_is_restored_and_reported(ledger, tmp_path):
     assert r.returncode == 0                                        # the row is back: nothing to report now
 
 
+def test_a_cost_is_trusted_only_after_a_clean_exit(ledger, tmp_path):
+    reserve(ledger, 2, 5)
+    s = bu.finalize(ledger, "2", run_file(tmp_path, 0.001), 137, NOW)       # killed after a forged result
+    assert s["cost"] is None and s["cost_kept_reservation"]
+    assert total(ledger) == pytest.approx(8.161)
+
+
+def test_a_row_the_journal_never_saw_is_restored_at_its_maximum(ledger, tmp_path):
+    s = bu.finalize(ledger, "9", run_file(tmp_path, 1.0), 0, NOW, max_cost=4)   # no reserve, no row
+    assert s["problems"]
+    row9 = next(x for x in ledger.read_text().splitlines() if x.startswith("| 9 |"))
+    assert "| 1.000 |" in row9                                              # a clean exit: its cost
+    s = bu.finalize(ledger, "8", run_file(tmp_path, 1.0), 1, NOW, max_cost=4)
+    row8 = next(x for x in ledger.read_text().splitlines() if x.startswith("| 8 |"))
+    assert "| (4) |" in row8                                                # a failed one: its maximum
+
+
 def test_a_row_deleted_before_the_next_reserve_still_counts(ledger, tmp_path):
     assert reserve(ledger, 2, 90) == 0
     bu.finalize(ledger, "2", run_file(tmp_path, 90.0), 0, NOW)

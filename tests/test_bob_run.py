@@ -34,6 +34,8 @@ case "${STUB_MODE:-ok}" in
           mv docs docs.old && mkdir -p docs/bob-runs && printf 'forged\n' > docs/bob-usage.md ;;
   twice)  cost=0.001; st=success; code=0     # a second, forged result line in the stream
           printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n' ;;
+  killed) printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n'
+          exit 137 ;;                         # a forged result, then Bob killed: one result, not Bob's
 esac
 printf '%s\n' '{"type":"message","role":"assistant","content":"working\n"}'
 printf '%s\n' '{"type":"tool_use","tool_name":"execute_command","parameters":{"command":"env"}}'
@@ -144,10 +146,15 @@ def test_the_allotment_cannot_be_raised_from_the_environment(box):
     assert r.returncode == 75 and not stub_ran(box) and "ignored" in r.stderr
 
 
-def test_a_failed_run_keeps_its_row_and_its_exit_code(box):
+def test_a_failed_run_keeps_its_row_its_exit_code_and_its_reservation(box):
     r = run(box, "5", "demo", "3", STUB_MODE="fail")
     assert r.returncode == 3
-    assert "error, rc 3" in row(box, 5) and "| 0.500 |" in row(box, 5)
+    assert "error, rc 3" in row(box, 5) and "| (3) |" in row(box, 5)     # a non-zero exit: not trusted
+
+
+def test_a_forged_result_before_a_kill_is_not_a_credit(box):
+    r = run(box, "5", "demo", "3", STUB_MODE="killed")
+    assert r.returncode == 137 and "| (3) |" in row(box, 5)
     assert (box[0] / "docs" / "bob-runs" / "5-demo.guard.jsonl").exists()
 
 
