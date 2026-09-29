@@ -891,6 +891,37 @@ class TestCharacterizationStale:
         assert self._new_snap == self._leg_snap
 
 
+class TestCharacterizationCredsError:
+    """The error text for unreadable credentials is part of the snapshot's JSON: legacy's format,
+    naming the path and the missing key and never a value (e:874-878, e:753-756)."""
+
+    _TS = 1_750_000_000.0
+
+    def _errors(self, monkeypatch, tmp_path, creds_text):
+        creds = tmp_path / "creds.env"
+        leg, _pw = _make_legacy_poller(monkeypatch, tmp_path / "leg", self._TS)
+        monkeypatch.setattr(_legacy(), "VOIPMS_ENV", str(creds))
+        new = VoipMsPoller(http=fixture_http(FIXTURE_DIR), creds=str(creds),
+                           cache_path=str(tmp_path / "new.json"),
+                           legacy_cache=str(tmp_path / "new-legacy.json"),
+                           clock=lambda: self._TS)
+        if creds_text is not None:
+            creds.write_text(creds_text)
+        leg._refresh_once()
+        new._refresh_once()
+        return leg.snapshot()["error"], new.snapshot()["error"]
+
+    def test_missing_file_agrees(self, monkeypatch, tmp_path):
+        leg_err, new_err = self._errors(monkeypatch, tmp_path, None)
+        assert new_err == leg_err
+        assert str(tmp_path / "creds.env") in new_err
+
+    def test_missing_password_agrees(self, monkeypatch, tmp_path):
+        leg_err, new_err = self._errors(monkeypatch, tmp_path, _j("VOIPMS", "_USER=fake-user\n"))
+        assert new_err == leg_err
+        assert "fake-user" not in new_err
+
+
 # ---------------------------------------------------------------------------
 # Item 2: build() tests
 # ---------------------------------------------------------------------------

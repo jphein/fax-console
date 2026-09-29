@@ -211,14 +211,17 @@ class VoipMsPoller:
         self._low_balance = low_balance if low_balance is not None else VOIPMS_LOW_BALANCE
         self._stale_after = stale_after if stale_after is not None else VOIPMS_STALE_AFTER
 
-        # Credentials: callable or path string
+        # Credentials: callable or path string. The label is what an error names: the
+        # path, as legacy did (e:874-878), or "injected" for a callable.
         if callable(creds):
             self._creds = creds
+            self._creds_label = "injected"
         else:
             creds_path = creds if isinstance(creds, str) else _DEFAULT_CREDS
             self._creds: Callable[[], tuple[str, str, str]] = (
                 lambda p=creds_path: _creds(p)
             )
+            self._creds_label = creds_path
 
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -276,6 +279,7 @@ class VoipMsPoller:
                 json.dump({k: self._data[k] for k in _PERSIST
                            if k in self._data}, fh)
             os.replace(tmp, self._cache_path)  # atomic; never a torn file
+        # (an OSError is suppressed: a cache we cannot persist is still a cache)
 
     def _call(self, method: str, user: str, pw: str, **params: str) -> dict:
         """Call the VoIP.ms REST API (legacy e:847–867)."""
@@ -306,7 +310,8 @@ class VoipMsPoller:
         except (OSError, KeyError) as e:
             with self._lock:
                 # ⛔ NAMES THE PATH AND THE MISSING KEY; no value (legacy e:874–878).
-                self._data["error"] = f"credentials unreadable: {e}"
+                # The text is part of the snapshot's JSON contract: the legacy format.
+                self._data["error"] = f"credentials unreadable ({self._creds_label}): {e}"
             return
 
         errs: list[str] = []
@@ -380,7 +385,7 @@ class VoipMsPoller:
         # A short first delay lets the HTTP server bind and answer immediately.
         self._sleep(2)
         while not self._stop_event.is_set():
-            with contextlib.suppress(Exception):
+            with contextlib.suppress(Exception):   # never let the thread die
                 self._refresh_once()
             self._sleep(30)
 
