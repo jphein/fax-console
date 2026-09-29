@@ -401,6 +401,10 @@ def _route_version(config: Config | None = None) -> Response:
     d = version_dict()
     if config is not None:
         d["replay"] = config.replay
+        if config.replay:
+            # Replay mode is the public demo. The sigil's `host` is the machine's own name,
+            # which on a house host is exactly what the scrub gate keeps out of public view.
+            d["host"] = "replay"
     return _ok(d)
 
 

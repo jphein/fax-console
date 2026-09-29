@@ -317,3 +317,30 @@ def test_html_token_field(html_body):
     """A password field for the write token must be in the HTML."""
     assert 'type="password"' in html_body
     assert 'id="token"' in html_body
+
+
+# ---------------------------------------------------------------------------
+# 13. The public replay demo names no host (review of run 9)
+# ---------------------------------------------------------------------------
+
+def test_version_names_no_host_in_replay(replay_config, monkeypatch):
+    """Replay mode is the public demo: /api/version must not publish the machine's name."""
+    import socket
+    monkeypatch.setattr(socket, "gethostname", lambda: "pbx7.example.net")   # a fictional stand-in
+    body = _get("/api/version", replay_config).body.decode()
+    assert "pbx7.example.net" not in body
+    assert json.loads(body)["host"] == "replay"
+
+
+def test_version_keeps_host_when_live(monkeypatch, tmp_path):
+    """Live mode keeps the sigil contract's real host, for the LAN status page."""
+    import socket
+    from pathlib import Path
+
+    from faxcli.transport import ReplayTransport
+    from faxconsole.routes import Config
+    monkeypatch.setattr(socket, "gethostname", lambda: "pbx7.example.net")
+    fx = Path("tests/fixtures")
+    cfg = Config(transport=ReplayTransport(fixture_dir=fx / "asterisk", cdr_path=fx / "cdr" / "Master.csv",
+                                           spool_dir=str(tmp_path)), inbox=str(tmp_path / "inbox"))
+    assert json.loads(_get("/api/version", cfg).body)["host"] == "pbx7.example.net"
