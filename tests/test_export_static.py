@@ -48,8 +48,10 @@ def test_each_api_file_is_the_routes_json_and_shows_no_failure(site):
 
 def test_the_page_is_static_and_keeps_its_csp(site):
     html = site["index.html"].decode()
-    assert '<html lang="en" data-static="1">' in html
+    m = re.search(r'<html lang="en" data-static="1" data-recorded="(\d{4}-\d\d-\d\d \d\d:\d\d UTC)">', html)
+    assert m, html[:200]                                          # the capture time the chip shows
     assert "a send is a dry run" not in html and "this static copy cannot send" in html
+    assert "<h2>Recorded state</h2>" in html and "<h2>Live state</h2>" not in html
     m = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
     assert m and "script-src 'self'" in m.group(1) and "frame-ancestors" not in m.group(1)
     assert 'href="/' not in html and 'src="/' not in html          # Pages serves it under /fax-console/
@@ -63,7 +65,12 @@ def test_app_js_reads_every_get_through_api():
     # nothing computed at export time is shown as current (finding A): a recording time, a billing date
     assert '"at "+v.fetched_at+", recorded for this static replay"' in js
     assert 'const bill = STATIC ? (v.did_next_billing ?' in js
-    assert 'el.appendChild(document.createTextNode("recorded"));' in js      # the chip, never "live"
+    chip = 'el.appendChild(document.createTextNode(at ? "recorded " + at : "recorded"));'
+    assert chip in js                                             # the chip, never "live"
+    # ...and the static branch runs FIRST: below if(ok), every static load would say "live" again
+    body = js[js.index("function freshness("):]
+    assert body.index("if(STATIC){") < body.index("if(ok){"), "the static branch must come first"
+    assert '${STATIC?" after it was recorded":""}' in js      # the trunk's recorded expiry
     assert 'STATIC ? "This is a static copy, and every value on it was recorded.' in js
 
 

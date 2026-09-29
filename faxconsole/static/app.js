@@ -43,8 +43,9 @@ function freshness(ok, why){
   if(STATIC){
     el.className = "rs-chip stale";
     el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
-    el.appendChild(document.createTextNode("recorded"));
-    el.title = "A static copy of recorded replay data. Nothing on this page is live.";
+    const at = document.documentElement.dataset.recorded || "";
+    el.appendChild(document.createTextNode(at ? "recorded " + at : "recorded"));
+    el.title = "A static copy of replay data" + (at ? " recorded " + at : "") + ". Nothing on this page is live.";
     return;
   }
   if(ok){
@@ -158,7 +159,7 @@ function tileTrunk(t){
     <div class="big">${t.status?(reg?st("ok","registered"):st("bad",t.status)):st("warn","no registration row")}</div>
     ${t.name?`<div class="kv"><span>trunk</span><span>${esc(t.name)}</span></div>`:""}
     ${t.uri?`<div class="kv"><span>server</span><span>${esc(t.uri)}</span></div>`:""}
-    ${t.expires?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s</span></div>`:""}
+    ${t.expires?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s${STATIC?" after it was recorded":""}</span></div>`:""}
     ${prov("source",t.src,t.raw)}</div>`;
 }
 function tileCalls(c){
@@ -175,7 +176,8 @@ function tileCalls(c){
     <div style="font-family:var(--serif);font-size:.85rem;color:var(--ink2);margin-top:8px">
       Asterisk counts every call; the MSC counts only the cellular ones, so the
       second number is a <em>subset</em> of the first and is normally lower.
-      ${c.impossible?"<b>Right now it is higher, which should not be possible.</b>":""}
+      ${c.impossible?(STATIC?"<b>In the recording it is higher, which should not be possible.</b>"
+                     :"<b>Right now it is higher, which should not be possible.</b>"):""}
     </div>
     ${insts.map(i=>prov(i.name,i.src,i.raw||i.why)).join("")}</div>`;
 }

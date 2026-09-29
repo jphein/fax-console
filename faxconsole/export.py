@@ -49,12 +49,14 @@ def api_file(route: str) -> str:
     return "api" + route[len("/api"):] + ".json"
 
 
-def staticize(page: bytes) -> bytes:
-    """Mark the page static, and carry the CSP as a meta tag. A meta tag cannot carry frame-ancestors."""
+def staticize(page: bytes, recorded: str) -> bytes:
+    """Mark the page static, with the time its data was recorded, and carry the CSP as a meta tag. A meta
+    tag cannot carry frame-ancestors."""
     html = page.decode("utf-8")
     csp = "; ".join(d for d in _CSP.split("; ") if not d.startswith("frame-ancestors"))
-    for old, new in (('<html lang="en">', '<html lang="en" data-static="1">'),
+    for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-recorded="{recorded}">'),
                      ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">'),
+                     ("<h2>Live state</h2>", "<h2>Recorded state</h2>"),
                      # the live replay's banner promises a dry run, and a static copy cannot even do that
                      ("a send is a dry run and nothing is dialled",
                       "this static copy cannot send, so run it locally for a dry run; nothing is dialled")):
@@ -83,7 +85,9 @@ def export(fixtures: str) -> dict[str, bytes]:
                     body["fetched_at"] = utc(body["fetched_at"])
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
-        files["index.html"] = staticize(page.body)
+        # One capture time for the whole snapshot, shown by the page's freshness chip instead of "live".
+        recorded = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        files["index.html"] = staticize(page.body, recorded)
         for name in PAGE_ASSETS:
             r = handle("GET", "/" + name, {}, b"", config)
             if r.status != 200:
