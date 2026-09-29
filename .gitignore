@@ -12,3 +12,4 @@ scratch/
 *.tif
 *.tiff
 .bob/tmp/
+.bob/guard.log

@@ -9,6 +9,7 @@
 #   scripts/scrub-check.sh --staged         scan the staged blobs (pre-commit hook)
 #   scripts/scrub-check.sh --message FILE   scan a commit message (commit-msg hook)
 #   scripts/scrub-check.sh --paths P...     scan files/dirs (prompts, positive controls)
+#   scripts/scrub-check.sh --stdin LABEL    scan text on stdin (the Bob prompt/tool gates)
 #   add --require-deny to fail when the private deny-list is missing
 #
 # Two rule sets:
@@ -25,7 +26,8 @@
 # Exit: 0 clean · 1 findings · 2 usage/config error.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-exec python3 - "$@" <<'PY'
+# The program travels in a variable, not on stdin: stdin belongs to --stdin callers.
+PROG=$(cat <<'PY'
 import os, re, subprocess, sys
 
 # Numbers that are PUBLIC test services, used on purpose (documented in BASELINE.md).
@@ -34,6 +36,7 @@ ALLOW_NUMBERS = {
     "18884732963",   # HP's public fax test line (named in the legacy route notes)
 }
 DOC_NETS = (re.compile(r"^192\.0\.2\."), re.compile(r"^198\.51\.100\."), re.compile(r"^203\.0\.113\."))
+CANONICAL_BLOCKS = {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"}
 
 GENERIC = [
     ("private-ipv4", re.compile(
@@ -64,6 +67,11 @@ def allowed(rule, m):
         return dom in ("example.com", "example.org", "example.net", "anthropic.com", "github.com",
                        "users.noreply.github.com") or dom.endswith(".example")
     if rule == "private-ipv4":
+        # A whole private range in canonical CIDR form (a firewall rule, a sandbox deny list)
+        # names no host, so it cannot leak one: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10.
+        pfx = re.match(r"/(\d{1,2})(?![\d\w])", m.string[m.end():])
+        if pfx and f"{s}/{pfx.group(1)}" in CANONICAL_BLOCKS:
+            return True
         return any(n.match(s) for n in DOC_NETS)
     return False
 
@@ -138,6 +146,8 @@ def main(argv):
         items = [(p, git("show", f":{p}")) for p in names if p]
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", open(argv[1], "rb").read())]
+    elif argv[0] == "--stdin" and len(argv) == 2:
+        items = [(f"<{argv[1]}>", sys.stdin.buffer.read())]
     elif argv[0] == "--paths" and len(argv) > 1:
         for p in argv[1:]:
             if os.path.isdir(p):
@@ -147,7 +157,7 @@ def main(argv):
             else:
                 items.append((p, open(p, "rb").read()))
     else:
-        print(__doc__ or "usage: scrub-check.sh [--staged | --message FILE | --paths P...] [--require-deny]",
+        print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL] [--require-deny]",
               file=sys.stderr)
         return 2
     hits = []
@@ -169,3 +179,5 @@ def main(argv):
 
 sys.exit(main(sys.argv[1:]))
 PY
+)
+exec python3 -c "$PROG" "$@"

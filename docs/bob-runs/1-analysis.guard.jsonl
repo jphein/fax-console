@@ -1,0 +1,27 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "3465 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./BASELINE.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/fax/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/CLAUDE.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./legacy/fax/docs\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"1-100\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"100-300\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/docs/route.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"300-600\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/fax/docs/inbound.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"600-900\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"900-1200\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"1200-1550\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"1550-1900\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"1900-2200\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2200-2550\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2550-2900\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2900-3100\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Write docs/analysis.md\\n\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./docs/analysis.md\", \"line_count\": 451, \"content\": \"# Modernization analysis\\n\\nEvery factual claim cites `legacy/` by file and line. Fictional numbers are used t"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"wc -l ./docs/analysis.md && python3 scripts/scrub-check.sh docs/analysis.md 2>&1 | head -20\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"bash ./scripts/scrub-check.sh docs/analysis.md 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"bash ./scripts/scrub-check.sh --paths docs/analysis.md 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"grep -c \\\"^##\\\" ./docs/analysis.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"grep \\\"^## [1-8]\\\" ./docs/analysis.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Write docs/analysis.md\\n\"}"}
