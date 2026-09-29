@@ -169,3 +169,17 @@ def test_scrub_check_canonical_blocks(text, expect, env):
     r = subprocess.run([SCRUB, "--stdin", "t"], input=text.encode(), capture_output=True, env=env, timeout=30,
                        check=False)
     assert r.returncode == expect, r.stdout.decode()
+
+
+# The independent review of PR #4 found two false negatives in the JSON-aware scan; these pin the fixes.
+@pytest.mark.parametrize("name,payload,expect", [
+    ("dup.jsonl", j('{"note":"', BAD_PHONE, '","note":"ok"}'), 1),          # duplicate key hid a value
+    ("dup.json", j('{"note":"', BAD_PHONE, '","note":"ok"}'), 1),
+    ("diff.jsonl", j('{"diff":"+', BAD_EMAIL, '"}'), 1),                    # an added diff line
+    ("deco.jsonl", j('{"diff":"x\\n@pytest', '.fixture\\n+@pytest', '.fixture(scope=\\"module\\")"}'), 0),
+])
+def test_scrub_check_json_false_negatives(tmp_path, env, name, payload, expect):
+    f = tmp_path / name
+    f.write_text(payload + "\n")
+    r = subprocess.run([SCRUB, "--paths", str(f)], capture_output=True, env=env, timeout=30, check=False)
+    assert r.returncode == expect, r.stdout.decode()

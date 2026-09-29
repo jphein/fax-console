@@ -44,8 +44,9 @@ GENERIC = [
         r"|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])(?:\.\d{1,3}){2})(?!\d)(?!\.\d)")),
     ("phone-number", re.compile(
         r"(?<![\d.])(?:\+?1[-. ]?)?\(?([2-9]\d{2})\)?[-. ]?([2-9]\d{2})[-. ]?(\d{4})(?![\d])")),
-    # the local part starts with a letter or digit: "+@pytest.fixture" in a diff is a decorator
-    ("email", re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9][A-Za-z0-9._%+-]*@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")),
+    # the local part starts with a letter or digit: "+@pytest.fixture" in a diff is a decorator, while
+    # an address on an added diff line (right after its "+") is still an address: no lookbehind
+    ("email", re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+-]*@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)")),
     ("credential", re.compile(
         r"api_password=[A-Za-z0-9][^&\s\"'<>`]{3,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bghp_[A-Za-z0-9]{20,}"
         r"|\bxox[abprs]-[A-Za-z0-9-]{10,}|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\."
@@ -121,8 +122,17 @@ def load_deny(require):
     return rules
 
 
+class _Pairs(list):
+    """A JSON object as its raw (key, value) pairs: json.loads would keep only the LAST of two
+    duplicate keys, so a value could hide behind a later copy of its key."""
+
+
 def json_strings(obj):
-    if isinstance(obj, dict):
+    if isinstance(obj, _Pairs):
+        for k, v in obj:
+            yield str(k)
+            yield from json_strings(v)
+    elif isinstance(obj, dict):
         for k, v in obj.items():
             yield str(k)
             yield from json_strings(v)
@@ -141,7 +151,7 @@ def decode_json(name, text):
     out = []
     for doc in docs:
         try:
-            out.extend(json_strings(json.loads(doc)))
+            out.extend(json_strings(json.loads(doc, object_pairs_hook=_Pairs)))
         except ValueError:
             out.append(doc)
     return "\n".join(out)
