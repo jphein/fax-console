@@ -12,6 +12,7 @@ import json
 import re
 import socket
 import tarfile
+import time
 from pathlib import Path
 
 import pytest
@@ -48,8 +49,7 @@ def test_each_api_file_is_the_routes_json_and_shows_no_failure(site):
 
 def test_the_page_is_static_and_keeps_its_csp(site):
     html = site["index.html"].decode()
-    m = re.search(r'<html lang="en" data-static="1" data-exported="(\d{4}-\d\d-\d\d \d\d:\d\d UTC)">', html)
-    assert m, html[:200]                                          # the export time the chip shows
+    assert '<html lang="en" data-static="1" data-recorded="2026-09-28 22:25 PDT">' in html   # capture.json
     assert "a send is a dry run" not in html and "this static copy cannot send" in html
     assert "<h2>Recorded state</h2>" in html and "<h2>Live state</h2>" not in html
     m = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
@@ -77,8 +77,20 @@ def test_the_version_is_the_static_sigil(site):
     assert not SIGIL_SERVER_ONLY & set(v), SIGIL_SERVER_ONLY & set(v)
 
 
-def test_the_voipms_time_is_utc_not_the_hosts_zone(site):
-    assert json.loads(site["api/voipms.json"])["fetched_at"].endswith(" UTC")
+def test_the_voipms_time_is_the_capture_time_in_utc(site):
+    # tests/fixtures/capture.json: 2026-09-28 22:25 PDT, the same instant as 2026-09-29 05:25 UTC
+    assert json.loads(site["api/voipms.json"])["fetched_at"] == "2026-09-29 05:25:00 UTC"
+
+
+def test_two_exports_are_byte_identical(site):
+    """The export is dated by the fixtures' capture time, never by its own clock. So a re-export of the
+    published commit reproduces the live site byte for byte, and Lucid's check can compare them."""
+    time.sleep(1.1)                                               # a clock read anywhere would now differ
+    again = ex.export("tests/fixtures")
+    one, two = io.BytesIO(), io.BytesIO()
+    ex.write_tar(site, one)
+    ex.write_tar(again, two)
+    assert one.getvalue() == two.getvalue(), sorted(n for n in site if site[n] != again.get(n))
 
 
 def test_the_voipms_json_carries_no_frozen_countdown(site):

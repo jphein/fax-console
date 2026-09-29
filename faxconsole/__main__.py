@@ -27,10 +27,13 @@ from faxconsole.voipms import VoipMsPoller, fixture_http
 
 def build(
     argv: list[str] | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> tuple[Config, Callable[[], None], argparse.Namespace]:
     """Parse *argv*, wire up transports and pollers, and return ``(config, cleanup, args)``.
 
     ``cleanup()`` stops any background threads and removes any temp directories.
+    ``clock`` replaces time.time for the replay poller: the static export pins it to the fixtures' capture
+    time, so the replay dates its data truthfully and two exports agree.
     In live modes it is a no-op.  ``main()`` calls it on shutdown, including on
     SIGTERM (systemd's default stop signal).
 
@@ -73,6 +76,7 @@ def build(
             creds=lambda: ("fake-user@example.com", "fake-password-replay", ""),
             cache_path=os.path.join(tmpdir, "voipms.json"),
             legacy_cache=os.path.join(tmpdir, "voipms-legacy.json"),
+            clock=clock,
         )
         voipms_poller.start()
 

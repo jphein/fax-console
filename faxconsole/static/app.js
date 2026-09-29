@@ -38,15 +38,14 @@ function ago(ms){
 function freshness(ok, why){
   const el = document.getElementById("fresh");
   if(!el) return;
-  /* A static copy measured nothing when it was drawn. Its data are the recorded fixtures, rendered when
-     it was exported, so its chip says "exported <time>", never "live" (finding A; the Oracle, on PR 16). */
+  /* A static copy measured nothing when it was drawn. Its data are the recorded fixtures, so its chip gives
+     the time they were recorded, committed with them, and never "live" (finding A; the Oracle, on PR 16). */
   if(STATIC){
     el.className = "rs-chip stale";
     el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
-    const at = document.documentElement.dataset.exported || "";
-    el.appendChild(document.createTextNode(at ? "exported " + at : "static copy"));
-    el.title = "A static copy of recorded replay data" + (at ? ", exported " + at : "")
-             + ". Nothing on this page is live.";
+    const at = document.documentElement.dataset.recorded || "";
+    el.appendChild(document.createTextNode(at ? "recorded " + at : "static copy"));
+    el.title = "A static copy of replay data" + (at ? " recorded " + at : "") + ". Nothing on this page is live.";
     return;
   }
   if(ok){

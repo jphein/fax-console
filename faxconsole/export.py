@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime
 import io
 import json
+import os
 import sys
 import tarfile
 from typing import BinaryIO
@@ -39,7 +40,8 @@ VOIPMS_FROZEN = ("age", "stale", "days_to_billing", "polling")
 
 def utc(local: str) -> str:
     """The poller writes fetched_at in the host's local time. A static site would freeze that zone onto a
-    public page, so the export gives the same instant in UTC."""
+    public page, so the export gives the same instant in UTC. (The export pins the poller's clock to the
+    fixtures' capture time, so this is that time.)"""
     t = datetime.datetime.strptime(local, "%Y-%m-%d %H:%M:%S").astimezone(datetime.timezone.utc)
     return t.strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -49,12 +51,12 @@ def api_file(route: str) -> str:
     return "api" + route[len("/api"):] + ".json"
 
 
-def staticize(page: bytes, exported: str) -> bytes:
-    """Mark the page static, with the time it was exported, and carry the CSP as a meta tag. A meta tag
-    cannot carry frame-ancestors."""
+def staticize(page: bytes, recorded: str) -> bytes:
+    """Mark the page static, with the time its data was recorded, and carry the CSP as a meta tag. A meta
+    tag cannot carry frame-ancestors."""
     html = page.decode("utf-8")
     csp = "; ".join(d for d in _CSP.split("; ") if not d.startswith("frame-ancestors"))
-    for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-exported="{exported}">'),
+    for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-recorded="{recorded}">'),
                      ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">'),
                      ("<h2>Live state</h2>", "<h2>Recorded state</h2>"),
                      # the live replay's banner promises a dry run, and a static copy cannot even do that
@@ -66,9 +68,18 @@ def staticize(page: bytes, exported: str) -> bytes:
     return html.encode("utf-8")
 
 
+def capture(fixtures: str) -> tuple[float, str]:
+    """The fixtures' own capture time, committed with them (capture.json), and its label. The export dates the
+    replay by it, never by its own clock: the data are that old, and two exports then agree byte for byte."""
+    with open(os.path.join(fixtures, "capture.json"), encoding="utf-8") as f:
+        meta = json.load(f)
+    return datetime.datetime.fromisoformat(meta["captured_at"]).timestamp(), meta["label"]
+
+
 def export(fixtures: str) -> dict[str, bytes]:
     """Every file of the static demo, by its path in the site."""
-    config, cleanup, _args = build(["--replay", fixtures])
+    captured, label = capture(fixtures)
+    config, cleanup, _args = build(["--replay", fixtures], clock=lambda: captured)
     try:
         config.voipms._refresh_once()     # synchronously, rather than waiting for the poller's first round
         files: dict[str, bytes] = {}
@@ -85,10 +96,7 @@ def export(fixtures: str) -> dict[str, bytes]:
                     body["fetched_at"] = utc(body["fetched_at"])
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
-        # One time for the whole snapshot, shown by the page's freshness chip instead of "live". It is the
-        # export's time: the fixtures themselves were recorded earlier.
-        exported = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        files["index.html"] = staticize(page.body, exported)
+        files["index.html"] = staticize(page.body, label)        # the chip shows "recorded <label>"
         for name in PAGE_ASSETS:
             r = handle("GET", "/" + name, {}, b"", config)
             if r.status != 200:
@@ -101,8 +109,8 @@ def export(fixtures: str) -> dict[str, bytes]:
 
 
 def write_tar(files: dict[str, bytes], out: BinaryIO) -> None:
-    """Regular files only, in name order, with fixed metadata: the same files give the same bytes. (An
-    export stamps the time it ran on the page, so two exports differ there.)"""
+    """Regular files only, in name order, with fixed metadata: the same files give the same bytes, and two
+    exports of one commit give the same files."""
     with tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
         for name in sorted(files):
             info = tarfile.TarInfo(name)

@@ -1,10 +1,12 @@
 """The static page, rendered: app.js runs under node in static mode, on a stub DOM and the exported files.
 
 This is what a visitor of the public demo sees. It is checked for any freshness the copy never measured:
-"live", "N s ago", "in N s", "in N days" or "right now" (finding A; the lead and the Oracle, on PR 16).
+"live", "N s ago", "in N s", "in N days", "right now" or "polled every" (finding A; the lead and the Oracle,
+on PR 16).
 A test that only reads app.js's source cannot see a reordered branch. This one runs it.
 Node is on the workstation and on CI's runners. Without it the test is skipped locally, and it fails in CI.
 """
+import html
 import json
 import os
 import re
@@ -39,7 +41,7 @@ function makeEl(id) {
 }
 const requested = [], wait = setTimeout;
 globalThis.document = {
-  documentElement: { dataset: { static: attr("static"), exported: attr("exported") } },
+  documentElement: { dataset: { static: attr("static"), recorded: attr("recorded") } },
   getElementById: id => els[id] || (els[id] = makeEl(id)),
   createTextNode: t => ({ html: quote(t) }),
 };
@@ -53,16 +55,21 @@ globalThis.setTimeout = () => 0;
 globalThis.console = { log() {}, info() {}, warn() {}, error() {} };
 vm.runInThisContext(fs.readFileSync(appJs, "utf8"), { filename: "app.js" });
 wait(() => {
-  const text = {};
-  for (const [id, e] of Object.entries(els)) text[id] = e.textContent.replace(/\s+/g, " ").trim();
+  const text = {}, markup = {}, titles = {};
+  for (const [id, e] of Object.entries(els)) {
+    text[id] = e.textContent.replace(/\s+/g, " ").trim();
+    markup[id] = e.innerHTML;
+    titles[id] = e.title;
+  }
   const chip = els.fresh || makeEl("fresh");
-  process.stdout.write(JSON.stringify({ text, requested,
+  process.stdout.write(JSON.stringify({ text, markup, titles, requested,
     chip: { text: chip.textContent.trim(), title: chip.title },
     sendDisabled: (els.faxsend || {}).disabled === true }));
 }, 300);
 """
 # A freshness a static copy cannot have measured.
-CLAIMS = re.compile(r"\blive\b|\b\d+\s*[smh]\s+ago\b|\bin\s+\d+\s*(?:s|m|h|days?)\b|\bright now\b", re.I)
+CLAIMS = re.compile(r"\blive\b|\b\d+\s*[smh]\s+ago\b|\bin\s+\d+\s*(?:s|m|h|days?)\b|\bright now\b"
+                    r"|\bpolled every\b", re.I)
 
 
 @pytest.fixture(scope="module")
@@ -81,15 +88,44 @@ def rendered(tmp_path_factory):
     return json.loads(r.stdout)
 
 
-def test_the_chip_says_exported_never_live(rendered):
+@pytest.fixture(scope="module")
+def site_html():
+    return ex.export("tests/fixtures")["index.html"].decode("utf-8")
+
+
+def test_the_chip_gives_the_capture_time_never_live(rendered):
     chip = rendered["chip"]
-    assert re.fullmatch(r"exported \d{4}-\d\d-\d\d \d\d:\d\d UTC", chip["text"]), chip
+    assert chip["text"] == "recorded 2026-09-28 22:25 PDT", chip          # tests/fixtures/capture.json
     assert "Nothing on this page is live" in chip["title"], chip
 
 
+CHIP_DISCLAIMER = "Nothing on this page is live."      # the one sentence allowed to say "live"
+SHOWN_ATTRS = re.compile(r'\b(?:title|aria-label|placeholder|alt)="([^"]*)"')
+
+
+def views(markup):
+    """What a reader can see in some markup, entities decoded: the text with tags removed (so li<b></b>ve
+    reads "live"), the text with tags as spaces, and the attributes a browser shows (the Oracle, on PR 16)."""
+    markup = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", markup)
+    out = [html.unescape(re.sub(r"<[^>]*>", "", markup)), html.unescape(re.sub(r"<[^>]*>", " ", markup))]
+    return out + [html.unescape(v) for v in SHOWN_ATTRS.findall(markup)]
+
+
+def claims(texts):
+    return sorted({m.group(0) for t in texts for m in CLAIMS.finditer(t.replace(CHIP_DISCLAIMER, ""))})
+
+
 def test_no_tile_claims_a_freshness_it_did_not_measure(rendered):
-    found = {el: CLAIMS.findall(t) for el, t in rendered["text"].items() if CLAIMS.search(t)}
+    found = {}
+    for el, markup in rendered["markup"].items():
+        if c := claims(views(markup) + [rendered["titles"][el]]):
+            found[el] = c
     assert not found, found
+
+
+def test_the_exported_page_itself_claims_no_freshness(site_html):
+    """app.js is not the whole page: index.html's own markup is scanned too, text and shown attributes."""
+    assert not claims(views(site_html)), claims(views(site_html))
 
 
 def test_every_request_is_a_relative_json_file(rendered):
