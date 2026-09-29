@@ -7,7 +7,9 @@
 # So the whole process tree is confined here instead:
 #
 #   filesystem (bubblewrap): the repo read-write, except legacy/ .git/ .bob/ scripts/ .github/
-#     .venv/ AGENTS.md BASELINE.md LICENSE (read-only); /usr read-only; a minimal /etc (CA
+#     .venv/ AGENTS.md BASELINE.md LICENSE and the evidence, docs/bob-usage.md and docs/bob-runs/
+#     (read-only: bob-run.sh records Bob's stream and keeps the ledger from outside); /usr
+#     read-only; a minimal /etc (CA
 #     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a clean
 #     HOME that holds only Bob's own settings; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
@@ -48,7 +50,7 @@ printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
 } > "$envf"
 
 ro=()
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE; do
+for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
 etc=()
