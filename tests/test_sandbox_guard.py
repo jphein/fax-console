@@ -89,6 +89,9 @@ REFUSED = [
     cmd("touch tests/subprocess.py"),
     {"tool_name": "write_file", "tool_input": {"path": "json.pyc", "content": "x"}},     # a sourceless shadow
     cmd("cp faxcli/numbers.py re.pyc"),
+    # the Oracle's delta on PR 8: a path prefix or a backslash before the writer's name
+    cmd("/usr/bin/cp faxcli/numbers.py json.py"),
+    cmd("\\cp faxcli/numbers.py json.py"),
     # Bob's own configuration: a planted gateway would carry the API key elsewhere
     cmd("cd && cat .bob/settings/settings.json"),
     cmd("echo gatewayUrl=local > s.cfg"),              # URL-free: this rule alone must refuse it

@@ -161,7 +161,9 @@ SHADOW_TOKEN = re.compile(r"(?<![\w./-])((?:\./)?(?:tests/|scripts/)?[A-Za-z_][\
 # Only a command that can create or rename a file is checked. A read such as `grep numbers.py docs/x.md`
 # is not
 # (the review of PR 8 found that false positive).
-WRITES = re.compile(r"(?:^|[\s;&|(])(?:cp|mv|install|ln|touch|tee|dd|rsync|tar|unzip|git|python3?|sed)\b|>")
+# A path prefix or a backslash before the name still counts (the Oracle's delta on PR 8: /usr/bin/cp, \\cp).
+WRITES = re.compile(r"(?:^|[\s;&|(])\\?(?:[\w./-]*/)?"
+                    r"(?:cp|mv|install|ln|touch|tee|dd|rsync|tar|unzip|git|python3?|sed)\b|>")
 # Bob's own configuration: a gateway planted in its settings would carry the API key elsewhere, within a
 # run or into the next one (the independent review, 9/29). Nothing in this repository needs to touch it.
 BOB_CONFIG = re.compile(r"(?i)gateway_?url|BOB_GATEWAY|VITE_GATEWAY|\.bob/settings|trustedFolders|"
