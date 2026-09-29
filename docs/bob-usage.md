@@ -87,7 +87,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 00:40 | 8 | `eeebacd0` | finished the VoIP.ms port: 4 fixes, replay wiring with cleanup, 50 tests and the legacy characterization | kept; the first run under its cap with its summary; review strengthened 7 tests | 4.975 |
 | 01:05 | 9 | `5a76155a` | the page: Live state, PSTN account and Fax, served by `handle()` with a CSP; dark and light; 41 tests | kept; review found the public demo would publish its host's name (fixed), a dark theme that never reached the favicon or form controls, and tests blind to CSP breakage | 4.615 |
 | 01:26 | 10 | `afc9c5e2` | the inbound-fax design as generated config: the dialplan, the hook and `fax inbound --render`; 56 tests | kept; Bob found the caller-ID injection in the legacy design unaided; review narrowed its filter and rebuilt the hostile tests | 3.362 |
-| 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered; 2 against a planted gateway failed as designed | the flag pin was not proven, so it was not used; then all runs held (see Budget) | 0.065 |
+| 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered, since the sandbox drops an outside gateway variable; a gateway planted in Bob's settings broke the run with `--gateway-url` and without it | the flag does not pin the gateway, so it was not used; then all runs held (see Budget) | 0.065 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below the table.
