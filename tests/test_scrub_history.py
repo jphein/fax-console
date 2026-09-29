@@ -103,6 +103,19 @@ def test_history_catches_a_commit_message(repo):
     assert r.returncode == 1 and "<commit message>:1: [phone-number]" in r.stdout
 
 
+def test_a_merge_message_quoting_full_commit_ids_passes(repo):
+    """GitHub's pull_request merge commit, "Merge <head> into <base>", whose head id held a 10-digit
+    run: the Oracle's CI false positive on PR #6. A number beside the ids is still caught."""
+    head = j("cafe", "202", "555", "0299", "beef" * 6, "cc")
+    msg = f"Merge {head} into {'0123abcd' * 5}"
+    git(repo, "commit", "-q", "--allow-empty", "-m", msg)
+    r = scrub(repo, "--history")
+    assert r.returncode == 0, r.stdout + r.stderr
+    git(repo, "commit", "-q", "--allow-empty", "-m", msg + ", call " + PHONE)
+    r = scrub(repo, "--history")
+    assert r.returncode == 1 and "<commit message>:1: [phone-number]" in r.stdout
+
+
 def test_a_control_byte_does_not_hide_the_rest_of_a_message(repo):
     git(repo, "commit", "-q", "--allow-empty", "-m", "ok\x01 then " + PHONE)
     r = scrub(repo, "--history")
