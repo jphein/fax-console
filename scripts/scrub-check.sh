@@ -70,14 +70,16 @@ SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "to
 SECRET_JOINED = ("apikey", "accesskey", "privatekey", "secretkey")
 PLACEHOLDER = re.compile(
     r"^(?:<.*>|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%\(?\w*\)?s|\{\w*\}|x{3,}|\*{3,}|\.{3}|…|changeme"
-    r"|change[_-]me|(?:example|dummy|fake|test|wrong|bogus|invalid|your)(?:[-_.][\w.-]*)?"
+    # the word, then word-like segments only: test-token, test-password-99, not test_9Qx7Lm2PzAbC
+    r"|change[_-]me|(?:example|dummy|fake|test|wrong|bogus|invalid|your)(?:[-_.](?:[a-z]+\d*|\d{1,6}))*"
     r"|none|null|nil|redacted|placeholder"
     r"|false|true|secret|password|token)$", re.IGNORECASE)
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 # A key that ends in one of these describes a secret without holding one: token_type, secret_name.
 DESCRIPTORS = {"name", "names", "type", "kind", "id", "ids", "path", "file", "dir", "url", "uri", "header",
                "field", "label", "prefix", "env", "var", "length", "len", "count", "ttl", "expiry", "expires",
-               "format", "mode", "scope", "endpoint", "hint", "policy", "version", "source", "store", "backend"}
+               "format", "mode", "scope", "endpoint", "hint", "policy", "version", "source", "store", "backend",
+               "iterations", "size", "rounds", "bits", "seconds", "limit"}
 # In these files an unquoted value is a literal, however much it looks like a code name.
 CONFIG_KINDS = (".env", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".properties")
 # The owner's commit address, published on every commit (GitHub shows it), kept as a SHA-256 so the gate
@@ -184,8 +186,8 @@ def secret_value(m, kind=""):
         return False                                   # compass=, bypass=, max_tokens=
     if parts and parts[-1] in DESCRIPTORS:
         return False                                   # token_type = "bearer": about a secret, not one
-    if v.isdigit() and "tokens" in parts and not (SECRET_WORDS - {"tokens"}).intersection(parts):
-        return False                                   # max_tokens, input_tokens: counts, not secrets
+    if v.isdigit() and not (parts[-1] in SECRET_WORDS - {"tokens"} or joined.endswith(SECRET_JOINED)):
+        return False                                   # a number is a secret only under a secret's own name
     if (len(v) < 6 or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
             or v.startswith(("/", "~/", "./", "../"))):
         return False                                   # a flag, a placeholder, a URL, a path

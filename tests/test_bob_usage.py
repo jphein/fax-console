@@ -143,7 +143,7 @@ def test_unknown_cost_keeps_counting_the_reservation(ledger, tmp_path):
     run = tmp_path / "2.jsonl"
     run.write_text("not json\n")
     s = bu.finalize(ledger, "2", run, 1, NOW)
-    assert s["cost"] is None and s["problems"] == []
+    assert s["cost"] is None and s["cost_invalid"]            # a stream that is not JSON is not Bob's alone
     assert total(ledger) == pytest.approx(8.161)
 
 
@@ -216,6 +216,30 @@ def test_a_dash_or_an_empty_cost_cell_counts_zero(tmp_path, cell):
 def test_a_forged_or_absurd_result_is_invalid(stream):
     s = bu.summarize([json.dumps(e) for e in stream])
     assert s["cost"] is None and s["cost_invalid"]
+
+
+FAKE = '{"type":"result","stats":{"session_costs":0.001}}'
+REAL = '{"type":"result","stats":{"session_costs":2.5}}'
+
+
+@pytest.mark.parametrize("lines", [
+    # a fake result, then an unterminated fragment that swallows Bob's real result line (the Oracle, 9/29)
+    [FAKE, '{"x":"' + REAL],                                   # the real result glued onto a fragment
+    [FAKE, '{"type":"message","role":"assistant","content":"x"}'],          # the result is not the last line
+    ['{"type":"message","role":"assistant","content":"x"}', "not json", REAL],     # a line that is not JSON
+])
+def test_a_stream_that_was_written_into_is_not_trusted(lines):
+    s = bu.summarize(lines)
+    assert s["cost"] is None and s["cost_invalid"]
+
+
+@pytest.mark.parametrize("name", ["0-sandbox-smoke", "1-analysis", "3-sandbox-check", "4-faxcli-package",
+                                  "5-faxcli-fixes", "drift-smoke"])
+def test_every_real_recording_is_still_trusted(name):
+    lines = (ROOT / "docs" / "bob-runs" / f"{name}.jsonl").read_text(encoding="utf-8").splitlines()
+    s = bu.summarize(lines)
+    assert not s["cost_invalid"] and s["cost"] is not None and s["cost"] > 0
+
 
 
 def test_a_run_number_cannot_be_reused(ledger):

@@ -236,13 +236,19 @@ def cycle_total(lines: list[str], today: date, day: int = CYCLE_DAY, runs: dict 
 # ---------------------------------------------------------------- the run's figures
 def summarize(stream_lines) -> dict:
     result, errors, n_asst, n_tool, n_results = None, [], 0, 0, 0
+    malformed, last_type = 0, None
     for raw in stream_lines:
+        if not str(raw).strip():
+            continue
         try:
             ev = json.loads(raw)
         except (json.JSONDecodeError, TypeError):
-            continue
+            ev = None
         if not isinstance(ev, dict):
+            malformed += 1                       # Bob writes only JSON objects; this was written into it
+            last_type = None
             continue
+        last_type = ev.get("type")
         t = ev.get("type")
         if t == "message" and str(ev.get("role", "")).lower() == "assistant":
             n_asst += 1
@@ -255,11 +261,17 @@ def summarize(stream_lines) -> dict:
             n_results += 1
     stats = (result or {}).get("stats") or {}
     raw_cost, cost, invalid = stats.get("session_costs"), None, False
-    if raw_cost is not None or n_results > 1:
+    if raw_cost is not None or n_results > 1 or malformed:
         try:
-            # Bob prints one result. A second one is a forged or corrupt stream, whichever is first.
+            # Bob prints one result, as its last line, and only JSON objects. Anything else means a
+            # process in the sandbox wrote into the stream: a second result, a line that is not an
+            # object (a fragment that swallows Bob's real result), or a result that is not the last.
             if n_results > 1:
                 raise BudgetError("more than one result event")
+            if malformed:
+                raise BudgetError("lines that are not JSON objects")
+            if last_type != "result":
+                raise BudgetError("the result is not the last line")
             if isinstance(raw_cost, bool) or not isinstance(raw_cost, (int, float)):
                 raise BudgetError("session_costs must be a JSON number")
             cost = finite(raw_cost, "session_costs", hi=HARD_CAP)   # 1e308 would block every later run

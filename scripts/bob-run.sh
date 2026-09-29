@@ -114,9 +114,16 @@ rm -f "$rec"    # the published, redacted copy in docs/bob-runs/ is the record f
 scripts/scrub-check.sh --paths "$out" "docs/bob-runs/$n-$slug.guard.jsonl" --require-deny
 python3 - "$out" <<'PY'
 import json, sys
-r = [json.loads(l) for l in open(sys.argv[1]) if '"type":"result"' in l.replace(" ", "")]
-s = (r[-1].get("stats") if r else {}) or {}
-print(f"run cost: {s.get('session_costs')}  tool calls: {s.get('tool_calls')}  task: {s.get('task_id')}")
+r, bad = [], 0
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    if '"type":"result"' in line.replace(" ", ""):
+        try:
+            r.append(json.loads(line))
+        except ValueError:
+            bad += 1                     # a line written into the stream: finalize has already refused its cost
+s = (r[-1].get("stats") if r and isinstance(r[-1], dict) else {}) or {}
+print(f"run cost: {s.get('session_costs')}  tool calls: {s.get('tool_calls')}  task: {s.get('task_id')}"
+      + (f"  ({bad} malformed result line(s))" if bad else ""))
 PY
 python3 scripts/bob_usage.py status "$ledger"
 if [ "$fin" -ne 0 ]; then

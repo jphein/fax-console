@@ -34,6 +34,7 @@ case "${STUB_MODE:-ok}" in
           mv docs docs.old && mkdir -p docs/bob-runs && printf 'forged\n' > docs/bob-usage.md ;;
   twice)  cost=0.001; st=success; code=0     # a second, forged result line in the stream
           printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n' ;;
+  glued)  cost=2.5; st=success; code=0 ;;     # see the result line below
   killed) printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n'
           exit 137 ;;                         # a forged result, then Bob killed: one result, not Bob's
 esac
@@ -43,6 +44,9 @@ printf '{"type":"tool_result","status":"success","output":"BOB_API_KEY=%s"}\n' "
 refused='{"type":"tool_result","status":"error","error":{"message":"refused: write to %s/Projects/other/x"}}'
 printf "$refused\n" "$HOME"
 stats='"tool_calls":1,"task_id":"t-stub","max_cost":3'
+if [ "${STUB_MODE:-}" = glued ]; then   # a fake result, then a fragment that swallows the real result line
+  printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n{"x":"'
+fi
 printf '{"type":"result","status":"%s","stats":{"session_costs":%s,%s}}\n' "$st" "$cost" "$stats"
 exit "$code"
 """
@@ -178,6 +182,11 @@ def test_a_replaced_docs_dir_is_refused_and_nothing_is_touched(box):
 
 def test_a_second_result_line_is_an_error_not_a_credit(box):
     r = run(box, "5", "demo", "3", STUB_MODE="twice")
+    assert r.returncode == 3 and "| (3) |" in row(box, 5) and "invalid cost reported" in row(box, 5)
+
+
+def test_a_result_glued_onto_a_fragment_is_not_a_credit(box):
+    r = run(box, "5", "demo", "3", STUB_MODE="glued")                    # Bob itself exits 0
     assert r.returncode == 3 and "| (3) |" in row(box, 5) and "invalid cost reported" in row(box, 5)
 
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -89,8 +90,11 @@ def test_history_catches_a_value_that_was_deleted(repo):
     assert scrub(repo).returncode == 0                   # HEAD is clean...
     r = scrub(repo, "--history")                         # ...history is not
     assert r.returncode == 1 and "cfg.env:1: [credential]" in r.stdout
-    for piece in ("abcdef", "123456", "56"):             # a finding never prints any of the value
-        assert piece not in r.stdout + r.stderr
+    # A finding is exactly its place and its rule, never any of the value (a short piece of it could
+    # appear in a commit id by chance, so the lines are matched whole).
+    lines = r.stdout.strip().splitlines()
+    assert lines and all(re.fullmatch(r"[0-9a-f]{7}:cfg\.env:1: \[[a-z-]+\]", x) for x in lines), r.stdout
+    assert "abcdef" not in r.stdout + r.stderr and "123456" not in r.stdout + r.stderr
 
 
 def test_history_catches_a_commit_message(repo):

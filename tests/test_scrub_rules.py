@@ -47,6 +47,7 @@ CAUGHT = [
     ("credential-assignment", j('VOIPMS_PASS = "', 'testpassword99"')),          # could be someone's (Aurora)
     ("credential-assignment", j("api_key = '", "yourdomain-9Qx7Lm2Pz'")),
     ("credential-assignment", j("password = ", "123456789")),                    # a number is a value
+    ("credential-assignment", j("api_key = '", "test_9Qx7Lm2PzAbC'")),           # a test_ prefix, then a key
     # credential assignments
     ("credential-assignment", j('password="', 'hunter2hunter2"')),
     ("credential-assignment", j("DB_PASSWORD=", "hunter2hunter2")),
@@ -84,6 +85,7 @@ PASSED = [
     'PATH_TOKEN = re.compile(r"x")',
     "resp = llm(max_tokens=4096)",
     '{"usage": {"input_tokens": 123456, "output_tokens": 7890123}}',          # counts, not secrets
+    "PASSWORD_HASH_ITERATIONS = 600000; TOKEN_BUCKET_SIZE = 100000",          # numbers about a secret
     "TOKEN_TTL=604800",
     "bypass=True; compass = north",
     '{"api_key": "***"}',
