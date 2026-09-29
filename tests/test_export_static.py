@@ -6,6 +6,7 @@ The demo is public the moment Pages builds it, so these tests hold three things:
 - nothing derived from the machine is in it.
 (scripts/untar-site.py, which extracts it on the host, has tests/test_untar_site.py.)
 """
+import html
 import inspect
 import io
 import json
@@ -35,7 +36,8 @@ def test_every_get_route_of_the_dispatcher_is_exported():
 
 
 def test_the_site_holds_every_file(site):
-    want = {ex.api_file(r) for r in ex.GET_API_ROUTES} | {"index.html", ".nojekyll", *ex.PAGE_ASSETS}
+    pages = {"index.html", ".nojekyll", "version.json", *ex.PAGE_ASSETS}
+    want = {ex.api_file(r) for r in ex.GET_API_ROUTES} | pages
     assert set(site) == want
 
 
@@ -117,3 +119,55 @@ def test_the_tar_stream_is_regular_files_with_fixed_metadata(site):
         members = tar.getmembers()
     assert [m.name for m in members] == sorted(site)
     assert all(m.isreg() and m.mode == 0o644 and m.mtime == 0 for m in members)
+
+
+# realm-sigil's static/build.sh writes exactly these, in this order.
+SIGIL_FIELDS = ["name", "description", "version", "hash", "branch", "dirty", "built", "realm", "repo",
+                "commit_url"]
+BUILD = {"hash": "abc1234", "branch": "main", "built": "2026-09-29T21:54:35Z"}
+
+
+def test_the_root_version_json_is_the_realm_sigil_static_contract():
+    """version.json, as realm-sigil's static build.sh writes it, with the commit's facts that
+    scripts/export-static.sh reads from git (the sandbox has none)."""
+    files = ex.export("tests/fixtures", BUILD)
+    v = json.loads(files["version.json"])
+    assert list(v) == SIGIL_FIELDS, list(v)
+    assert (v["hash"], v["branch"], v["built"], v["dirty"]) == ("abc1234", "main", BUILD["built"], False), v
+    assert v["commit_url"] == "https://github.com/jphein/fax-console/commit/abc1234", v["commit_url"]
+    assert files["version.json"] == (json.dumps(v, indent=2) + "\n").encode()        # build.sh's layout
+    # the page's own version is the same sigil, plus the mode
+    assert json.loads(files["api/version.json"]) == {**v, "replay": True}
+
+
+def test_the_page_carries_the_realm_version_meta_tag():
+    files = ex.export("tests/fixtures", BUILD)
+    page = files["index.html"].decode()
+    m = re.search(r"<meta name=\"realm-version\" content='([^']*)'>\n</head>", page)
+    assert m, page[-300:]
+    assert json.loads(html.unescape(m.group(1))) == json.loads(files["version.json"])
+
+
+def test_without_build_facts_the_version_says_dev():
+    v = json.loads(ex.export("tests/fixtures")["version.json"])
+    assert v["hash"] == "dev" and v["commit_url"] == "", v
+
+
+@pytest.mark.parametrize("facts", [
+    ["zzzz999", "main", "2026-09-29T21:54:35Z"],                  # not a hex hash
+    ["abc1234", "fix/a b", "2026-09-29T21:54:35Z"],                # a space: not a branch git would print
+    ["abc1234", "feat/</head>", "2026-09-29T21:54:35Z"],           # markup
+    ["abc1234", "main", "2026-09-29 21:54:35"],                    # not the UTC shape
+])
+def test_the_export_refuses_facts_that_are_not_a_commits(facts, capsys):
+    """export-static.sh reads the facts from git. Anything else is refused, so free text cannot reach the
+    public version (the Oracle, on PR 20)."""
+    assert ex.main(["tests/fixtures", *facts]) == 2
+    assert "refusing" in capsys.readouterr().err
+
+
+def test_the_meta_tag_escapes_markup_for_a_naive_reader():
+    meta = ex.sigil_meta({"branch": "x'y&z\"</head>"})
+    assert "</head>" not in meta and "<" not in meta[1:-1] and ">" not in meta[:-1], meta
+    content = re.search(r"content='([^']*)'", meta).group(1)
+    assert json.loads(html.unescape(content)) == {"branch": "x'y&z\"</head>"}

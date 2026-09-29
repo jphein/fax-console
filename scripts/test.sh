@@ -28,4 +28,9 @@ if [ "$rc" -ne 0 ]; then
   else echo "test.sh: refusing: the shadow check itself failed (exit $rc)" >&2; fi
   exit 2
 fi
-exec scripts/bob-sandbox.sh bash -c '.venv/bin/python -m pytest -q "$@" && .venv/bin/ruff check .' test.sh "$@"
+# Python trusts a __pycache__ entry whose header claims the source's mtime and size, and Bob can write
+# faxconsole/__pycache__, so a planted .pyc could run in place of the committed code. With the cache
+# prefix on the sandbox's fresh /tmp, the tree's __pycache__ is never read or written (the Oracle, on PR
+# 20). It is exported, so the tests' own Python subprocesses inherit it.
+exec scripts/bob-sandbox.sh bash -c 'export PYTHONPYCACHEPREFIX=/tmp/pycache
+.venv/bin/python -m pytest -q "$@" && .venv/bin/ruff check .' test.sh "$@"

@@ -19,6 +19,7 @@ import datetime
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 import zoneinfo
@@ -26,18 +27,41 @@ from typing import BinaryIO
 
 from faxconsole.__main__ import build
 from faxconsole.routes import _CSP, handle
+from faxconsole.version import APP_DESC, APP_NAME, APP_REALM, APP_REPO, generate_name
 
 # Every GET API route that handle() serves. A test holds this list to the dispatcher, so a new route cannot
 # be left out of the static demo.
 GET_API_ROUTES = ("/api/voipms", "/api/fax/status", "/api/fax/log", "/api/fax",
                   "/api/pbx/trunk", "/api/pbx/calls", "/api/pbx/endpoints", "/api/version")
 PAGE_ASSETS = ("app.css", "app.js", "favicon.svg")
-# realm-sigil: "Static sites omit server-only fields".
-SERVER_ONLY = ("started", "uptime", "runtime", "os", "host", "pid")
+# What a commit's facts look like (scripts/export-static.sh reads them from git). Anything else is refused,
+# so free text cannot reach the public version (the Oracle, on PR 20).
+FACT_SHAPES = {"hash": re.compile(r"[0-9a-f]{7,40}"), "branch": re.compile(r"[A-Za-z0-9._/-]{1,64}"),
+               "built": re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")}
 # The VoIP.ms fixtures are synthesized, never captured (tests/fixtures/voipms/README.md). So the export
 # carries no time for them: no fetched_at, and nothing computed from a clock, which a static copy would
 # also freeze into a countdown (the Oracle, on PR 16).
 VOIPMS_UNMEASURED = ("age", "stale", "days_to_billing", "polling", "fetched_at")
+
+
+def sigil(facts: dict) -> dict:
+    """The realm-sigil static contract: the fields its static/build.sh writes to version.json, in its order.
+    One difference: "built" is the commit's own time, not the export's clock, so the export stays a pure
+    function of the commit (two exports agree byte for byte)."""
+    h = facts.get("hash", "dev")
+    return {"name": APP_NAME, "description": APP_DESC, "version": generate_name(h, APP_REALM), "hash": h,
+            "branch": facts.get("branch", "unknown"), "dirty": bool(facts.get("dirty", False)),
+            "built": facts.get("built", "unknown"), "realm": APP_REALM, "repo": APP_REPO,
+            "commit_url": f"{APP_REPO}/commit/{h}" if APP_REPO and h != "dev" else ""}
+
+
+def sigil_meta(data: dict) -> str:
+    """realm-sigil's <meta name="realm-version">: the JSON in a single-quoted attribute. &, ', < and > are
+    escaped, which realm-sigil's build.sh does not do. A browser unescapes them, so a reader's JSON.parse
+    is unchanged."""
+    content = (json.dumps(data).replace("&", "&amp;").replace("'", "&#39;")
+               .replace("<", "&lt;").replace(">", "&gt;"))       # a naive, non-HTML reader stays safe too
+    return f"<meta name=\"realm-version\" content='{content}'>"
 
 
 def api_file(route: str) -> str:
@@ -45,13 +69,14 @@ def api_file(route: str) -> str:
     return "api" + route[len("/api"):] + ".json"
 
 
-def staticize(page: bytes, recorded: str) -> bytes:
+def staticize(page: bytes, recorded: str, meta: str = "") -> bytes:
     """Mark the page static, with the time its data was recorded, and carry the CSP as a meta tag. A meta
     tag cannot carry frame-ancestors."""
     html = page.decode("utf-8")
     csp = "; ".join(d for d in _CSP.split("; ") if not d.startswith("frame-ancestors"))
     for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-recorded="{recorded}">'),
                      ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">'),
+                     ("</head>", (f"  {meta}\n" if meta else "") + "</head>"),
                      ("<h2>Live state</h2>", "<h2>Recorded state</h2>"),
                      # the live replay's banner promises a dry run, and a static copy cannot even do that
                      ("a send is a dry run and nothing is dialled",
@@ -72,8 +97,10 @@ def capture(fixtures: str) -> tuple[float, str]:
     return at.timestamp(), at.astimezone(zoneinfo.ZoneInfo(meta["zone"])).strftime("%Y-%m-%d %H:%M %Z")
 
 
-def export(fixtures: str) -> dict[str, bytes]:
-    """Every file of the static demo, by its path in the site."""
+def export(fixtures: str, facts: dict | None = None) -> dict[str, bytes]:
+    """Every file of the static demo, by its path in the site. *facts* are the commit's (hash, branch,
+    built): scripts/export-static.sh reads them from git, since the sandbox cannot."""
+    version = sigil(facts or {})
     captured, label = capture(fixtures)
     config, cleanup, _args = build(["--replay", fixtures], clock=lambda: captured)
     try:
@@ -85,12 +112,14 @@ def export(fixtures: str) -> dict[str, bytes]:
                 raise RuntimeError(f"export: GET {route} answered {r.status}")
             body = json.loads(r.body)
             if route == "/api/version":
-                body = {k: v for k, v in body.items() if k not in SERVER_ONLY}
+                body = {**version, "replay": body.get("replay") is True}   # the static sigil, and the mode
             if route == "/api/voipms":
                 body = {k: v for k, v in body.items() if k not in VOIPMS_UNMEASURED}
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
-        files["index.html"] = staticize(page.body, label)        # the chip shows "recorded <label>"
+        # the chip shows "recorded <label>"; version.json is laid out as realm-sigil's build.sh writes it
+        files["index.html"] = staticize(page.body, label, sigil_meta(version))
+        files["version.json"] = (json.dumps(version, indent=2) + "\n").encode("utf-8")
         for name in PAGE_ASSETS:
             r = handle("GET", "/" + name, {}, b"", config)
             if r.status != 200:
@@ -114,10 +143,14 @@ def write_tar(files: dict[str, bytes], out: BinaryIO) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
-    if len(args) != 1:
-        print("usage: python -m faxconsole.export FIXTURES > site.tar", file=sys.stderr)
+    if len(args) not in (1, 4):
+        print("usage: python -m faxconsole.export FIXTURES [HASH BRANCH BUILT] > site.tar", file=sys.stderr)
         return 2
-    write_tar(export(args[0]), sys.stdout.buffer)
+    facts = dict(zip(("hash", "branch", "built"), args[1:], strict=True)) if len(args) == 4 else None
+    if facts and not all(FACT_SHAPES[k].fullmatch(v) for k, v in facts.items()):
+        print(f"export: refusing facts that are not a commit's: {facts}", file=sys.stderr)
+        return 2
+    write_tar(export(args[0], facts), sys.stdout.buffer)
     sys.stdout.buffer.flush()
     return 0
 
