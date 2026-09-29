@@ -477,3 +477,26 @@ def test_the_recheck_before_bwrap_catches_a_swap_during_setup(tmp_path):
     r = sandbox(repo, env)
     assert mark.exists(), "the swap never ran: the test would prove nothing"
     assert r.returncode == 2 and "is a symlink" in r.stderr and not argv.exists(), r.stderr
+
+
+def test_the_sandbox_env_keeps_python_bytecode_on_its_own_tmp(tmp_path):
+    """Python trusts a __pycache__ entry whose header claims its source's mtime and size, and Bob can write
+    the tree. So the environment bob-sandbox.sh sets after --clearenv sends every Python cache read and write
+    to /tmp/pycache, and that /tmp must be the start's own fresh tmpfs, never a bind, so nothing cached there
+    outlives it (Aurora, after PR 20). scripts/sandbox-probe.sh plants a forged .pyc against the real
+    sandbox."""
+    repo, env, argv = sandbox_repo(tmp_path, "pyc")
+    kept = tmp_path / "pyc" / "env"
+    fake = Path(env["PATH"].split(":")[0])
+    (fake / "sudo").write_text(              # it also keeps the env file (bob-sandbox.sh deletes it on exit)
+        "#!/bin/sh\nprev=\nfor a in \"$@\"; do printf '%s\\n' \"$a\"\n"
+        f"  [ \"$a\" = /run/bob-env ] && cp \"$prev\" {kept}; prev=$a\ndone > {argv}\n", encoding="utf-8")
+    r = sandbox(repo, env)
+    assert r.returncode == 0 and kept.exists(), r.stderr
+    assert "export PYTHONPYCACHEPREFIX=/tmp/pycache" in kept.read_text(encoding="utf-8").splitlines()
+    a = argv.read_text(encoding="utf-8").splitlines()
+    assert "--clearenv" in a and any(x == "--tmpfs" and a[j + 1] == "/tmp" for j, x in enumerate(a[:-1])), a
+    # nothing from the host is bound or linked at /tmp or at the cache (this test's own repo lives under /tmp)
+    dests = [a[j + 2] for j, x in enumerate(a[:-2])
+             if x in ("--bind", "--ro-bind", "--bind-try", "--ro-bind-try", "--symlink")]
+    assert not [d for d in dests if d in ("/tmp", "/tmp/pycache") or d.startswith("/tmp/pycache/")], dests

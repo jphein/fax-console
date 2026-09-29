@@ -95,6 +95,33 @@ probe fail "see the directory above the repo"     "[ \$(ls -A .. | wc -l) -gt 1 
 probe work "write a new file in the repo"        "echo x > sandbox-probe.tmp && rm sandbox-probe.tmp"
 probe work "append to the guard log"             "printf '' >> .bob/guard.log"
 probe work "run the test tools"                  ".venv/bin/python -m pytest --version && .venv/bin/ruff --version"
+# a .pyc planted in the tree, its header claiming the source's own mtime and size, must not run in the source's
+# place: the sandbox keeps Python's bytecode cache on its own /tmp (PYTHONPYCACHEPREFIX; Aurora, after PR 20).
+# The control unsets the prefix in the same sandbox, so it proves the plant would run there without it.
+plant=.sandbox-probe-pyc-$$
+{ [ ! -e "$plant" ] && [ ! -L "$plant" ]; } || { echo "sandbox-probe: $plant exists; not touched" >&2; exit 2; }
+trap 'rm -rf "$plant"' EXIT
+# on the host, so -I: without it the repo root is on sys.path, and a module Bob left there would run here
+.venv/bin/python -I - "$plant" > /dev/null <<'PY'
+import importlib.util, marshal, os, sys
+pkg = os.path.join(sys.argv[1], "plantpkg")
+os.makedirs(os.path.join(pkg, "__pycache__"))
+src = os.path.join(pkg, "__init__.py")
+with open(src, "w", encoding="utf-8") as fh:
+    fh.write("X = 'committed'\n")
+os.utime(src, (1_700_000_000, 1_700_000_000))
+st = os.stat(src)
+head = (importlib.util.MAGIC_NUMBER + (0).to_bytes(4, "little") + int(st.st_mtime).to_bytes(4, "little")
+        + (st.st_size & 0xFFFFFFFF).to_bytes(4, "little"))
+with open(os.path.join(pkg, "__pycache__", f"__init__.{sys.implementation.cache_tag}.pyc"), "wb") as fh:
+    fh.write(head + marshal.dumps(compile("X = 'planted'\n", src, "exec")))
+PY
+x='import plantpkg; print(plantpkg.X)'
+probe work "a planted .pyc runs once the prefix is unset (control)" \
+  "cd $plant && [ \"\$(env -u PYTHONPYCACHEPREFIX ../.venv/bin/python -c '$x')\" = planted ]"
+probe work "Python runs the committed source, not a planted .pyc" \
+  "cd $plant && [ \"\$(../.venv/bin/python -c '$x')\" = committed ]"
+rm -rf "$plant"; trap - EXIT
 # nothing one run leaves in Bob's home reaches the next run; the gateway is Bob's own
 scripts/bob-sandbox.sh bash -c 'printf "{\"gatewayUrl\": \"https://attacker.example\"}\n" > ~/.bob/settings/settings.json
   echo BOB_GATEWAY_URL=https://attacker.example > ~/.bob/.env' >/dev/null 2>&1

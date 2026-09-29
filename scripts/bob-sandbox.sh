@@ -15,6 +15,7 @@
 #     made fresh for every start that holds only Bob's own settings (nothing survives into the next
 #     run), and Bob's gateway pinned; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
+#     Python's bytecode cache lives on the sandbox's own /tmp, never in the tree's __pycache__.
 #   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges and ALL of IPv6 denied,
 #     except the local DNS stub; the public IPv4 internet stays open so Bob can reach its API. The PBX and every
 #     house service are unreachable, and ssh has no keys, no agent and no config in any case.
@@ -106,6 +107,11 @@ printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
 {
   printf 'export HOME=/home/bob LANG=C.UTF-8 TERM=%q FAX_CONSOLE_SANDBOX=1\n' "${TERM:-xterm-256color}"
   printf 'export PATH=%q\n' "$root/.venv/bin:$HOME/.npm-global/bin:/usr/bin:/bin"
+  # Python trusts a __pycache__ entry whose header claims its source's mtime and size, and Bob can write the
+  # tree. Every Python cache read and write goes to this start's own fresh /tmp instead, so a planted .pyc never
+  # runs in its source's place, whoever started the sandbox, and no run leaves bytecode in the tree (Aurora,
+  # after PR 20; scripts/test.sh and export-static.sh also set it for their own commands).
+  printf 'export PYTHONPYCACHEPREFIX=/tmp/pycache\n'
   printf 'export FAX_CONSOLE_GUARD_LOG=%q\n' "$root/.bob/guard.log"
   printf 'export BOB_GATEWAY_URL=%q VITE_GATEWAY_BASE_URL=%q BOB_WEB_LOGIN_URL=%q VITE_WEB_LOGIN_URL=%q\n' \
     "$BOB_GATEWAY" "$BOB_GATEWAY" "$BOB_WEB_LOGIN" "$BOB_WEB_LOGIN"
