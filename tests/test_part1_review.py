@@ -10,8 +10,9 @@ Covers:
 """
 from __future__ import annotations
 
+import json
 import os
-import threading
+import socket
 from pathlib import Path
 
 import pytest
@@ -52,9 +53,9 @@ class TestReplayIsolation:
 
     def test_replay_send_tif_not_under_var(self, tmp_path):
         """TIF produced by a replay send must not be under /var."""
-        from faxcli.api import send
-        import tempfile
         import os
+
+        from faxcli.api import send
 
         spool = str(tmp_path / "spool")
         os.makedirs(spool, exist_ok=True)
@@ -75,8 +76,9 @@ class TestReplayIsolation:
 
     def test_replay_send_stays_under_tmpdir(self, tmp_path):
         """Both inbox PDF and TIFF stay inside tmp_path in replay mode."""
-        from faxconsole.routes import handle
         import json
+
+        from faxconsole.routes import handle
 
         cfg = self._replay_config(tmp_path)
         boundary = "B1"
@@ -95,7 +97,6 @@ class TestReplayIsolation:
 
         # No token check — replay doesn't need a token set (token is None → falls
         # back to env which is empty in tests → 401). So set a write_token.
-        from dataclasses import replace
         cfg2 = dataclass_replace(cfg, write_token="test-token")
         r = handle(
             "POST", "/api/fax/send",
@@ -109,6 +110,9 @@ class TestReplayIsolation:
         pdf_path = obj.get("pdf", "")
         assert not tif.startswith("/var"), f"tif {tif!r} under /var"
         assert not pdf_path.startswith("/var"), f"pdf {pdf_path!r} under /var"
+        # "not under /var" alone would pass for a write to any other real path
+        assert tif.startswith(str(tmp_path) + os.sep), f"tif {tif!r} outside the replay dir"
+        assert pdf_path.startswith(str(tmp_path) + os.sep), f"pdf {pdf_path!r} outside the replay dir"
 
 
 def dataclass_replace(cfg: Config, **changes) -> Config:
@@ -207,7 +211,10 @@ class TestApiSend:
 
     def test_cmd_send_json_unchanged(self, tmp_path):
         """cmd_send --json output must include the contract fields (golden check)."""
-        import argparse, io, json
+        import argparse
+        import io
+        import json
+
         from faxcli.cli import cmd_send
         os.makedirs(str(tmp_path / "spool"), exist_ok=True)
         pdf = self._pdf(tmp_path)
@@ -230,59 +237,89 @@ class TestApiSend:
 # ---------------------------------------------------------------------------
 
 class TestBoundedQueue503:
-    def test_503_when_over_capacity(self, tmp_path):
-        """When semaphore is exhausted, the next request gets 503 without TCP."""
-        import json, socket, threading
-        from faxcli.transport import ReplayTransport
-        from faxconsole.routes import Config
-        from faxconsole.server import FaxServer, _send_503
+    """The capacity check in process_request, driven over AF_UNIX socketpairs (no TCP).
 
-        # Build a config
-        t = ReplayTransport(
-            fixture_dir=FIXTURE_DIR / "asterisk",
-            cdr_path=FIXTURE_DIR / "cdr" / "Master.csv",
-        )
-        cfg = Config(transport=t, inbox=str(tmp_path / "inbox"))
+    The server is built with bind=False and handed one end of a socketpair per request,
+    as its accept loop would hand it a connection. A request whose bytes have not arrived
+    yet holds a worker, which makes "the pool is busy" deterministic without sleeps.
+    """
 
-        # Create a server with pool_size=1, backlog=0 → capacity=1
-        srv = FaxServer(cfg, host="127.0.0.1", port=0, pool_size=1, backlog=0)
-        sem = srv._sem
+    GET = b"GET /api/version HTTP/1.1\r\nHost: t\r\n\r\n"
 
-        # Exhaust the semaphore manually (capacity=1)
-        acquired = sem.acquire(blocking=False)
-        assert acquired, "semaphore should be acquirable initially"
+    def _server(self, tmp_path, pool_size=1, backlog=0):
+        from faxconsole.server import FaxServer
+        t = ReplayTransport(fixture_dir=FIXTURE_DIR / "asterisk",
+                            cdr_path=FIXTURE_DIR / "cdr" / "Master.csv",
+                            spool_dir=str(tmp_path))
+        cfg = Config(transport=t, inbox=str(tmp_path / "inbox"), spool=str(tmp_path), replay=True)
+        return FaxServer(cfg, pool_size=pool_size, backlog=backlog, bind=False)
 
-        # Now capacity is 0: a request pair should get 503
-        server_sock, client_sock = socket.socketpair(socket.AF_UNIX)
+    @staticmethod
+    def _connect(srv, clients, send=b""):
+        server_end, client_end = socket.socketpair(socket.AF_UNIX)
+        client_end.settimeout(5)
+        clients.append(client_end)
+        if send:
+            client_end.sendall(send)
+        srv._httpd.process_request(server_end, ("socketpair", 0))
+        return client_end
+
+    @staticmethod
+    def _read_all(sock):
+        data = b""
+        while chunk := sock.recv(65536):
+            data += chunk
+        return data
+
+    @staticmethod
+    def _close(srv, clients):
+        for c in clients:        # a worker blocked on a silent client sees EOF and returns
+            c.close()
+        srv.close()
+
+    def test_request_over_capacity_gets_503_and_is_not_queued(self, tmp_path):
+        srv, clients = self._server(tmp_path), []          # capacity 1: one worker, no backlog
         try:
-            _send_503(server_sock)
-            # Read back what was written to the other end
-            client_sock.settimeout(2)
-            data = b""
-            try:
-                while True:
-                    chunk = client_sock.recv(4096)
-                    if not chunk:
-                        break
-                    data += chunk
-            except (TimeoutError, OSError):
-                pass
+            busy = self._connect(srv, clients)             # holds the only slot
+            over = self._connect(srv, clients, self.GET)
+            head, _, body = self._read_all(over).partition(b"\r\n\r\n")
+            assert head.startswith(b"HTTP/1.0 503 ")
+            assert b"\r\nRetry-After: " in head
+            assert b"\r\nContent-Type: application/json" in head
+            assert json.loads(body)["ok"] is False
+            busy.sendall(self.GET)                         # the held request is still served
+            assert self._read_all(busy).startswith(b"HTTP/1.0 200 ")
         finally:
-            server_sock.close()
-            client_sock.close()
-            sem.release()
-            srv._pool.shutdown(wait=False)
+            self._close(srv, clients)
 
-        assert b"503" in data
-        assert b"Retry-After" in data
-        # Body must be JSON
-        _, _, body_bytes = data.partition(b"\r\n\r\n")
-        obj = json.loads(body_bytes)
-        assert obj["ok"] is False
+    def test_backlog_queues_rather_than_refusing(self, tmp_path):
+        srv, clients = self._server(tmp_path, pool_size=1, backlog=1), []
+        try:
+            busy = self._connect(srv, clients)             # the one worker
+            queued = self._connect(srv, clients, self.GET) # the backlog slot: waits, is not refused
+            third = self._connect(srv, clients, self.GET)  # over capacity
+            assert self._read_all(third).startswith(b"HTTP/1.0 503 ")
+            busy.sendall(self.GET)
+            assert self._read_all(busy).startswith(b"HTTP/1.0 200 ")
+            assert self._read_all(queued).startswith(b"HTTP/1.0 200 ")
+        finally:
+            self._close(srv, clients)
+
+    def test_slot_is_released_after_each_request(self, tmp_path):
+        srv, clients = self._server(tmp_path), []          # capacity 1
+        try:
+            for _ in range(3):
+                c = self._connect(srv, clients, self.GET)
+                assert self._read_all(c).startswith(b"HTTP/1.0 200 ")
+                assert srv._sem.acquire(timeout=5), "the worker never released its slot"
+                srv._sem.release()
+        finally:
+            self._close(srv, clients)
 
     def test_503_response_has_retry_after(self):
         """_send_503 must write a Retry-After header."""
         import socket
+
         from faxconsole.server import _send_503
 
         server_sock, client_sock = socket.socketpair(socket.AF_UNIX)

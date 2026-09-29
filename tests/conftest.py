@@ -1,12 +1,42 @@
-"""conftest.py — shared fixtures and subprocess/os.system guard.
+"""conftest.py — shared fixtures, the subprocess/os.system guard and the network guard.
 
 Any test that accidentally reaches subprocess.run, subprocess.Popen, or
 os.system will fail immediately rather than spawning a real process.
+Any test that binds or connects an IP socket fails the same way: tests talk
+to the server over AF_UNIX socketpairs only, and never reach a network.
 """
 import os
+import socket
 import subprocess
 
 import pytest
+
+_IP_FAMILIES = (socket.AF_INET, socket.AF_INET6)
+
+
+@pytest.fixture(autouse=True)
+def _block_ip_sockets(monkeypatch, request):
+    """Fail the test if its code binds or connects an IPv4/IPv6 socket.
+
+    The sandbox's packet filter denies loopback, but it cannot see a bind or a listen,
+    and it allows the public internet (Bob reaches its API that way). So "tests never
+    open a TCP port" and "tests never reach a network" are enforced here, for every test.
+    pytest.fail raises a BaseException, which production code's `except OSError` or
+    `except Exception` cannot swallow. AF_UNIX sockets and socketpair() are untouched.
+    """
+    real = {name: getattr(socket.socket, name) for name in ("bind", "connect", "connect_ex")}
+
+    def guard(name):
+        def blocked(self, address, *args, **kwargs):
+            if self.family in _IP_FAMILIES:
+                pytest.fail(f"socket.{name}({address!r}) on an IP socket in test "
+                            f"{request.node.nodeid!r}: tests use AF_UNIX socketpairs only")
+            return real[name](self, address, *args, **kwargs)
+        return blocked
+
+    for name in real:
+        monkeypatch.setattr(socket.socket, name, guard(name))
+    yield
 
 
 @pytest.fixture(autouse=True)

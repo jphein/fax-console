@@ -19,6 +19,7 @@ import concurrent.futures
 import contextlib
 import http.server
 import json
+import socket
 import threading
 from typing import Any
 
@@ -35,10 +36,16 @@ _503_BODY = json.dumps({
 
 
 def _send_503(sock: Any) -> None:
-    """Write a minimal HTTP/1.0 503 response directly to *sock*.
+    """Write a minimal HTTP/1.0 503 response directly to *sock*, then drain its input.
 
-    Called before a handler is constructed, so we write raw bytes rather
-    than going through BaseHTTPRequestHandler.
+    Called in the accept thread, before a handler is constructed, so it writes raw
+    bytes and must never block: the socket goes non-blocking first.
+
+    The request bytes that have already arrived are read and dropped before the
+    caller closes the socket. Closing with unread input makes the kernel reset the
+    connection (a TCP RST; ECONNRESET on AF_UNIX), and the client then sees a reset
+    instead of this 503. A body still in flight, such as a large upload, can still be
+    reset: the 503 is best-effort, and the drain never waits for more input.
     """
     body = _503_BODY
     response = (
@@ -50,8 +57,13 @@ def _send_503(sock: Any) -> None:
         b"\r\n"
         + body
     )
-    with contextlib.suppress(OSError):
-        sock.sendall(response)
+    with contextlib.suppress(OSError):   # BlockingIOError ends the drain: nothing more buffered
+        sock.setblocking(False)
+        sock.sendall(response)            # ~200 bytes into an empty send buffer
+        sock.shutdown(socket.SHUT_WR)
+        for _ in range(16):               # at most 1 MiB: a fast upload cannot hold this thread
+            if not sock.recv(65536):
+                break
 
 
 class _Handler(http.server.BaseHTTPRequestHandler):
@@ -114,7 +126,10 @@ class FaxServer:
         port: int = 8093,
         pool_size: int = POOL_SIZE,
         backlog: int = BACKLOG,
+        bind: bool = True,
     ) -> None:
+        """``bind=False`` builds the server without binding its socket: tests drive
+        ``process_request`` over AF_UNIX socketpairs, since no test may open a TCP port."""
         self.config = config
         capacity = pool_size + backlog
         self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=pool_size)
@@ -154,7 +169,8 @@ class FaxServer:
                     sem.release()
 
         outer_pool = self._pool
-        self._httpd = _PooledHTTPServer((host, port), _ConfiguredHandler)
+        self._httpd = _PooledHTTPServer((host, port), _ConfiguredHandler,
+                                        bind_and_activate=bind)
 
     def serve_forever(self) -> None:
         try:
@@ -165,6 +181,11 @@ class FaxServer:
     def shutdown(self) -> None:
         self._httpd.shutdown()
         self._pool.shutdown(wait=False)
+
+    def close(self) -> None:
+        """Release the pool and the socket without a serve loop; shutdown() waits for one."""
+        self._pool.shutdown(wait=True)
+        self._httpd.server_close()
 
     @property
     def server_address(self) -> tuple[str, int]:
