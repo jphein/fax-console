@@ -607,7 +607,9 @@ def shadow_findings(paths):
     hits = []
     for p in paths:
         parts = p.split("/")
-        if "/".join(parts[:-1]) in PATH_DIRS and module_of(parts[-1]) in STDLIB:
+        if "/".join(parts[:-1]) in PATH_DIRS and (module_of(parts[-1]) in STDLIB or parts[-1] in STDLIB):
+            # the bare name too: a symlink named json that points at a package directory is imported as
+            # json, and git lists it as the path "json", not as a directory (the Oracle, PR #9)
             hits.append(f"{p}: [stdlib-shadow]")
         elif (len(parts) >= 2 and module_of(parts[-1]) == "__init__" and "/".join(parts[:-2]) in PATH_DIRS
               and parts[-2] in STDLIB):

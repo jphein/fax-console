@@ -94,8 +94,12 @@ ro=()
 # Read-only inside the sandbox: the frozen baseline, git, the guard, the tooling and the evidence; and
 # every path the HOST later executes or sends (the Oracle via Aurora, PR #8 S2). That covers
 # docs/deck (build.sh runs fill.py on the host), docs/video (narration.mjs), demo/ (the test page the
-# host faxes to a public inbox) and scratch/ (the orchestrators' scripts). A path missing at start is
-# skipped. Bob can still create one, but nothing on the host runs a scratch/ that it did not write.
+# host faxes to a public inbox) and scratch/ (the orchestrators' scripts). The three tracked ones are
+# made first if they are missing, so they are always bound. Otherwise Bob could create docs/deck/fill.py
+# in a tree that lacked the directory, and a later host build would run it (the Oracle, PR #9). scratch/
+# is bound whenever it exists. The orchestrators keep theirs outside Bob's view, and nothing on the host
+# runs a scratch/ it did not write.
+for p in docs/deck docs/video demo; do mkdir -p "$root/$p"; done
 for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs \
          docs/deck docs/video demo scratch; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
