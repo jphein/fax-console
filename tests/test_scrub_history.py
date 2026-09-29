@@ -178,6 +178,37 @@ def test_a_module_named_like_the_standard_library_is_a_finding(repo):
     assert "json.py: [stdlib-shadow]" in scrub(repo, "--staged").stdout
 
 
+def test_a_sourceless_pyc_or_extension_shadows_too_even_when_git_ignores_it(repo):
+    """Python imports what is on disk: a json.pyc that .gitignore hides still shadows json for
+    `python -m` at the root (the Oracle via Aurora, PR #8). Bytecode in __pycache__ never does."""
+    commit(repo, ".gitignore", "*.pyc\n*.so\n__pycache__/\n", "ignore bytecode")
+    for rel in ("json.pyc", "re.cpython-314-x86_64-linux-gnu.so", "tests/subprocess.pyc",
+                "scripts/hashlib/__init__.pyc", "__pycache__/json.cpython-314.pyc", "faxcli/json.pyc",
+                "mymod.pyc"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_bytes(b"\x00fake bytecode")
+    r = scrub(repo)
+    flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
+    assert flagged == {"json.pyc", "re.cpython-314-x86_64-linux-gnu.so", "tests/subprocess.pyc",
+                       "scripts/hashlib/__init__.pyc"}, r.stdout
+    git(repo, "add", "-f", "json.pyc")
+    assert "json.pyc: [stdlib-shadow]" in scrub(repo, "--staged").stdout
+
+
+def test_a_symlink_named_like_the_standard_library_is_a_finding(repo):
+    """A committed symlink json -> an in-repo package is imported as json from the root, and git lists
+    it as the bare path "json" (the Oracle, PR #9). A symlink with another name is fine."""
+    (repo / "pkg").mkdir()
+    (repo / "pkg" / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "json").symlink_to("pkg")
+    (repo / "mymod").symlink_to("pkg")
+    r = scrub(repo)
+    flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
+    assert flagged == {"json"}, r.stdout
+    git(repo, "add", "json", "mymod", "pkg/__init__.py")
+    assert "json: [stdlib-shadow]" in scrub(repo, "--staged").stdout
+
+
 def test_the_gate_never_imports_a_module_planted_in_the_repo(repo):
     marker = repo.parent / "imported"
     for name in ("json", "re", "subprocess", "hashlib", "os"):
