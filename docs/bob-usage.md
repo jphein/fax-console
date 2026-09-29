@@ -144,6 +144,21 @@ before it edits them. 3 would likely stop mid-fix again.
     .git/index.lock: Read-only file system"), so the owner's uncommitted work was never at risk.
     The hook guard now refuses every git subcommand that isn't read-only, which gives the same
     answer earlier.
+- **The independent review of the PR** (a read-only reviewer agent) found three more, all fixed before merge:
+  - **A failed `sudo install` was reported as success.** Bob's code. `spool()` discarded the result, so
+    `send` would dial a TIFF that never reached the spool. Legacy aborted there. Fixed by the reviewer,
+    with two tests, each proven by a perturbation.
+  - **Two false negatives in the scrub gate's new JSON mode**, both the orchestrator's own: a value
+    hidden behind a duplicate JSON key, and an address right after a diff's "+". Fixed with regression
+    cases.
+  - **The conftest subprocess guard could be swallowed** by production code's `except Exception`. It
+    now uses `pytest.fail`, a positive control proves it fires, and a blind half-probe is fixed.
+- **Kept for week 2** (review items that are real but not blocking):
+  - legacy behaviours the port kept on purpose, now candidates for deliberate fixes like finding A:
+    a failed originate still reports `ok: true`; a failed "before" stats read counts the delta from
+    zero; an empty CDR `file` matches any send;
+  - hardening: `mktemp` for temp paths, `--` before the ssh host, the ignored CDR `limit` on the local
+    path.
 - **Cost.** 6.03 and 5.16. Each run spent its full cap. Fresh runs re-read the package, so
   targeted follow-ups by the reviewer are cheaper for small fixes.
 
