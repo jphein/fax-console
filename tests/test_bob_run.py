@@ -325,3 +325,155 @@ def test_the_real_sandbox_refuses_a_bad_log_directory_before_touching_anything(t
     assert r.returncode == 2 and "refusing:" in r.stderr, r.stderr
     assert not (repo / ".bob").exists()                                 # refused before anything was made
     assert sorted(p.name for p in logs.iterdir()) == ["taken"]
+
+
+@pytest.mark.parametrize("rel,target", [
+    ("scratch", ".."), ("docs/deck", "../.."), ("docs", ".."), (".venv", ".."),
+    (".bob/guard.log", "../../x"), (".bob/tmp", "../.."),
+])
+def test_the_real_sandbox_refuses_a_symlinked_bind_path(tmp_path, rel, target):
+    """bubblewrap follows a symlink at a bind path: `scratch -> ..` showed Bob the directory above the repo
+    (the Oracle, PR #10). The real scripts/bob-sandbox.sh must refuse such a tree before making anything."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).symlink_to(target)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / "state"), HOME=str(tmp_path))
+    r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                       text=True, timeout=60, check=False)
+    assert r.returncode == 2 and "is a symlink" in r.stderr, r.stderr
+    assert not (repo / ".bob" / "tmp").is_dir() or rel == ".bob/tmp"    # refused before anything was made
+    assert not (tmp_path / "x").exists()                                # nothing touched through the link
+
+
+def test_the_sandbox_mounts_scratch_as_an_empty_tmpfs_and_binds_no_symlink(tmp_path):
+    """The real scripts/bob-sandbox.sh, with a fake sudo first on PATH that records the bwrap argv (the
+    Oracle's CI recipe). scratch/ must be an empty read-only tmpfs, never a bind of the host's scratch/, and
+    no --bind/--ro-bind source under the repo may be a symlink."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    argv = tmp_path / "argv"
+    (fake / "sudo").write_text(f"#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > {argv}\n",
+                               encoding="utf-8")
+    (fake / "sudo").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / "state"), HOME=str(tmp_path), PATH=f"{fake}:{env['PATH']}")
+    r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                       text=True, timeout=60, check=False)
+    assert r.returncode == 0 and argv.exists(), r.stderr
+    a = argv.read_text(encoding="utf-8").splitlines()
+    root = str(repo.resolve())
+    at = [j for j, x in enumerate(a) if x == "--tmpfs" and a[j + 1] == f"{root}/scratch"]
+    assert len(at) == 1 and a[at[0] + 2:at[0] + 4] == ["--remount-ro", f"{root}/scratch"], a
+    binds = [a[j + 1] for j, x in enumerate(a) if x in ("--bind", "--ro-bind")]
+    assert f"{root}/scratch" not in binds                              # never the host's scratch/
+    assert all(not Path(s).is_symlink() for s in binds if s.startswith(root)), binds
+    assert (repo / "scratch").is_dir() and not any((repo / "scratch").iterdir())
+
+
+def test_bob_run_refuses_a_symlinked_guard_log_before_emptying_anything(box, tmp_path):
+    """bob-run.sh empties .bob/guard.log on the host before the run: a planted link there must be refused
+    first, or the linked host file is truncated (the Oracle ab7e64d, PR #14)."""
+    repo = box[0]
+    victim = tmp_path / "host-file.txt"
+    victim.write_text("keep me\n", encoding="utf-8")
+    g = repo / ".bob" / "guard.log"
+    if g.exists() or g.is_symlink():
+        g.unlink()
+    g.symlink_to(victim)
+    r = run(box, "5", "demo", "3")
+    assert r.returncode == 2 and "is a symlink" in r.stderr, r.stderr
+    assert victim.read_text(encoding="utf-8") == "keep me\n" and not stub_ran(box) and row(box, 5) is None
+
+
+SKELETON_DIRS = ("legacy", ".github", ".venv", "docs/bob-runs")
+SKELETON_FILES = ("AGENTS.md", "BASELINE.md", "LICENSE", "docs/bob-usage.md")
+
+
+def sandbox_repo(tmp_path, name):
+    """A throwaway repo with every read-only path present, the real bob-sandbox.sh and a fake sudo that
+    records bwrap's argv. Returns (repo, env, argv file)."""
+    repo = tmp_path / name / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    for d in SKELETON_DIRS:
+        (repo / d).mkdir(parents=True, exist_ok=True)
+    for f in SKELETON_FILES:
+        (repo / f).write_text("x\n", encoding="utf-8")
+    fake = tmp_path / name / "bin"
+    fake.mkdir()
+    argv = tmp_path / name / "argv"
+    (fake / "sudo").write_text(f"#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > {argv}\n",
+                               encoding="utf-8")
+    (fake / "sudo").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / name / "state"), HOME=str(tmp_path / name),
+               PATH=f"{fake}:{env['PATH']}")
+    return repo, env, argv
+
+
+def sandbox(repo, env):
+    return subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                          text=True, timeout=60, check=False)
+
+
+def test_every_bind_source_under_the_repo_is_refused_as_a_symlink(tmp_path):
+    """Generic: record every --bind/--ro-bind source under the repo from a clean start, then plant a symlink
+    at each one in turn; each start must be refused before bwrap. A bind added to the script without a
+    symlink check fails here (the Oracle ab7e64d, PR #14). The repo root, .git and scripts/ are excluded,
+    since this test needs them real to run at all; the check still covers them."""
+    repo, env, argv = sandbox_repo(tmp_path, "clean")
+    assert sandbox(repo, env).returncode == 0
+    a = argv.read_text(encoding="utf-8").splitlines()
+    root = str(repo.resolve())
+    mounts = ("--bind", "--ro-bind", "--tmpfs")
+    rels = sorted({a[j + 1][len(root) + 1:] for j, x in enumerate(a)
+                   if x in mounts and a[j + 1].startswith(root + "/")} - {".git", "scripts"})
+    must = {"docs", "scratch", ".bob", ".bob/guard.log", ".bob/tmp", "docs/deck", "demo", ".venv"}
+    assert must <= set(rels), rels
+    for k, rel in enumerate(rels):
+        r2, e2, argv2 = sandbox_repo(tmp_path, f"t{k}")
+        target = r2 / rel
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.symlink_to(tmp_path / "elsewhere")
+        r = sandbox(r2, e2)
+        assert r.returncode == 2 and "is a symlink" in r.stderr and not argv2.exists(), (rel, r.stderr)
+
+
+@pytest.mark.parametrize("rel", ["5-demo.jsonl", "5-demo.guard.jsonl"])
+def test_a_dangling_link_at_a_recording_is_refused_before_the_run(box, rel):
+    """Runs are append-only, and `[ -e ]` misses a dangling symlink; cp would refuse it only after Bob ran and
+    spent (the Oracle ab7e64d, PR #14). bob-run.sh must refuse it before anything runs."""
+    (box[0] / "docs" / "bob-runs" / rel).symlink_to(box[2] / "nowhere")
+    r = run(box, "5", "demo", "3")
+    assert r.returncode == 2 and "append-only" in r.stderr, r.stderr
+    assert not stub_ran(box) and row(box, 5) is None
+
+
+def test_the_recheck_before_bwrap_catches_a_swap_during_setup(tmp_path):
+    """The Oracle's reproducer (ab7e64d, PR #14): a fake python3 first on PATH, the one the policy check runs
+    mid-setup, turns .bob/tmp into `-> ../..` after the first check. Only the re-check right before bwrap can
+    refuse it; without that check, bwrap would get a writable bind of the directory above the repo."""
+    repo, env, argv = sandbox_repo(tmp_path, "swap")
+    fake = Path(env["PATH"].split(":")[0])
+    mark = tmp_path / "swapped"
+    (fake / "python3").write_text(
+        "#!/bin/sh\n"
+        f"if [ ! -e {mark} ]; then rm -rf .bob/tmp; ln -s ../.. .bob/tmp; : > {mark}; fi\n"
+        'exec /usr/bin/python3 "$@"\n', encoding="utf-8")
+    (fake / "python3").chmod(0o755)
+    r = sandbox(repo, env)
+    assert mark.exists(), "the swap never ran: the test would prove nothing"
+    assert r.returncode == 2 and "is a symlink" in r.stderr and not argv.exists(), r.stderr
