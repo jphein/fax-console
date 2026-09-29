@@ -103,7 +103,11 @@ def log(verdict, tool, detail):
         pass
 
 
+MARKER = "sandbox guard: "   # on every refusal: scripts/redact-refused.py keys on it (the review of PR 8)
+
+
 def deny(tool, reason):
+    reason = MARKER + reason
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
                                              "permissionDecisionReason": reason}}))
     print(reason, file=sys.stderr)
@@ -144,7 +148,8 @@ def shadows_stdlib(rel):
         head, name = "/".join(parts[:depth - 1]), parts[depth - 1]
         if head not in SHADOW_DIRS:
             continue
-        stem = name[:-3] if name.endswith(".py") else (name if len(parts) > depth else None)
+        stem = (name[:-3] if name.endswith(".py") else name[:-4] if name.endswith(".pyc")
+                else (name if len(parts) > depth else None))
         if stem and stem in STDLIB:
             return True
     return False
@@ -152,7 +157,11 @@ def shadows_stdlib(rel):
 
 # A token starts at a path boundary: never right after "/" or ".", or "faxcli/numbers.py" would read as
 # a root-level numbers.py.
-SHADOW_TOKEN = re.compile(r"(?<![\w./-])((?:\./)?(?:tests/|scripts/)?[A-Za-z_][\w]*(?:\.py|/__init__\.py))")
+SHADOW_TOKEN = re.compile(r"(?<![\w./-])((?:\./)?(?:tests/|scripts/)?[A-Za-z_][\w]*(?:\.pyc?|/__init__\.py))")
+# Only a command that can create or rename a file is checked. A read such as `grep numbers.py docs/x.md`
+# is not
+# (the review of PR 8 found that false positive).
+WRITES = re.compile(r"(?:^|[\s;&|(])(?:cp|mv|install|ln|touch|tee|dd|rsync|tar|unzip|git|python3?|sed)\b|>")
 # Bob's own configuration: a gateway planted in its settings would carry the API key elsewhere, within a
 # run or into the next one (the independent review, 9/29). Nothing in this repository needs to touch it.
 BOB_CONFIG = re.compile(r"(?i)gateway_?url|BOB_GATEWAY|VITE_GATEWAY|\.bob/settings|trustedFolders|"
@@ -174,12 +183,12 @@ def main():
     try:
         if DENY_TOOLS.search(tool):
             deny(tool, f"{tool} is disabled in this repository (no web, MCP or skill use)")
-        if BOB_CONFIG.search(json.dumps(args)):
+        if BOB_CONFIG.search(json.dumps([*strings(args, PATH_KEYS), args.get("command") or ""])):
             deny(tool, "refused: Bob's own configuration (its settings, policy or gateway) is off-limits "
                        "in this repository")
         if "command" in args and isinstance(args.get("command"), str):
             cmd = args["command"]
-            for tok in SHADOW_TOKEN.findall(cmd):
+            for tok in (SHADOW_TOKEN.findall(cmd) if WRITES.search(cmd) else ()):
                 if shadows_stdlib(tok):
                     deny(tool, f"command refused: {tok} would shadow a standard-library module")
             if DENY_COMMAND.search(cmd):

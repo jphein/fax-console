@@ -25,6 +25,8 @@ testpaths = ["tests"]
 markers = [
     "allow_subprocesses: permit subprocess.run calls (test installs its own fake)",
 ]
+# A thread that dies of an exception, a network guard trip included, fails the run (the review of PR 8).
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.ruff]
 line-length = 110

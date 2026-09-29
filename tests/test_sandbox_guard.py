@@ -60,6 +60,9 @@ ALLOWED = [
     {"tool_name": "write_file", "tool_input": {"path": "tests/test_json_shapes.py", "content": "x = 1"}},
     {"tool_name": "write_file", "tool_input": {"path": "faxcli/phone_numbers.py", "content": "x = 1"}},
     cmd("cp faxcli/numbers.py faxcli/phone_numbers.py"),
+    # the review of PR 8: reads and harmless mentions are not refused
+    cmd("grep -n numbers.py docs/changes.md"),
+    {"tool_name": "write_file", "tool_input": {"path": "docs/x.json", "content": '{"gatewayUrl": "https://gw.example.net"}'}},
     cmd("python3 -m pytest -q"),
     cmd(".venv/bin/python -m pytest tests/test_x.py -q"),
     cmd(".venv/bin/ruff check faxcli tests"),
@@ -84,10 +87,11 @@ REFUSED = [
     {"tool_name": "rename_file", "tool_input": {"path": "notes.py", "target": "json.py"}},
     cmd("cp faxcli/numbers.py json.py"),
     cmd("touch tests/subprocess.py"),
+    {"tool_name": "write_file", "tool_input": {"path": "json.pyc", "content": "x"}},     # a sourceless shadow
+    cmd("cp faxcli/numbers.py re.pyc"),
     # Bob's own configuration: a planted gateway would carry the API key elsewhere
     cmd("cd && cat .bob/settings/settings.json"),
     cmd("echo gatewayUrl=local > s.cfg"),              # URL-free: this rule alone must refuse it
-    {"tool_name": "write_file", "tool_input": {"path": "docs/x.json", "content": '{"gatewayUrl": "https://gw.example.net"}'}},
     cmd("BOB_GATEWAY_URL=local true"),
     cmd("ssh pbx asterisk -rx 'fax show stats'"),
     cmd("echo x; curl http://example.com"),
@@ -202,3 +206,15 @@ def test_scrub_check_json_false_negatives(tmp_path, env, name, payload, expect):
     f.write_text(payload + "\n")
     r = subprocess.run([SCRUB, "--paths", str(f)], capture_output=True, env=env, timeout=30, check=False)
     assert r.returncode == expect, r.stdout.decode()
+
+
+def test_every_refusal_carries_the_stable_marker(env):
+    """scripts/redact-refused.py keys on this marker, so a new rule's refusals are redacted too
+    (the review of PR 8)."""
+    payload = json.dumps(cmd("cd && cat .bob/settings/settings.json")).encode()
+    r = subprocess.run([sys.executable, GUARD], input=payload, capture_output=True, env=env, timeout=30,
+                       check=False)
+    assert r.returncode != 0
+    assert r.stderr.decode().startswith("sandbox guard: ")
+    reason = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert reason.startswith("sandbox guard: ")
