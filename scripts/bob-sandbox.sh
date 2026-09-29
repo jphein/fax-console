@@ -9,7 +9,7 @@
 #   filesystem (bubblewrap): the repo read-write, except legacy/ .git/ .bob/ scripts/ .github/
 #     .venv/ AGENTS.md BASELINE.md LICENSE (read-only); /usr read-only; a minimal /etc (CA
 #     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a clean
-#     HOME that holds only Bob's own settings. The owner's real home is not visible at all: no
+#     HOME that holds only Bob's own settings; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
 #   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges and ALL of IPv6 denied,
 #     except the local DNS stub; the public IPv4 internet stays open so Bob can reach its API. The PBX and every
@@ -71,7 +71,8 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     "${etc[@]}" --ro-bind "$resolv" /etc/resolv.conf \
     --ro-bind "$rt/passwd" /etc/passwd --ro-bind "$rt/group" /etc/group \
     --bind "$bob_home" /home/bob \
-    --ro-bind "$HOME/.npm-global" "$HOME/.npm-global" \
+    --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
+    --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
     --bind "$root" "$root" "${ro[@]}" \
     --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \

@@ -35,7 +35,12 @@ DENY_TOOLS = re.compile(r"web_fetch|web_search|browser|mcp|use_skill", re.IGNORE
 DENY_COMMAND = re.compile(
     r"(?:^|[\s;&|()`$])(?:ssh|scp|sftp|rsync|curl|wget|nc|ncat|telnet|ftp|sudo|su|doas|gh|asterisk|fax|"
     r"systemctl|docker|podman|apt|apt-get|dpkg|snap|npm|npx|pnpm|yarn|brew|pipx|bob|bobide)(?=$|[\s;&|()`])"
-    r"|\bgit\s+(?:push|pull|fetch|clone|remote|config|submodule|credential|send-email|commit|tag|reset|checkout|rebase)\b"
+    # git: read-only subcommands only, and no options before the subcommand (`git -c core.pager=…`
+    # or `-C dir` would run a command or leave the repo). The sandbox's read-only .git is the real
+    # control; this refusal just says so early. (`git stash` reached the sandbox once and failed there.)
+    r"|\bgit\s+-"
+    r"|\bgit\s+(?!(?:status|diff|log|show|blame|ls-files|ls-tree|rev-parse|grep|shortlog|describe"
+    r"|cat-file)\b)\S"
     r"|\bpip3?\s+(?:install|download)\b|\bpython3?\s+-m\s+pip\s+(?:install|download)\b"
     r"|\buv\s+(?:pip|add|sync|run)\b|/dev/tcp/|\bsocket\.|\burllib\.request|\bhttp\.client|\brequests\.",
     re.IGNORECASE)
@@ -60,7 +65,8 @@ def runs_live_code(cmd):
         if os.path.basename(exe) in ("fax", "faxcli", "fax-console") and len(words) > 1 \
                 and words[1] in ("send", "status", "log", "test", "inbox", "serve"):
             return True
-        if os.path.basename(exe).rstrip("0123456789.") in INTERPRETERS or os.path.basename(exe).startswith("python"):
+        base = os.path.basename(exe)
+        if base.rstrip("0123456789.") in INTERPRETERS or base.startswith("python"):
             rest = words[1:]
             if "-m" in rest:
                 k = rest.index("-m")
@@ -74,20 +80,25 @@ def runs_live_code(cmd):
                 return True
     return False
 # Path-like tokens in a command line: absolute, home-relative, or climbing out with "..".
-PATH_TOKEN = re.compile(r"(?:(?<=^)|(?<=[\s='\"(:]))(~[^\s'\";&|)]*|\$HOME[^\s'\";&|)]*|/[^\s'\";&|)]*|\.\.(?:/[^\s'\";&|)]*)?)")
+PATH_TOKEN = re.compile(r"(?:(?<=^)|(?<=[\s='\"(:]))"
+                        r"(~[^\s'\";&|)]*|\$HOME[^\s'\";&|)]*|/[^\s'\";&|)]*|\.\.(?:/[^\s'\";&|)]*)?)")
 SYSTEM_OK = ("/usr/", "/bin/", "/dev/null")      # interpreters and the bit bucket
 PROTECTED = ("legacy/", ".git/", ".bob/", "scripts/", "AGENTS.md", "BASELINE.md", "LICENSE")
-WRITE_TOOL = re.compile(r"write|apply|insert|replace|edit|delete|remove|move|rename|create|patch", re.IGNORECASE)
-PATH_KEYS = ("path", "file_path", "filepath", "target_file", "file", "paths", "files", "target", "destination",
+WRITE_TOOL = re.compile(r"write|apply|insert|replace|edit|delete|remove|move|rename|create|patch",
+                        re.IGNORECASE)
+PATH_KEYS = ("path", "file_path", "filepath", "target_file", "file", "paths", "files", "target",
+             "destination",
              "source", "directory", "dir", "cwd")
-CONTENT_KEYS = ("content", "contents", "diff", "patch", "new_str", "new_string", "text", "replace", "replacement",
+CONTENT_KEYS = ("content", "contents", "diff", "patch", "new_str", "new_string", "text", "replace",
+                "replacement",
                 "new_content", "code", "search_and_replace", "edits", "operations", "lines")
 
 
 def log(verdict, tool, detail):
     try:
         with open(LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"hook": "tool_guard", "verdict": verdict, "tool": tool, "detail": detail[:300]}) + "\n")
+            rec = {"hook": "tool_guard", "verdict": verdict, "tool": tool, "detail": detail[:300]}
+            f.write(json.dumps(rec) + "\n")
     except OSError:
         pass
 
@@ -135,7 +146,8 @@ def main():
         if "command" in args and isinstance(args.get("command"), str):
             cmd = args["command"]
             if DENY_COMMAND.search(cmd):
-                deny(tool, "command refused: no network, remote, privileged, PBX, package-install or git-history "
+                deny(tool, "command refused: no network, remote, privileged, PBX, package-install or "
+                           "git-writing "
                            "commands in this repository (tests, ruff and read-only git are fine)")
             if runs_live_code(cmd):
                 deny(tool, "command refused: running the legacy code or the fax CLI would reach a PBX; "
@@ -147,7 +159,8 @@ def main():
                         deny(tool, "command refused: it names the filesystem root")
                     continue
                 if not inside(t)[0]:
-                    deny(tool, "command refused: it names a path outside the repository (use repo-relative paths)")
+                    deny(tool, "command refused: it names a path outside the repository "
+                               "(use repo-relative paths)")
         is_write = bool(WRITE_TOOL.search(tool))
         for p in strings(args, PATH_KEYS):
             if not p.strip():
@@ -156,7 +169,8 @@ def main():
             if not ok:
                 deny(tool, "path refused: outside the repository")
             if is_write and (rel.startswith(PROTECTED) or (rel + "/").startswith(PROTECTED)):
-                deny(tool, f"write refused: {rel} is protected (frozen baseline, git internals, or this guard)")
+                deny(tool, f"write refused: {rel} is protected "
+                           "(frozen baseline, git internals, or this guard)")
         if is_write:
             body = "\n".join(strings(args, CONTENT_KEYS))
             if body:

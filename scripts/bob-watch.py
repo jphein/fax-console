@@ -47,7 +47,8 @@ def main():
                 print(f"{R}  ✗ {short((e.get('error') or {}).get('message', e.get('error')))}{X}")
         elif t == "result":
             s = e.get("stats") or {}
-            print(f"{B}■ {e.get('status')} · cost {s.get('session_costs')} · {s.get('tool_calls')} tool calls · "
+            print(f"{B}■ {e.get('status')} · cost {s.get('session_costs')} · "
+                  f"{s.get('tool_calls')} tool calls · "
                   f"{round((s.get('duration_ms') or 0) / 1000)}s · task {s.get('task_id')}{X}")
     if buf.strip():
         print(G + textwrap.fill(buf, W) + X)

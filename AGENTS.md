@@ -50,5 +50,8 @@ sandbox or in CI.
   (subprocess, ssh, files, clock). I/O goes behind small injectable seams, so tests never
   spawn a process.
 - Tests live in `tests/`, fixtures in `tests/fixtures/`, one fixture per recorded command
-  output. Run them with `python3 -m pytest -q`. Lint with `ruff check .`.
+  output. Inside the sandbox (as Bob): `.venv/bin/python -m pytest -q` and `.venv/bin/ruff check .`.
+  **On the workstation, only `scripts/test.sh`**, which runs both inside the sandbox. A test
+  suite executes whatever it contains, so agent-written tests never run unsandboxed there. CI runs
+  them on GitHub's disposable runners, which have no secrets and no route to the house network.
 - Docs go in `docs/`. Write plainly and cite the file and line you are describing.
