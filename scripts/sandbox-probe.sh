@@ -66,13 +66,24 @@ probe fail "replace docs/ by a rename"           "mv docs docs.old && { mv docs.
 # Writes outside the repo must never reach the host. The old form took its result from `echo x > /usr/probe`, which
 # the invoking uid cannot write on the host either, so it could never fail (the Oracle, PR #17). Now the writes are
 # attempted inside, and the HOST is checked afterwards.
+# A marker written into the repo (a legitimate write) proves the same sandbox run really made the attempts: a sandbox
+# that failed to start must not pass (the Oracle, PR #17).
 out_name=".sandbox-probe-outside-$$"
-outside=("$root/../$out_name" "/home/$(id -un)/$out_name" "/tmp/$out_name")
-for f in "${outside[@]}"; do [ ! -e "$f" ] || { echo "sandbox-probe: $f exists before the probe" >&2; exit 2; }; done
-scripts/bob-sandbox.sh bash -c 'for f in "$@"; do echo x 2>/dev/null > "$f"; done; true' _ "${outside[@]}" >/dev/null 2>&1
+ran="$root/.sandbox-probe-ran-$$"
+outside=("$root/../$out_name" "$HOME/$out_name" "/tmp/$out_name")
+for f in "${outside[@]}" "$ran"; do
+  if [ -e "$f" ] || [ -L "$f" ]; then echo "sandbox-probe: $f exists before the probe" >&2; exit 2; fi
+done
+scripts/bob-sandbox.sh bash -c 'm=$1; shift; for f in "$@"; do echo x 2>/dev/null > "$f"; done; echo ran > "$m"' _ \
+  "$ran" "${outside[@]}" >/dev/null 2>&1
 leaked=""
-for f in "${outside[@]}"; do [ ! -e "$f" ] || { leaked="$leaked $f"; rm -f "$f"; }; done
-if [ -z "$leaked" ]; then r=ok; pass=$((pass+1)); else r=WRONG; fail=$((fail+1)); fi
+for f in "${outside[@]}"; do
+  if [ -e "$f" ] || [ -L "$f" ]; then leaked="$leaked $f"; rm -f "$f"; fi
+done
+if [ ! -f "$ran" ]; then r=WRONG; fail=$((fail+1)); leaked=" (the sandbox never ran the attempt)"
+elif [ -z "$leaked" ]; then r=ok; pass=$((pass+1))
+else r=WRONG; fail=$((fail+1)); fi
+rm -f "$ran"
 printf '%-6s must fail  %s\n' "$r" "write outside the repo (checked on the host${leaked:+; leaked:$leaked})"
 # paths the host later executes or sends are read-only too (PR #8 S2)
 for d in docs/deck docs/video demo scratch; do
