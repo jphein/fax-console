@@ -932,7 +932,7 @@ class TestBuildReplayMode:
         from faxconsole.__main__ import build
         from faxconsole.routes import handle
 
-        config, cleanup = build(["--replay", "tests/fixtures"])
+        config, cleanup, _args = build(["--replay", "tests/fixtures"])
         try:
             response = handle("GET", "/api/voipms", {}, b"", config)
             assert response.status == 200
@@ -966,7 +966,7 @@ class TestBuildReplayMode:
 
         from faxconsole.__main__ import build
 
-        config, cleanup = build(["--replay", "tests/fixtures"])
+        config, cleanup, _args = build(["--replay", "tests/fixtures"])
         try:
             assert created_dirs  # a temp dir was created
             tmpdir = created_dirs[0]

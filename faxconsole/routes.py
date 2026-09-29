@@ -196,6 +196,7 @@ class Config:
     write_token: str | None = None   # if None, falls back to env
     replay: bool = False             # replay mode: POST /api/fax/send → dry run
     voipms: Any = None               # VoipMsPoller instance, or None
+    replay_root: str | None = None   # replay mode: the temp dir that runtime paths are shown relative to
 
     def __post_init__(self) -> None:
         from faxcli.transport import ReplayTransport  # noqa: PLC0415
@@ -394,18 +395,34 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
     if config.replay:
         r["replay"] = True
         r["detail"] = "replay: nothing is dialled"
-        # Mask runtime paths: replace temp-dir prefix with a neutral token
-        import os as _os  # noqa: PLC0415
-        _td = _os.path.commonpath([config.inbox, config.spool]) if config.spool else config.inbox
+        # The public demo never names the machine's directories (review of run 11): see _public_path.
         for _k in ("pdf", "tif"):
-            if _k in r and isinstance(r[_k], str) and r[_k].startswith(_td):
-                r[_k] = "replay:" + r[_k][len(_td):]
+            if isinstance(r.get(_k), str):
+                r[_k] = _public_path(config, r[_k])
     else:
         r["detail"] = (
             f"dialing {number} with {r.get('pages', '?')} page(s); the outcome appears in "
             "the log below when the call ends (judged by the fax counters, not the call disposition)"
         )
     return r
+
+
+def _public_path(config: Config, path: str) -> str:
+    """How a runtime path is shown. In replay mode, the public demo, a path under the replay root reads
+    "replay:/…" relative to it, and any other absolute path reads "replay:<name>". The machine's directories
+    never appear. Live mode, which only the LAN sees, shows paths as they are.
+
+    Review of run 11: the first version stripped os.path.commonpath([inbox, spool]). When those share only
+    "/", that strips a single slash, and "replay:tmp/…" still named the whole temp dir.
+    """
+    if not config.replay:
+        return path
+    root = (config.replay_root or "").rstrip(os.sep)
+    if root and (path == root or path.startswith(root + os.sep)):
+        return "replay:" + (path[len(root):] or "/")
+    if os.path.isabs(path):
+        return "replay:" + os.path.basename(path)
+    return path
 
 
 def _route_version(config: Config | None = None) -> Response:

@@ -110,9 +110,13 @@ class TestReplayIsolation:
         pdf_path = obj.get("pdf", "")
         assert not tif.startswith("/var"), f"tif {tif!r} under /var"
         assert not pdf_path.startswith("/var"), f"pdf {pdf_path!r} under /var"
-        # "not under /var" alone would pass for a write to any other real path
-        assert tif.startswith(str(tmp_path) + os.sep), f"tif {tif!r} outside the replay dir"
-        assert pdf_path.startswith(str(tmp_path) + os.sep), f"pdf {pdf_path!r} outside the replay dir"
+        # Since run 11 the response shows replay tokens, never a machine path (the public-demo rule)...
+        for shown in (tif, pdf_path):
+            assert shown.startswith("replay:"), shown
+            assert str(tmp_path).lstrip("/") not in shown, shown
+            # ...and "not under /var" alone would pass for any other real path: the file must be here
+            name = shown.split(":", 1)[1].rsplit("/", 1)[-1]
+            assert list(tmp_path.rglob(name)), f"{name} was not written under {tmp_path}"
 
 
 def dataclass_replace(cfg: Config, **changes) -> Config:

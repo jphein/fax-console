@@ -19,7 +19,7 @@ from faxconsole.routes import handle
 @pytest.fixture(scope="module")
 def replay_config():
     """Build a replay Config and clean up afterwards."""
-    config, cleanup = build(["--replay", "tests/fixtures"])
+    config, cleanup, _args = build(["--replay", "tests/fixtures"])
     try:
         yield config
     finally:

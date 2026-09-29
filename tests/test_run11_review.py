@@ -126,8 +126,7 @@ class TestMainBuild:
 
     def test_fax_server_raise_still_runs_cleanup(self, tmp_path):
         """If FaxServer.__init__ raises, main()'s finally must still call cleanup()."""
-        import sys
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         from faxconsole.__main__ import build
 
@@ -152,9 +151,8 @@ class TestMainBuild:
             return c, _watched_cleanup, a
 
         with patch.object(main_mod, "FaxServer", _raising_server), \
-             patch.object(main_mod, "build", _build_patched):
-            with pytest.raises(OSError, match="bind failed"):
-                main_mod.main(["--replay", str(FIXTURE_DIR)])
+             patch.object(main_mod, "build", _build_patched), pytest.raises(OSError, match="bind failed"):
+            main_mod.main(["--replay", str(FIXTURE_DIR)])
 
         assert cleaned_up.is_set(), "cleanup() was not called when FaxServer raised"
 
@@ -181,6 +179,7 @@ class TestReplaySpoolAlignment:
     def test_tif_lands_in_config_spool(self, tmp_path):
         """A replay send must write the TIFF into the directory named by Config.spool."""
         import json as _json
+
         from faxconsole.routes import handle as _handle
 
         cfg = _replay_config(tmp_path)

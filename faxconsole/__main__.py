@@ -85,6 +85,7 @@ def build(
             spool=spool_dir,
             replay=True,
             voipms=voipms_poller,
+            replay_root=tmpdir,
         )
 
         def _cleanup() -> None:

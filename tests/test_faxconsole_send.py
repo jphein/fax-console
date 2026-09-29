@@ -258,8 +258,12 @@ class TestSendReplayDryRun:
         r = self._replay_send(tmp_path)
         obj = json.loads(r.body)
         tif = obj.get("tif", "")
-        assert str(tmp_path) in tif, f"tif {tif!r} should be inside {tmp_path}"
-        assert "/var/spool" not in tif
+        # Since run 11 the response shows a replay token, never a machine path (the public-demo rule)...
+        assert tif.startswith("replay:"), tif
+        assert str(tmp_path).lstrip("/") not in tif and "/var/spool" not in tif, tif
+        # ...and the file itself was written under the replay directory.
+        name = tif.split(":", 1)[1].rsplit("/", 1)[-1]
+        assert list(tmp_path.rglob(name)), f"{name} was not written under {tmp_path}"
 
     def test_replay_pdf_written_in_inbox(self, tmp_path):
         self._replay_send(tmp_path)

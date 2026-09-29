@@ -71,7 +71,7 @@ def _make_config(tmp_path) -> Config:
 def _assert_clean(response_text: str, tmpdir: str, label: str) -> None:
     """Fail if *response_text* contains any forbidden runtime value."""
     # 1. Must not contain the temp-dir prefix
-    if tmpdir in response_text:
+    if tmpdir in response_text or tmpdir.lstrip("/") in response_text:   # with or without its first "/"
         pytest.fail(f"{label}: temp dir {tmpdir!r} leaked into response")
 
     # 2. Must not contain any absolute path under /tmp, /home, or /etc
@@ -186,3 +186,24 @@ class TestReplayPublicSurface:
             assert tmpdir not in val, (
                 f"field {field!r} must not contain the temp dir, got {val!r}"
             )
+
+
+def test_send_is_clean_when_inbox_and_spool_share_no_root(tmp_path):
+    """Review of run 11: masking by os.path.commonpath([inbox, spool]) strips only "/" when the two share
+    no directory, and "replay:tmp/..." still named the whole temp dir. Config's own default spool
+    (/var/spool/...) with an inbox under tmp_path is exactly that shape."""
+    spool = str(tmp_path / "spool")
+    os.makedirs(spool, exist_ok=True)
+    transport = ReplayTransport(fixture_dir=FIXTURE_DIR / "asterisk",
+                                cdr_path=FIXTURE_DIR / "cdr" / "Master.csv", spool_dir=spool)
+    cfg = Config(transport=transport, inbox=str(tmp_path / "inbox"), write_token=WRITE_TOKEN, replay=True)
+    boundary = "B1"
+    pdf = b"%PDF-1.4\n%demo\n"
+    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="number"\r\n\r\n2025550142\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="confirm"\r\n\r\nyes\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="doc.pdf"\r\n'
+            f'Content-Type: application/pdf\r\n\r\n').encode() + pdf + f"\r\n--{boundary}--\r\n".encode()
+    r = handle("POST", "/api/fax/send", {"content-type": f"multipart/form-data; boundary={boundary}",
+               "content-length": str(len(body)), "x-auth-token": WRITE_TOKEN}, body, cfg)
+    assert json.loads(r.body)["ok"] is True
+    _assert_clean(r.body.decode(), str(tmp_path), "send (no shared root)")
