@@ -3,9 +3,12 @@
 This file records every Bob run on this project: the prompt, what Bob produced, what was
 kept, what was changed or rejected and why, and what it cost. It is the evidence for "Bob as
 a core part of the workflow". Each run's raw record is kept under
-[`docs/bob-runs/`](bob-runs/). The records are verbatim except for two mechanical rewrites
-made before publishing: the absolute repo path became `.`, and two cellular endpoint names
-match the rebuilt baseline.
+[`docs/bob-runs/`](bob-runs/). The records are verbatim except for mechanical rewrites made
+before publishing:
+- the absolute repo path became `.`, and the workstation's home directory became `~`;
+- the content of any write the sandbox guard refused is replaced by a placeholder, because that
+  content is exactly what the guard keeps out; the tool name, path and reason stay;
+- two cellular endpoint names match the rebuilt baseline.
 
 | File | Contents |
 |---|---|
@@ -31,7 +34,7 @@ match the rebuilt baseline.
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    31 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    35 probes. One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
@@ -46,7 +49,11 @@ match the rebuilt baseline.
     so Bob hears a clear reason, and it logs every decision.
   - An independent review showed that a regex over a shell command can be evaded (quoting,
     absolute paths, `python -c`). That is why the OS sandbox exists.
-  - [`tests/test_sandbox_guard.py`](../tests/test_sandbox_guard.py) has 56 cases.
+  - [`tests/test_sandbox_guard.py`](../tests/test_sandbox_guard.py) has 65 cases.
+- **Tests run only inside the sandbox** ([`scripts/test.sh`](../scripts/test.sh)), and
+  [`tests/conftest.py`](../tests/conftest.py) fails any test that spawns a process or binds or
+  connects an IP socket. The sandbox's packet filter cannot see a bind, and it lets the public
+  internet through for Bob's own API, so the "no TCP, no network" rule for tests is enforced there.
 - **The orchestrating agent (Claude) reviews everything Bob writes.** It checks claims against
   the code and records corrections here. Nothing Bob writes is committed unread.
 - **Commits whose content Bob wrote carry an `Assisted-by: IBM Bob` trailer**, so
@@ -69,8 +76,14 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 23:19 | 5 | `eded36dd` | the review fixes and transport tests | kept; `git stash` refused by the sandbox (23:24:32) | 5.165 |
 | 23:57 | 6 | `262e87a5` | the `faxconsole` core (week 2 begins) and 103 tests | kept; review items go to run 7 | 8.022 |
 
+**Tue 2026-09-29** (day 2)
+
+| Time (PDT) | Run | Bob task | What Bob did | Outcome | Bobcoins |
+|---|---|---|---|---|---|
+| 00:13 | 7 | `0b7f46c4` | run 6's review items (replay isolation, typed send API, bounded queue) and the VoIP.ms poller | Part 1 kept; the poller's tests were refused by the guard, so run 8 finishes it | 10.225 |
+
 ## Ledger
-Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 50 for the month.
+Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below the table.
 
 | # | Date (PDT) | Task | Bob's output | Tool calls | Cost | Kept / changed |
 |---|---|---|---|---|---|---|
@@ -82,8 +95,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 | 4 | 9/28 23:02 | [The faxcli package](bob-runs/4-faxcli-package.prompt.md) | `faxcli/` (9 modules, ~905 lines), `pyproject.toml`, 121 tests (unit, golden, characterization) | 58 | 6.027 | Architecture kept. Review found 2 production regressions and 5 more defects (run 5) |
 | 5 | 9/28 23:19 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
 | 6 | 9/28 23:57 | [The faxconsole core](bob-runs/6-faxconsole-core.prompt.md) | `faxconsole/` (888 lines): pure `handle()`, PBX readers, the write gate, a pooled server, sigil; 103 tests | 62 | 8.022 | Kept. Review: replay mode lacks a temp spool/inbox; send still parses CLI output; `--ssh` pins the host (run 7) |
+| 7 | 9/29 00:13 | [Run 6's review and the VoIP.ms poller](bob-runs/7-voipms-and-replay.prompt.md) | replay temp dir, `Config(replay=True)` check, `--ssh` host, `faxcli/api.py` (typed send), a bounded queue with 503; `faxconsole/voipms.py` (391 lines), 3 synthesized fixtures, `GET /api/voipms`; 16 tests | 69 | 10.225 | Part 1 kept. Review: the 503 test bound TCP and was vacuous, and the 503 was lost to a reset (fixed by the reviewer). The poller's tests were refused by the guard; run 8 finishes them |
 
-**Running total: 22.42 Bobcoins** (after run 6). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 32.65 Bobcoins** (after run 7). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
@@ -97,6 +111,12 @@ mid-way would have to re-read everything on resume, which costs more than the he
 **Cap for run 5 (review fixes): 5.** Run 4 spent its full 6 and stopped before its own lint and
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
+
+**Cap for run 8 (finish the VoIP.ms port): 7.** Run 7 spent 0.15 per tool call. Run 8 re-reads
+about 900 lines (the poller, the legacy poller and the legacy-import pattern), then writes about 400
+lines of tests and a small refactor of `__main__`, and iterates: an estimated 45 tool calls. The
+prompt asks for a work log after each item, because runs 4–7 all ended at their cap before their
+final summary; Bob Shell does not show the model its own spend.
 
 **Cap for run 7 (the VoIP.ms poller plus run 6's review items): 10.** Runs 4–6 each spent their full
 cap (6, 5, 8). Run 7 combines two planned pieces of work to avoid a second full re-read, so it is
@@ -184,10 +204,62 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
 - **Cost.** 6.03 and 5.16. Each run spent its full cap. Fresh runs re-read the package, so
   targeted follow-ups by the reviewer are cheaper for small fixes.
 
+### Runs 6 and 7: the service
+- **What Bob did.** Run 6 extracted the Fax panel's back end and the PBX status readers into
+  `faxconsole/`:
+  - a pure `handle(method, path, headers, body)`, and an `http.server` adapter on a fixed pool of
+    8 workers (analysis finding F);
+  - the PBX readers over faxcli `Reading`s, keeping the legacy meaning of "not probed";
+  - the write gate (token, confirm, size, PDF), the realm-sigil version contract, and replay mode;
+  - 103 tests, driven through `handle()` and over AF_UNIX socketpairs, with characterization
+    against the frozen legacy readers.
+
+  Run 7 worked through run 6's review, then started the VoIP.ms poller:
+  - replay mode uses one temp dir, and `Config(replay=True)` refuses a live transport;
+  - `faxcli/api.py`, a typed `send()`, so the console no longer parses the CLI's printed JSON;
+  - a bounded queue: 8 workers plus 4 waiting, and then a 503 with `Retry-After`;
+  - `faxconsole/voipms.py`, the poller with injectable I/O, and three synthesized fixtures.
+- **Kept.**
+  - Run 6's design.
+  - Run 7's Part 1.
+  - The poller's port, which keeps every legacy rule in its comments.
+- **Rejected or fixed, with reasons.**
+  - **Run 6: four review items, all fixed in run 7.**
+    - Replay dry runs rendered into the real spool path, and uploads went to a permanent inbox.
+    - `--ssh` pinned the host.
+    - The console still built an `argparse.Namespace` and parsed printed JSON.
+    - The queue was unbounded.
+  - **Run 7's over-capacity test bound a TCP socket,** which the rules forbid. It passed only
+    because the sandbox filters packets, not binds. It was also vacuous: it wrote the 503 by hand
+    and never went through the capacity check.
+    - The reviewer replaced it with tests that hand `process_request` one end of a socketpair.
+    - conftest now fails any test that binds or connects an IP socket. Bob's test was the only one
+      of 321 to go red under the new guard.
+  - **Those tests found a real bug.** The 503 was written, then the socket closed with the request
+    unread. The kernel reset the connection, so the client saw a reset, not the 503.
+    - Fixed with a bounded, non-blocking drain.
+    - Three perturbations each turn the tests red: no capacity check, no release, no drain.
+  - **Review items for run 8.**
+    - `days_to_billing` ignores the injected clock.
+    - The legacy 403 hint was dropped. (That hint says a bare 403 is usually the WAF rejecting the
+      User-Agent.)
+    - `stop()` can take 30 s.
+    - Replay mode does not start the poller.
+    - The poller has no tests.
+- **Guard moments.**
+  - **Run 6.** Three writes were refused:
+    - one write outside the repo, a path slip;
+    - two test numbers outside the fictional 555-01xx block, which Bob rewrote.
+  - **Run 7.** Bob's poller test file was refused: a credential-shaped assignment appeared in it
+    literally, although its values were fictional. Bob was probing the gate to restructure the file
+    when the cap stopped the run. The refused content is not published.
+- **Cost.** 8.02 and 10.23, each the full cap. Neither run reached its final summary, so run 8's
+  prompt asks for a work log after each item.
+
 ## Who wrote what
 | Author | What |
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
-| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up. |
-| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. |
+| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests (runs 6 and 7), except the reviewer fixes named in the run notes. |
+| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`, the network guard and the process guard's hardening in `tests/conftest.py`), review notes (`docs/analysis.md` §9), and this file. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
