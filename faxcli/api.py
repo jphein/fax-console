@@ -96,25 +96,26 @@ def send(
         localtif = os.path.join(_tmpdir, name)
     spooled = os.path.join(SPOOL, name)
 
-    render_reading = transport.render(pdf, localtif)
-    if not render_reading.ok:
-        raise SendError(f"render failed: {render_reading.why}")
-    actual_localtif = render_reading.text
+    # The temp dir is removed on every path, a failed render and an unreadable TIFF included
+    # (review of run 12: a failed render raised before any cleanup and left the directory behind).
+    try:
+        render_reading = transport.render(pdf, localtif)
+        if not render_reading.ok:
+            raise SendError(f"render failed: {render_reading.why}")
+        actual_localtif = render_reading.text
 
-    pages = count_pages_from_path(actual_localtif)
+        pages = count_pages_from_path(actual_localtif)
 
-    spool_reading = transport.spool(actual_localtif, name, spooled)
-    if not spool_reading.ok:
+        spool_reading = transport.spool(actual_localtif, name, spooled)
+        if not spool_reading.ok:
+            raise SendError(f"spool failed: {spool_reading.why}")
+        effective_tif = spool_reading.text if spool_reading.text else spooled
+
+        transport.cleanup(actual_localtif)
+    finally:
         if _tmpdir:
             import shutil  # noqa: PLC0415
             shutil.rmtree(_tmpdir, ignore_errors=True)
-        raise SendError(f"spool failed: {spool_reading.why}")
-    effective_tif = spool_reading.text if spool_reading.text else spooled
-
-    transport.cleanup(actual_localtif)
-    if _tmpdir:
-        import shutil  # noqa: PLC0415
-        shutil.rmtree(_tmpdir, ignore_errors=True)
 
     if dry_run:
         return DryRunResult(ok=True, dry_run=True, number=number, pages=pages, tif=effective_tif)

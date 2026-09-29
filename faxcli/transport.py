@@ -5,6 +5,7 @@ an SshTransport, and a ReplayTransport for tests.
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import os
 import shlex
@@ -128,9 +129,11 @@ class LocalTransport:
         from faxcli.cdr import CDR as _CDR_PATH  # noqa: PLC0415
 
         try:
+            if limit <= 0:                     # `tail -n 0`: nothing (lines[-0:] would be every line)
+                return Reading.success("")
             with open(_CDR_PATH, newline="") as f:
-                lines = f.readlines()
-            return Reading.success("".join(lines[-limit:]))
+                tail = collections.deque(f, maxlen=limit)   # the CDR only grows: keep the tail only
+            return Reading.success("".join(tail))
         except OSError as exc:
             return Reading.failure(str(exc))
 
@@ -283,10 +286,6 @@ class ReplayTransport:
     def asterisk(self, cmd: str) -> Reading:
         if cmd in self._fail_cmds:
             return Reading.failure(f"injected failure for {cmd!r}")
-        # channel originate has a dynamic TIFF path; no fixture can cover it.
-        # Return success with empty text (mirrors Asterisk's actual output format).
-        if cmd.startswith("channel originate "):
-            return Reading.success("")
         fname = self._cmd_to_filename(cmd)
         path = self._ast_dir / fname
         try:

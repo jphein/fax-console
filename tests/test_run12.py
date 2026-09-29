@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import pathlib
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,21 @@ def _load_legacy():
     spec.loader.exec_module(mod)
     return mod
 
+
+
+class _ReplayOriginates(ReplayTransport):
+    """A test double: ReplayTransport, plus a successful `channel originate`.
+
+    The product's ReplayTransport serves only recorded fixtures, and an unrecorded originate is
+    unread, per finding A. A test that needs a send to succeed says so here, where the fiction is
+    visible (review of run 12). Asterisk prints nothing on a successful originate.
+    """
+
+    def asterisk(self, cmd):
+        if cmd.startswith("channel originate "):
+            from faxcli.transport import Reading  # noqa: PLC0415
+            return Reading.success("")
+        return super().asterisk(cmd)
 
 class _CP:
     """Minimal CompletedProcess stub."""
@@ -202,7 +218,7 @@ class TestFailedOriginate:
         buf = io.StringIO()
         rc = main(
             ["--json", "send", str(pdf), "12025550142"],
-            transport=ReplayTransport(spool_dir=tmp_path),
+            transport=_ReplayOriginates(spool_dir=tmp_path),
             stdout=buf,
         )
         assert rc == 0
@@ -264,7 +280,7 @@ class TestFailedBeforeStats:
         """When --wait is used and before-stats read fails, result.outcome == UNMEASURED."""
         from faxcli.api import send
 
-        class BeforeStatsFail(ReplayTransport):
+        class BeforeStatsFail(_ReplayOriginates):
             _stats_calls = 0
 
             def asterisk(self, cmd):
@@ -315,7 +331,7 @@ class TestEmptyCdrFileField:
         """faxcli skips a CDR row whose file field is empty."""
         from faxcli.api import send
 
-        class EmptyFileCDR(ReplayTransport):
+        class EmptyFileCDR(_ReplayOriginates):
             def read_cdr(self, limit):
                 # Return a CDR line whose file field is empty (SendFAX with no TIFF in lastdata)
                 line = (
@@ -351,7 +367,7 @@ class TestEmptyCdrFileField:
 
         tif_name = None
 
-        class KnownFileCDR(ReplayTransport):
+        class KnownFileCDR(_ReplayOriginates):
             def render(self, pdf, tif):
                 nonlocal tif_name
                 result = super().render(pdf, tif)
@@ -465,7 +481,7 @@ class TestTempfileForNonLocalRender:
             from faxcli.api import send
             send(
                 str(pdf), "12025550142",
-                transport=ReplayTransport(spool_dir=tmp_path),
+                transport=_ReplayOriginates(spool_dir=tmp_path),
                 local=False,
                 dry_run=True,
             )
@@ -633,3 +649,52 @@ class TestLocalReadCdrLimit:
         assert reading.ok
         returned = reading.text.splitlines()
         assert len(returned) == 5
+
+
+
+# ============================================================================
+# Review of run 12
+# ============================================================================
+
+class TestReviewOfRun12:
+    def test_replay_does_not_claim_an_unrecorded_originate(self):
+        """Finding A's rule, for the replay transport too: what it cannot replay is unread, not a success."""
+        cmd = "channel originate PJSIP/12025550142@voipms-fax application SendFax x.tif,f"
+        r = ReplayTransport().asterisk(cmd)
+        assert not r.ok
+
+    def test_a_failed_render_leaves_no_temp_dir(self, tmp_path, monkeypatch):
+        import tempfile
+
+        from faxcli.api import SendError, send
+        from faxcli.transport import Reading
+        made = []
+        real = tempfile.mkdtemp
+
+        def recording_mkdtemp(*a, **kw):
+            d = real(*a, dir=tmp_path, **{k: v for k, v in kw.items() if k != "dir"})
+            made.append(d)
+            return d
+
+        monkeypatch.setattr(tempfile, "mkdtemp", recording_mkdtemp)
+
+        class RenderFails(ReplayTransport):
+            def render(self, pdf, tif):
+                return Reading.failure("gs exited 1")
+
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n")
+        with pytest.raises(SendError):
+            send(str(pdf), "12025550142", dry_run=True, transport=RenderFails(), local=False)
+        assert made, "send() did not use mkdtemp for the non-local render"
+        assert not any(pathlib.Path(d).exists() for d in made), "the temp dir was left behind"
+
+    def test_read_cdr_limit_zero_is_nothing_and_a_limit_is_the_tail(self, tmp_path, monkeypatch):
+        import faxcli.cdr as cdr_mod_real
+        cdr_file = tmp_path / "Master.csv"
+        cdr_file.write_text("".join(f"row{i}\n" for i in range(5)))
+        monkeypatch.setattr(cdr_mod_real, "CDR", str(cdr_file))
+        t = LocalTransport(is_asterisk_user=lambda: True)
+        assert t.read_cdr(0).text == ""                 # `tail -n 0`; lines[-0:] would be all five
+        assert t.read_cdr(2).text == "row3\nrow4\n"
+        assert t.read_cdr(-3).text == ""                # no exception from deque(maxlen=-3)
