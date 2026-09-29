@@ -9,8 +9,9 @@ before publishing:
 - the content of any write the sandbox guard refused is replaced by a placeholder, because that
   content is exactly what the guard keeps out; the tool name, path and reason stay;
 - two cellular endpoint names match the rebuilt baseline;
-- one fictional test value in run 8 was renamed to the gate's placeholder form (`fake-…`), in the test
-  and in its recording. The gate landing with PR 2 cannot tell that value from a real one.
+- fictional credential-shaped values that the stricter gate (PRs 2 and 5) cannot tell from real ones were
+  renamed to its placeholder form: one test value in run 8 (`fake-…`), and run 7's gate probe
+  (`testpassword99` became `test-password-99`, including one fragment split across two stream events).
 
 | File | Contents |
 |---|---|
@@ -84,6 +85,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 |---|---|---|---|---|---|
 | 00:13 | 7 | `0b7f46c4` | run 6's review items (replay isolation, typed send API, bounded queue) and the VoIP.ms poller | Part 1 kept; the poller's tests were refused by the guard, so run 8 finishes it | 10.225 |
 | 00:40 | 8 | `eeebacd0` | finished the VoIP.ms port: 4 fixes, replay wiring with cleanup, 50 tests and the legacy characterization | kept; the first run under its cap with its summary; review strengthened 7 tests | 4.975 |
+| 01:05 | 9 | `5a76155a` | the page: Live state, PSTN account and Fax, served by `handle()` with a CSP; dark and light; 41 tests | kept; review found the public demo would publish its host's name (fixed), a dark theme that never reached the favicon or form controls, and tests blind to CSP breakage | 4.615 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below the table.
@@ -100,8 +102,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The budget is below t
 | 6 | 9/28 23:57 | [The faxconsole core](bob-runs/6-faxconsole-core.prompt.md) | `faxconsole/` (888 lines): pure `handle()`, PBX readers, the write gate, a pooled server, sigil; 103 tests | 62 | 8.022 | Kept. Review: replay mode lacks a temp spool/inbox; send still parses CLI output; `--ssh` pins the host (run 7) |
 | 7 | 9/29 00:13 | [Run 6's review and the VoIP.ms poller](bob-runs/7-voipms-and-replay.prompt.md) | replay temp dir, `Config(replay=True)` check, `--ssh` host, `faxcli/api.py` (typed send), a bounded queue with 503; `faxconsole/voipms.py` (391 lines), 3 synthesized fixtures, `GET /api/voipms`; 16 tests | 69 | 10.225 | Part 1 kept. Review: the 503 test bound TCP and was vacuous, and the 503 was lost to a reset (fixed by the reviewer). The poller's tests were refused by the guard; run 8 finishes them |
 | 8 | 9/29 00:40 | [Finish the VoIP.ms port](bob-runs/8-voipms-finish.prompt.md) | the 4 review fixes in `voipms.py`; `fixture_http`; `build(argv)` with cleanup and SIGTERM; 50 tests, 17 of them characterization against the legacy poller; a work log ([worklog](bob-runs/8-voipms-finish.worklog.md)) | 46 | 4.975 | Kept. Review: 5 perturbations left Bob's tests green (two mechanisms masked each other, a vacuous `__cause__` check, 12 chosen fields); fixed with whole-snapshot equality. The credentials error text had changed from legacy's (fixed) |
+| 9 | 9/29 01:05 | [The page](bob-runs/9-page.prompt.md) | `faxconsole/static/` (index.html, app.css, app.js, favicon.svg), served by `handle()` with a CSP and nosniff; replay banner from `/api/version`; 41 tests; a work log ([worklog](bob-runs/9-page.worklog.md)) | 44 | 4.615 | Kept. Review (a visual check, light and dark, on a static export): the sigil's `host` would publish the demo host's name (fixed); the favicon's dark rules never applied; native controls stayed light; the tests missed inline handlers, a weakened `script-src` and a 503 |
 
-**Running total: 37.62 Bobcoins** (after run 8). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 42.24 Bobcoins** (after run 9). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
@@ -115,6 +118,10 @@ mid-way would have to re-read everything on resume, which costs more than the he
 **Cap for run 5 (review fixes): 5.** Run 4 spent its full 6 and stopped before its own lint and
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
+
+**Cap for run 10 (the inbound dialplan as generated config): 5.** The plan said 4. Runs 8 and 9 spent
+4.97 and 4.61 on similar-sized scopes (a module, about 300 lines of tests, a work log), so 4 would likely
+stop short of the tests. The work log keeps any partial progress visible.
 
 **Cap for run 9 (the page): 8,** as planned. It ports the page's PBX pieces (about 450 lines of
 legacy markup, CSS and JS, read in ranges), writes four static files and 20 or more tests, and keeps the
@@ -298,10 +305,34 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
   - `main()` re-parses argv with a second parser.
 - **Cost.** 4.97.
 
+### Run 9: the page
+- **What Bob did.** Bob ported the page's Live state, PSTN account and Fax sections from the legacy
+  template into four static files, keeping every legacy element id and the rule comments. They are
+  served by `handle()` with a CSP that allows no inline script, plus `nosniff`.
+  - The JS reads only this service's routes. A replay banner comes from `/api/version`, and the write
+    token is held in memory only.
+  - It wrote 41 tests and finished under its cap (4.61 of 8), with its work log and summary.
+- **Kept.** The port and the routes.
+- **Rejected or fixed, with reasons.** The review looked at the page in a browser, light and dark, on a
+  static export that `handle()` wrote inside the sandbox. It used the same CSP as a meta tag, and the
+  console showed no violations.
+  - **The public demo would publish its host's name.** The sigil's `host` is the machine's name. In
+    replay mode, which is the public demo, it now reads "replay".
+  - **The favicon's dark rules never applied.** They came before the defaults at equal specificity.
+  - **The dark theme left native form controls light.** `color-scheme` is now declared.
+  - **The footer read "vAmplified Antenna".**
+  - **The tests could not see a broken page.** Inline handlers fail silently under the CSP, a substring
+    check passes a weakened `script-src`, and "non-404" passes a 503. Five perturbations each turn the
+    new tests red. One of the reviewer's own new tests first came back green: it counted the media
+    query's `prefers-color-scheme:dark` as a declaration.
+- **For the lead.** The Active-calls tile and the backend keep legacy's instrument name "MSC
+  connections". It is part of the characterized JSON contract.
+- **Cost.** 4.61.
+
 ## Who wrote what
 | Author | What |
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
-| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests (runs 6–8), except the reviewer fixes named in the run notes. |
+| **Bob** | `docs/analysis.md` §1–§8; `faxcli/` and its tests (runs 4 and 5), except the host-reading follow-up; `faxcli/api.py` and `faxconsole/` with their tests and its page (runs 6–9), except the reviewer fixes named in the run notes. |
 | Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`, the network guard and the process guard's hardening in `tests/conftest.py`), review notes (`docs/analysis.md` §9), and this file. |
 | Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |
