@@ -7,9 +7,13 @@
 # So the whole process tree is confined here instead:
 #
 #   filesystem (bubblewrap): the repo read-write, except legacy/ .git/ .bob/ scripts/ .github/
-#     .venv/ AGENTS.md BASELINE.md LICENSE (read-only); /usr read-only; a minimal /etc (CA
-#     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a clean
-#     HOME that holds only Bob's own settings; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
+#     .venv/ AGENTS.md BASELINE.md LICENSE and the evidence, docs/bob-usage.md and docs/bob-runs/
+#     (read-only: bob-run.sh records Bob's stream and keeps the ledger from outside), and docs/
+#     itself cannot be renamed (it is bound onto itself, a mount point); /usr
+#     read-only; a minimal /etc (CA
+#     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a HOME
+#     made fresh for every start that holds only Bob's own settings (nothing survives into the next
+#     run), and Bob's gateway pinned; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
 #   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges and ALL of IPv6 denied,
 #     except the local DNS stub; the public IPv4 internet stays open so Bob can reach its API. The PBX and every
@@ -20,23 +24,46 @@
 # Everything Bob writes that later executes (tests, conftest.py) must run here or in CI.
 set -euo pipefail
 root=$(git rev-parse --show-toplevel)
-bob_home=${BOB_HOME:-$HOME/.local/share/fax-console/bob-home}
 [ "$#" -ge 1 ] || { echo "usage: bob-sandbox.sh CMD [ARGS...]" >&2; exit 2; }
+# Bob Shell 2.0.5's own gateway and login (its built-in defaults), pinned in the sandbox's environment,
+# which outranks its settings file, so nothing a run leaves behind can point the next run's API key
+# (a bearer token) anywhere else (the Oracle, 9/29 01:3x).
+BOB_GATEWAY=https://api.us-east.bob.ibm.com
+BOB_WEB_LOGIN=https://bob.ibm.com
+# Bob Shell loads a .env from its working directory, the repo root, and that could set other values.
+[ ! -e "$root/.env" ] || { echo "refusing: $root/.env exists, and Bob would load it" >&2; exit 2; }
+# It also lists every skill it finds in the workspace (.claude/skills, .agents/skills) in its prompt, and
+# the repo is writable: a skill one run leaves there would steer the next (the Oracle, 9/29 01:4x).
+for d in .claude .agents; do
+  [ -z "$(ls -A "$root/$d" 2>/dev/null)" ] || { echo "refusing: $root/$d is not empty; Bob would read skills there" >&2; exit 2; }
+done
+[ -z "${BOB_HOME:-}" ] || echo "bob-sandbox: BOB_HOME is ignored: Bob's home is made fresh for every start" >&2
 
-mkdir -p "$bob_home/.bob/settings" "$root/.bob/tmp"
+mkdir -p "$root/.bob/tmp"
 touch "$root/.bob/guard.log"
-[ -f "$bob_home/.bob/settings/settings.json" ] ||
-  printf '{"licenseConsent": true, "bobShell": {"autoUpdate": false}}\n' > "$bob_home/.bob/settings/settings.json"
+
+# Secrets reach the sandbox through a mode-600 file, never argv (argv is visible in ps).
+# (Temp files, not fds: sudo closes every inherited descriptor above 2.)
+rt=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/bob-sandbox.XXXXXX"); chmod 700 "$rt"
+# Bob's home is made fresh from the template for every start, and removed afterwards: one run must not
+# leave anything the next run reads (a settings.json naming its own gateway, a .env). Bob's own logs
+# are kept, as data, outside the repository.
+bob_home="$rt/home"
+logs=${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/bob-logs
+save_logs() {
+  if [ -d "$bob_home/.bob/logs" ]; then
+    mkdir -p "$logs" && cp -r "$bob_home/.bob/logs" "$logs/$(date +%Y%m%dT%H%M%S)-$$" 2>/dev/null
+  fi
+  return 0
+}
+trap 'save_logs; rm -rf "$rt"' EXIT
+mkdir -p "$bob_home/.bob/settings"
+printf '{"licenseConsent": true, "bobShell": {"autoUpdate": false}}\n' > "$bob_home/.bob/settings/settings.json"
 printf '{"version": 1, "folders": {"%s": "TRUST_FOLDER"}}\n' "$root" > "$bob_home/.bob/trustedFolders.json"
 # Bob lists every skill it can find in its prompt: nothing but its own settings may live in this home.
 for d in .bob/skills .bob/plugins .bob/rules .claude .agents; do
   [ -z "$(ls -A "$bob_home/$d" 2>/dev/null)" ] || { echo "refusing: $bob_home/$d is not empty" >&2; exit 2; }
 done
-
-# Secrets reach the sandbox through a mode-600 file, never argv (argv is visible in ps).
-# (Temp files, not fds: sudo closes every inherited descriptor above 2.)
-rt=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/bob-sandbox.XXXXXX"); chmod 700 "$rt"
-trap 'rm -rf "$rt"' EXIT
 envf="$rt/env"; install -m 600 /dev/null "$envf"
 printf '%s:x:%s:%s::/home/bob:/bin/bash\n' "$(id -un)" "$(id -u)" "$(id -g)" > "$rt/passwd"
 printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
@@ -44,13 +71,19 @@ printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
   printf 'export HOME=/home/bob LANG=C.UTF-8 TERM=%q FAX_CONSOLE_SANDBOX=1\n' "${TERM:-xterm-256color}"
   printf 'export PATH=%q\n' "$root/.venv/bin:$HOME/.npm-global/bin:/usr/bin:/bin"
   printf 'export FAX_CONSOLE_GUARD_LOG=%q\n' "$root/.bob/guard.log"
+  printf 'export BOB_GATEWAY_URL=%q VITE_GATEWAY_BASE_URL=%q BOB_WEB_LOGIN_URL=%q VITE_WEB_LOGIN_URL=%q\n' \
+    "$BOB_GATEWAY" "$BOB_GATEWAY" "$BOB_WEB_LOGIN" "$BOB_WEB_LOGIN"
   [ -n "${BOB_API_KEY:-}" ] && printf 'export BOB_API_KEY=%q\n' "$BOB_API_KEY"
 } > "$envf"
 
 ro=()
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE; do
+for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
+# docs/ bound onto itself is a mount point, which cannot be renamed. Renaming it would carry the
+# read-only ledger and run records away and let a new docs/ stand in their place (Oracle, 9/29).
+docs_bind=()
+[ -d "$root/docs" ] && docs_bind=(--bind "$root/docs" "$root/docs")
 etc=()
 for p in /etc/ssl /etc/ca-certificates /etc/ld.so.cache /etc/ld.so.conf /etc/ld.so.conf.d /etc/nsswitch.conf \
          /etc/localtime /etc/alternatives /etc/gai.conf /etc/host.conf /etc/protocols /etc/services; do
@@ -73,7 +106,7 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --bind "$bob_home" /home/bob \
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
     --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
-    --bind "$root" "$root" "${ro[@]}" \
+    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" \
     --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
     /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"

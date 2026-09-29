@@ -28,7 +28,7 @@ markers = [
 
 [tool.ruff]
 line-length = 110
-extend-exclude = ["legacy"]
+extend-exclude = ["./legacy"]   # the frozen top-level baseline only; a bare "legacy" also hid nested dirs
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]

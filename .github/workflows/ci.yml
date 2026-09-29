@@ -4,28 +4,50 @@ on:
   pull_request:
 permissions:
   contents: read
+# One run per ref; a newer push cancels an older run, except on main, where every run completes.
+# Actions are pinned to commit SHAs (the tag is noted beside each), so a moved tag cannot change
+# what runs here.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
   scrub:
     name: scrub gate + frozen baseline
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
-          fetch-depth: 0          # the baseline tag must be present
+          fetch-depth: 0          # the baseline tag and the full history must be present
+          persist-credentials: false
+      - name: PDF text extraction for the scrub gate (only when a PDF is in the tree or history)
+        run: |
+          if git log --format= --name-only HEAD -- '*.pdf' '*.PDF' | grep -q .; then
+            sudo apt-get update -q && sudo apt-get install -y -q poppler-utils
+          fi
       - name: Nothing identifying is published (generic rules; the private deny-list stays local)
         run: scripts/scrub-check.sh
+      - name: Nothing identifying was ever published (every commit, message, name, identity and tag)
+        run: scripts/scrub-check.sh --history
       - name: legacy/ is unchanged since the pre-hackathon baseline
         run: git diff --exit-code baseline-2026-09-28 -- legacy/
   tests:
     name: tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         python: ["3.10", "3.12", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97   # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install --upgrade pip pytest
+      - name: Tools the tests drive (pdftotext for the PDF scan, tmux for bob-run.sh's tmux mode)
+        run: sudo apt-get update -q && sudo apt-get install -y -q poppler-utils tmux
+      - run: python -m pip install --upgrade pip pytest "ruff==0.16.9"
+      - name: ruff (the top-level legacy/ is the frozen baseline and is not linted)
+        run: ruff check . --extend-exclude ./legacy
       - run: python -m pytest -q

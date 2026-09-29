@@ -13,3 +13,6 @@ scratch/
 *.tiff
 .bob/tmp/
 .bob/guard.log
+docs/bob-runs/.run-*.rc
+docs/.bob-usage.*.tmp
+docs/bob-runs/.run-*.rc.tmp

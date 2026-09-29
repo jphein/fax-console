@@ -24,8 +24,17 @@ def refused(result):
 def main(path):
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().splitlines()
-    events = [json.loads(line) if line.strip() else None for line in lines]
-    results = {e["tool_id"]: e for e in events if e and e.get("type") == "tool_result"}
+    def parse(line):
+        """An event, or None for a line that is not a JSON object: such a line is kept verbatim."""
+        try:
+            e = json.loads(line) if line.strip() else None
+        except ValueError:
+            return None
+        return e if isinstance(e, dict) else None
+
+    events = [parse(line) for line in lines]
+    results = {e["tool_id"]: e for e in events
+               if e and e.get("type") == "tool_result" and e.get("tool_id") is not None}
     n, changed = 0, set()
     for i, e in enumerate(events):
         if e and e.get("type") == "tool_use" and refused(results.get(e.get("tool_id"))):
