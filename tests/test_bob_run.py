@@ -559,3 +559,22 @@ def test_a_tracked_file_in_a_pycache_stops_the_start_and_nothing_is_purged(tmp_p
     r = sandbox(repo, env)
     assert r.returncode == 2 and "holds a tracked file" in r.stderr and not argv.exists(), r.stderr
     assert tracked.exists() and all(c.exists() for c in caches)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list a mode-000 directory, so find would not fail")
+def test_a_failed_pycache_listing_stops_the_start_and_nothing_is_purged(tmp_path):
+    """The purge fails closed: if find cannot list the whole tree, the start stops before bwrap and nothing is
+    deleted (the standing Oracle, on #21). A directory nobody may read makes find fail."""
+    repo, env, argv = sandbox_repo(tmp_path, "unlisted")
+    cache = repo / "faxconsole" / "__pycache__" / "m.cpython-314.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"cache")
+    locked = repo / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        r = sandbox(repo, env)
+    finally:
+        locked.chmod(0o755)
+    assert r.returncode == 2 and "could not all be listed" in r.stderr and not argv.exists(), r.stderr
+    assert cache.exists()

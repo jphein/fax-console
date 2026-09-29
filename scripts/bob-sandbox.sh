@@ -83,15 +83,21 @@ check_links
 # leaves one behind. Only cache artifacts go:
 # - a target holding a tracked file stops the start, and so does a target outside the repo;
 # - find never follows a link, so a link's own target is never touched;
-# - every check runs before the first deletion, so a refusal deletes nothing.
+# - every check runs before the first deletion, so a refusal deletes nothing;
+# - a listing that fails also stops the start: set -e cannot see into a process substitution, so its status
+#   is read with `wait` (the standing Oracle, on #21).
 # The last path component is always __pycache__. So even a path that a concurrent run swapped mid-purge could
-# only remove a cache directory. Not walked: .git, .venv (read-only to Bob) and scratch/ (never written).
+# only remove a cache directory. Nothing enforces one sandbox per tree yet, so don't start another one (test.sh,
+# an export, the probe) in a tree where Bob is running. Not walked: .git, .venv (read-only to Bob) and scratch/
+# (never written).
 purge_pycache() {
-  local t parent root_p targets=()
+  local t parent root_p found=() targets=()
   root_p=$(cd -P -- "$root" && pwd)
-  while IFS= read -r -d '' t; do targets+=("$root/${t#./}"); done < <(cd "$root" && find . \
+  mapfile -d '' -t found < <(cd "$root" && find . \
     \( -path ./.git -o -path ./.venv -o -path ./scratch \) -prune -o -name __pycache__ \( -type d -o -type l \) \
     -prune -print0)
+  wait "$!" || { echo "refusing: the tree's __pycache__ could not all be listed; nothing was purged" >&2; exit 2; }
+  for t in "${found[@]}"; do targets+=("$root/${t#./}"); done
   for t in "${targets[@]}"; do
     parent=$(cd -P -- "$(dirname -- "$t")" && pwd) || { echo "refusing: cannot resolve $t" >&2; exit 2; }
     case "$parent/" in "$root_p"/*) ;; *) echo "refusing: $t is outside the repo" >&2; exit 2 ;; esac
