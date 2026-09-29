@@ -5,6 +5,10 @@ function: it receives a request and returns a Response.  No sockets, no
 globals.  The http.server adapter in server.py calls it.
 
 Routes implemented:
+  GET  /                     — index.html (faxconsole page)
+  GET  /app.css              — stylesheet
+  GET  /app.js               — JavaScript
+  GET  /favicon.svg          — favicon
   GET  /api/fax/status       — faxcli status JSON
   GET  /api/fax/log?limit=N  — faxcli log JSON
   GET  /api/fax              — legacy combined shape (fax_state)
@@ -28,6 +32,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from importlib.resources import files as _pkg_files
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -50,6 +55,30 @@ FAX_MAX_BYTES = 15 * 1024 * 1024  # 15 MB, matching legacy e:2007
 # Response dataclass
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Content-Security-Policy applied to every page response
+# ---------------------------------------------------------------------------
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "frame-ancestors 'none'; "
+    "form-action 'self'"
+)
+
+_STATIC_DIR = _pkg_files("faxconsole").joinpath("static")
+
+_CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css":  "text/css; charset=utf-8",
+    ".js":   "application/javascript; charset=utf-8",
+    ".svg":  "image/svg+xml",
+}
+
+
 @dataclass
 class Response:
     """An HTTP response ready to be serialised."""
@@ -57,6 +86,7 @@ class Response:
     status: int
     body: bytes
     content_type: str = "application/json"
+    extra_headers: dict[str, str] | None = None
 
 
 def _json_response(status: int, obj: Any) -> Response:
@@ -366,9 +396,31 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
     return r
 
 
-def _route_version() -> Response:
+def _route_version(config: Config | None = None) -> Response:
     """GET /api/version — realm-sigil contract."""
-    return _ok(version_dict())
+    d = version_dict()
+    if config is not None:
+        d["replay"] = config.replay
+    return _ok(d)
+
+
+def _route_static(filename: str) -> Response:
+    """Serve a static file from faxconsole/static/ with CSP headers."""
+    ext = os.path.splitext(filename)[1]
+    content_type = _CONTENT_TYPES.get(ext, "application/octet-stream")
+    try:
+        data = _STATIC_DIR.joinpath(filename).read_bytes()
+    except (FileNotFoundError, OSError):
+        return _route_not_found(f"/{filename}")
+    return Response(
+        status=200,
+        body=data,
+        content_type=content_type,
+        extra_headers={
+            "Content-Security-Policy": _CSP,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 def _route_not_found(path: str) -> Response:
@@ -379,7 +431,14 @@ def _route_not_found(path: str) -> Response:
         "status": 404,
         "detail": f"No such route: {escaped}",
     })
-    return Response(status=404, body=body.encode())
+    return Response(
+        status=404,
+        body=body.encode(),
+        extra_headers={
+            "Content-Security-Policy": _CSP,
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +464,14 @@ def handle(
     route = parsed.path
 
     if method == "GET":
+        if route in ("/", "/index.html"):
+            return _route_static("index.html")
+        if route == "/app.css":
+            return _route_static("app.css")
+        if route == "/app.js":
+            return _route_static("app.js")
+        if route == "/favicon.svg":
+            return _route_static("favicon.svg")
         if route == "/api/voipms":
             return _route_voipms(config)
         if route == "/api/fax/status":
@@ -420,7 +487,7 @@ def handle(
         if route == "/api/pbx/endpoints":
             return _route_pbx_endpoints(config)
         if route == "/api/version":
-            return _route_version()
+            return _route_version(config)
 
     if method == "POST" and route == "/api/fax/send":
         return _route_send(headers, body, config)

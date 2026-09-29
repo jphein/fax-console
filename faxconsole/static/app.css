@@ -1,0 +1,453 @@
+/* realm-tokens:begin — synced from web/realm-tokens.css by scripts/sync-tokens.sh */
+:root{
+  /* --- ground & paper ---------------------------------------------------- */
+  --bg:#f4efe4;          /* page ground — warm paper                          */
+  --bg2:#fbf8f1;         /* raised ground, gradients, code wells              */
+  --panel:#fffdf8;       /* card / panel face                                 */
+
+  /* --- ink --------------------------------------------------------------- */
+  --ink:#241f18;         /* body text                                         */
+  --ink2:#5c5244;        /* secondary text, labels                            */
+
+  /* --- rules ------------------------------------------------------------- */
+  --line:#ddd0b8;        /* ordinary hairline                                 */
+  --line2:#c6b494;       /* emphasised rule — STRONGER than --line            */
+
+  /* --- brass: the accent ------------------------------------------------- */
+  --brass:#8a6222;       /* links, accents, the identity colour               */
+  --brass2:#a97c31;      /* hover / secondary brass                           */
+  --brass-soft:#efe0c0;  /* brass wash for chips and fills                    */
+
+  /* --- state: the three-verdict vocabulary -------------------------------
+     Used identically by the console's presence column and the SIM ledger's
+     verdict chips, because they are THE SAME THREE STATES:
+       ok    read, and correct        (filled mark)
+       bad   read, and wrong          (filled mark, oxide)
+       idle  NOT READ / not probed    (HOLLOW mark — never a default green)
+     Colour is never the only carrier: every state pairs its mark with a WORD,
+     so the vocabulary survives greyscale and colour-blindness.            */
+  --ok:#2f6b41;   --ok-bg:#e2efe4;
+  --warn:#8a5a12; --warn-bg:#f6e9d2;
+  --bad:#9c2f26;  --bad-bg:#f7e2df;
+  --idle:#6b6355; --idle-bg:#ece5d8;
+
+  /* --- staleness: MEASURED, BUT NOT NOW ----------------------------------
+     The fourth state, and the one this palette was missing. `idle` means NOT
+     READ. `stale` means read, correctly, at a time that is no longer now --
+     a distinction the surfaces had no way to draw, so a value measured once
+     at 03:00 rendered identically to one measured a second ago.
+     A stale mark must ALWAYS carry its age in the same breath ("last read
+     4m ago"); a bare dot re-creates the exact ambiguity it exists to remove. */
+  --stale:#7a6a3f;  --stale-bg:#f2ead6;
+
+  /* --- call direction ---------------------------------------------------- */
+  --in:#2b5f7a;          /* inbound                                           */
+  --out:#6a4a86;         /* outbound                                          */
+
+  /* --- (+) additions the other surfaces need ----------------------------- */
+  --line-soft:#e8dcc6;   /* (+) lighter than --line, for dense table rows     */
+  --code-bg:#f0ead9;     /* (+) inline code and pre wells                     */
+  --radius:10px;         /* (+) one corner radius everywhere                  */
+  --radius-sm:6px;       /* (+) chips, code, small controls                   */
+
+  --shadow:0 1px 2px rgba(60,45,20,.10), 0 8px 24px -12px rgba(60,45,20,.30);
+
+  /* --- spacing: ONE 4px scale, so seven surfaces stop improvising -------- */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+
+  /* --- type scale: the two FACES already existed; the SIZES did not ------
+     Sizes were being picked per surface (13.5px, 12.5px, 11.5px, .82rem ...),
+     which is the same drift the palette had, in a dimension nobody watched.
+     No new font files and no CDN -- the stacks below stay local by design. */
+  --t-xs:11px;   /* mono labels, letterspaced uppercase                     */
+  --t-sm:13px;   /* chips, table cells, secondary text                      */
+  --t-md:15px;   /* body                                                    */
+  --t-lg:18px;   /* panel headings                                          */
+  --t-xl:24px;   /* page title                                              */
+  --lh-tight:1.25; --lh:1.5;
+
+  /* --- type: two faces, no CDN -------------------------------------------
+     :8080 uses serif + mono only, with letterspaced uppercase mono for labels
+     instead of a third face. Adopting that drops the Archivo/Source Serif 4
+     Google Fonts dependency the two doc pages currently carry -- local pages
+     should not need the network to look right.                            */
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono","DejaVu Sans Mono",Menlo,Consolas,monospace;
+}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#101317; --bg2:#151920; --panel:#181d24;
+    --ink:#e8e2d4; --ink2:#9aa0a6;
+    --line:#2a313a; --line2:#3a434e;
+    --brass:#d9ad5c; --brass2:#c9973f; --brass-soft:#2b2418;
+    --ok:#6fcf8f;   --ok-bg:#16281c;
+    --warn:#e0b062; --warn-bg:#2a2114;
+    --bad:#f2867a;  --bad-bg:#2c1917;
+    --idle:#7d8590; --idle-bg:#1d232b;
+    --stale:#c2b184; --stale-bg:#241f14;
+    --in:#7fc2e8;   --out:#c2a4e8;
+    --line-soft:#232a32;
+    --code-bg:#131820;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+
+/* An explicit choice wins in both directions. Every colour is defined on bare
+   :root first, so nothing has its ONLY definition inside a media query. */
+:root[data-theme="dark"]{
+  --bg:#101317; --bg2:#151920; --panel:#181d24;
+  --ink:#e8e2d4; --ink2:#9aa0a6;
+  --line:#2a313a; --line2:#3a434e;
+  --brass:#d9ad5c; --brass2:#c9973f; --brass-soft:#2b2418;
+  --ok:#6fcf8f;   --ok-bg:#16281c;
+  --warn:#e0b062; --warn-bg:#2a2114;
+  --bad:#f2867a;  --bad-bg:#2c1917;
+  --idle:#7d8590; --idle-bg:#1d232b;
+  --stale:#c2b184; --stale-bg:#241f14;
+  --in:#7fc2e8;   --out:#c2a4e8;
+  --line-soft:#232a32;
+  --code-bg:#131820;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+
+/* ---- MOBILE, added 2026-09-07 ----------------------------------------
+   Lives in the TOKEN SOURCE so every surface gets it from one edit --
+   status, console, radio, matrix, inventory, build-guide, runbooks,
+   sources. Adding it per-page is how six of them end up slightly
+   different.
+   The specific fault it fixes: /runbooks renders ELEVEN tables and only
+   three sat in a scrolling box, so on a phone the widest table set the
+   width of the document and every other section inherited a sideways
+   scroll. `display:block; overflow-x:auto` on the table itself is the
+   CSS-only fix -- each table scrolls in its own box, the body does not.
+   Scoped to narrow screens ON PURPOSE: on a desktop `display:table` is
+   what makes columns line up, and changing it there would be a
+   regression introduced to fix a problem that only exists at 400px. */
+@media (max-width:760px){
+  body{overflow-x:hidden}
+  table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  pre,code{white-space:pre-wrap;word-break:break-word}
+  img,svg{max-width:100%;height:auto}
+}
+@media (max-width:420px){ body{font-size:14px} }
+
+/* === ABSENCE — SIX meanings, and a VOCABULARY PRIMITIVE, which is why it lives
+   here and not in `realm-status`. Any surface that renders a value can have an
+   absent one, so making this optional meant 224 undifferentiated em dashes on
+   two surfaces. Moved 2026-09-12 at lucid-console154's reading, which was right:
+   "if the matrix is the first non-console surface to need it, that is evidence
+   it is a token, not a status thing."
+   ⚠️ The `rs-` prefix is kept deliberately — renaming would churn every call
+   site for a cosmetic gain, and the family still reads as one vocabulary even
+   though it now ships in two blocks. === */
+.rs-absent{color:var(--idle);font-style:italic}
+/* ⛔ NO GLYPH FROM CSS WHEN THE CELL HAS ONE. This block used to emit an em dash
+   via ::after while the matrix wrote ⊘ in the markup -- TWO GLYPHS FOR ONE
+   MEANING, which is the same defect as the `none`/`—` collision this section was
+   written to fix, arriving from the other direction. The mark now comes from the
+   markup; CSS supplies one only for a genuinely empty cell. */
+.rs-absent:empty::after{content:"⊘"}   /* ⊘ LITERAL, deliberately.
+   ⛔ THIS LINE LANDED IN f272ba5, WHICH IS A MIXED COMMIT. Reverting that
+   commit whole to back this out would SILENTLY DROP 17 REASONED data-why CELLS
+   from web/femtocell-matrix.html (13 of its 22 added lines are lucid-console154's,
+   1 is this fix). REVERT THIS LINE, NEVER THE COMMIT.
+   [A commit message cannot be annotated, so the warning lives at the point of
+    use — where someone backing this out will actually be standing.]
+   ⏳ EXPIRY, and it is TESTABLE rather than a date: this warning is spent once
+   this line has been CHANGED by any commit after f272ba5, because a revert of
+   f272ba5 will then CONFLICT rather than apply silently — and a conflict is its
+   own warning. Check with:
+       git log --oneline f272ba5.. -S'rs-absent:empty::after' -- web/realm-tokens.css
+   Non-empty ⇒ DELETE THIS BLOCK. (Added 2026-09-12 at lucid-console154's ask:
+   a hazard comment with no expiry becomes permanent furniture that a later
+   reader cannot evaluate.)
+   A CSS numeric escape here (backslash, then the four hex digits for this
+   glyph) is RE-PARSED AS AN OCTAL ESCAPE when this block is embedded in a
+   non-raw Python string: render-runbooks.py turned it into a 0x12 control
+   character in the rendered page. The sync guard caught it.
+   ⭐ AND THE FIRST VERSION OF THIS COMMENT REPRODUCED THE BUG — it spelled
+   the escape out in prose, and the prose was mangled identically. The
+   sequence is dangerous ANYWHERE in the block, including in text about it.
+   ⇒ So: literal glyphs only here, and never write the escape form down. */          /* ⊘, fallback only */
+
+/* --- THE CATEGORY IS A MACHINE KEY; THE REASON IS REAL TEXT -----------------
+   `data-why` carries a value from the CLOSED SET below. The human sentence stays
+   in the markup as a real span.
+   ⛔ NEVER content: attr(data-why) -- generated content is not reliably
+      selectable, not reliably read aloud, and does not survive copy/paste. The
+      attribute is for MACHINES; the span is for PEOPLE. Neither restates the
+      other, so neither can rot against the other.
+   ⭐ THE SET IS CLOSED SO IT CAN BE ASSERTED. A value outside it is a defect,
+      and that assertion is what would have caught `n/a` drifting in beside `⊘`:
+      two names for one meaning is exactly a category that was never enumerable.
+        no-unit         no live device -- documentary only
+        not-checked     never asked of this unit
+        not-read        exists and was not read
+        not-derivable   depends on something unread
+        not-measurable  blocked until a precondition clears
+        not-applicable  does not exist for this device   <- absorbs the old `n/a`
+   ⇒ Assert with:  grep -o 'data-why="[a-z-]*"' <surface> | sort -u
+      and require the result to be a subset of the six above.
+   📌 Derived from USAGE by lucid-console154 (6 no-unit, 6 not-checked, 1 not-read,
+      1 not-derivable, 2 bare, 2 n/a), not invented. `not-applicable` is the one
+      added deliberately: having it NAMED makes using it visibly a CLAIM, where
+      `n/a` reads as a formatting choice. */
+
+/* STRUCTURAL absences -- nothing is wrong and nothing is missing, so they get the
+   lowest emphasis on the page. */
+.rs-absent[data-why="no-unit"],
+.rs-absent[data-why="not-applicable"]{opacity:.55}
+
+/* GAPS -- we did not look, or could not. Deliberately NOT the same weight: a
+   dotted rule says "something belongs here and is not here". Distinguishable
+   WITHOUT COLOUR, so it survives greyscale, a screenshot and a colour-blind
+   reader. */
+.rs-absent[data-why="not-checked"],
+.rs-absent[data-why="not-read"],
+.rs-absent[data-why="not-derivable"],
+.rs-absent[data-why="not-measurable"]{opacity:1;border-bottom:1px dotted currentColor}
+
+/* 🔴 THE OMISSION DETECTOR, AND IT IS THE POINT OF THE WHOLE DESIGN.
+   A cell with no `data-why` is a DEFECT, and it renders loudly so the omission is
+   visible IN THE PAGE rather than only to someone who thinks to grep. Free prose
+   with no category is how two cells ended up with no parseable reason at all. */
+.rs-absent:not([data-why]){opacity:1;border-bottom:2px dashed var(--warn,currentColor)}
+/* realm-tokens:end */
+
+/* ---- page layout --------------------------------------------------------- */
+*,*::before,*::after{box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:var(--t-md);
+  line-height:var(--lh);
+  margin:0;
+  padding:0;
+}
+#hdr{
+  display:flex;
+  align-items:center;
+  gap:var(--s3);
+  flex-wrap:wrap;
+  padding:var(--s3) var(--s5);
+  background:var(--panel);
+  border-bottom:1px solid var(--line2);
+  box-shadow:var(--shadow);
+}
+#hdr h1{
+  font-size:var(--t-xl);
+  margin:0;
+  color:var(--brass);
+  font-family:var(--serif);
+}
+.token-label{
+  margin-left:auto;
+  font-size:var(--t-sm);
+  color:var(--ink2);
+  display:flex;
+  align-items:center;
+  gap:var(--s1);
+}
+.token-label input{
+  font-family:var(--mono);
+  font-size:var(--t-sm);
+  padding:2px 6px;
+  border:1px solid var(--line2);
+  border-radius:var(--radius-sm);
+  background:var(--bg2);
+  color:var(--ink);
+  width:12em;
+}
+main{
+  max-width:1100px;
+  margin:0 auto;
+  padding:var(--s5);
+}
+section{
+  margin-bottom:var(--s6);
+}
+section h2{
+  font-size:var(--t-lg);
+  color:var(--brass);
+  border-bottom:1px solid var(--line);
+  padding-bottom:var(--s2);
+  margin-top:0;
+}
+footer#foot{
+  max-width:1100px;
+  margin:0 auto;
+  padding:var(--s4) var(--s5) var(--s6);
+  color:var(--ink2);
+  font-size:var(--t-sm);
+  font-family:var(--serif);
+  border-top:1px solid var(--line);
+}
+
+/* ---- freshness chip ------------------------------------------------------ */
+.rs-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:2px 8px;
+  border-radius:var(--radius-sm);
+  background:var(--brass-soft);
+  font-size:var(--t-sm);
+  font-family:var(--mono);
+}
+.rs-chip.stale{background:var(--stale-bg);color:var(--stale)}
+.rs-mark{
+  display:inline-block;
+  width:8px; height:8px;
+  border-radius:50%;
+}
+.rs-mark.ok{background:var(--ok)}
+.rs-mark.stale{background:var(--stale)}
+
+/* ---- cards and grid ------------------------------------------------------ */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--s4)}
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:var(--s4);
+  box-shadow:var(--shadow);
+  margin-bottom:var(--s3);
+}
+.lbl{
+  font-size:var(--t-xs);
+  font-family:var(--mono);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--ink2);
+  margin-bottom:var(--s2);
+}
+.tile{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:var(--s4);
+  box-shadow:var(--shadow);
+}
+.tile h3{
+  font-size:var(--t-sm);
+  font-family:var(--mono);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--ink2);
+  margin:0 0 var(--s2);
+}
+.big{margin-bottom:var(--s2)}
+.kv{display:flex;gap:var(--s2);font-size:var(--t-sm)}
+.kv span:first-child{color:var(--ink2);min-width:5em}
+
+/* ---- status spans -------------------------------------------------------- */
+.st{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  font-size:var(--t-sm);
+  font-family:var(--mono);
+  padding:2px 7px;
+  border-radius:var(--radius-sm);
+  margin:2px 0;
+}
+.st i{display:inline-block;width:8px;height:8px;border-radius:50%}
+.st-ok{background:var(--ok-bg);color:var(--ok)}     .st-ok i{background:var(--ok)}
+.st-bad{background:var(--bad-bg);color:var(--bad)}   .st-bad i{background:var(--bad)}
+.st-warn{background:var(--warn-bg);color:var(--warn)} .st-warn i{background:var(--warn)}
+.st-idle,.st-unread,.st-na{background:var(--idle-bg);color:var(--idle)} .st-idle i,.st-unread i,.st-na i{background:transparent;border:2px solid var(--idle)}
+.st-stale{background:var(--stale-bg);color:var(--stale)} .st-stale i{background:var(--stale)}
+
+/* ---- lede / sub ---------------------------------------------------------- */
+.lede{color:var(--ink2);font-size:var(--t-sm)}
+.sub{color:var(--ink2);font-size:var(--t-sm);margin-top:var(--s1)}
+.mono{font-family:var(--mono);font-size:var(--t-sm)}
+
+/* ---- VoIP.ms card -------------------------------------------------------- */
+.cs-sum{margin-bottom:var(--s2)}
+.cs-win{font-size:var(--t-sm);color:var(--ink2);margin-left:var(--s2)}
+.cs-amb{color:var(--warn);font-size:var(--t-sm);margin-top:var(--s2)}
+.vm-bal{font-size:28px;font-family:var(--mono);font-weight:600;color:var(--ok)}
+.vm-bal.vm-low{color:var(--bad)}
+.vm-sub{font-size:var(--t-sm);color:var(--ink2);margin-top:var(--s1)}
+
+/* ---- prov (source details) ----------------------------------------------- */
+details.prov{margin-top:var(--s3);font-size:var(--t-sm)}
+details.prov summary{cursor:pointer;color:var(--brass);list-style:none}
+details.prov summary::before{content:"▸ ";font-size:.7em}
+details.prov[open] summary::before{content:"▾ ";font-size:.7em}
+.src{
+  display:block;
+  font-family:var(--mono);
+  font-size:var(--t-xs);
+  background:var(--code-bg);
+  border-radius:var(--radius-sm);
+  padding:4px 8px;
+  margin-top:var(--s1);
+  white-space:pre-wrap;
+  word-break:break-all;
+}
+
+/* ---- banners ------------------------------------------------------------- */
+.banner{
+  padding:var(--s3) var(--s4);
+  border-radius:var(--radius);
+  margin-bottom:var(--s4);
+  font-size:var(--t-sm);
+}
+.banner.bad{background:var(--bad-bg);color:var(--bad)}
+.banner.replay{
+  background:var(--warn-bg);
+  color:var(--warn);
+  border:1px solid var(--warn);
+  font-family:var(--mono);
+  font-size:var(--t-sm);
+}
+
+/* ---- fax form / bar / msg ------------------------------------------------ */
+.bar{display:flex;align-items:center;gap:var(--s3)}
+button{
+  font-family:var(--mono);
+  font-size:var(--t-sm);
+  padding:5px 14px;
+  border:1px solid var(--line2);
+  border-radius:var(--radius-sm);
+  background:var(--brass-soft);
+  color:var(--brass);
+  cursor:pointer;
+}
+button:disabled{opacity:.5;cursor:not-allowed}
+.msg{font-size:var(--t-sm);font-family:var(--mono)}
+.msg.good{color:var(--ok)}
+.msg.bad{color:var(--bad)}
+
+/* ---- fax log table / scroll ---------------------------------------------- */
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:var(--t-sm)}
+th{
+  font-family:var(--mono);
+  font-size:var(--t-xs);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--ink2);
+  text-align:left;
+  padding:var(--s1) var(--s2);
+  border-bottom:1px solid var(--line2);
+}
+td{
+  padding:var(--s1) var(--s2);
+  border-bottom:1px solid var(--line-soft);
+  vertical-align:top;
+}
+.disp-ANSWERED{color:var(--ok)}
+.disp-NOANSWER,.disp-BUSY,.disp-FAILED{color:var(--bad)}
+
+code{
+  font-family:var(--mono);
+  font-size:.88em;
+  background:var(--code-bg);
+  border-radius:3px;
+  padding:1px 4px;
+}

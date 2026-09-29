@@ -95,6 +95,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", resp.content_type)
         self.send_header("Content-Length", str(len(resp.body)))
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        if resp.extra_headers:
+            for k, v in resp.extra_headers.items():
+                self.send_header(k, v)
         self.end_headers()
         self.wfile.write(resp.body)
 

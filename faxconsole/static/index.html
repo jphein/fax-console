@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fax console</title>
+<link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<header id="hdr">
+  <h1>Fax console</h1>
+  <span id="fresh" class="rs-chip"></span>
+  <label class="token-label">Token <input id="token" type="password" autocomplete="off" placeholder="write token"></label>
+</header>
+
+<div id="replay-banner" style="display:none" class="banner replay">
+  Replay: recorded data; a send is a dry run and nothing is dialled
+</div>
+
+<main>
+
+<section><h2>Live state</h2><div class="grid" id="live"></div></section>
+
+<section><h2>PSTN account</h2>
+  <p class="lede" style="margin-top:-2px">The VoIP.ms balance and the DID behind the
+  house number. <em>This is the one thing that silently runs out and takes the line
+  with it</em> &mdash; it is funded by hand, and nothing else on this page can tell you
+  it is low.</p>
+  <div id="voipms"></div></section>
+
+<section><h2>Fax &mdash; send a PDF from this page</h2>
+  <div id="fax"></div>
+  <div class="card">
+    <div class="lbl">Send</div>
+    <form id="faxform" style="display:grid;gap:8px;max-width:640px">
+      <label>Fax number <input id="faxnum" type="tel" inputmode="numeric" placeholder="202 555 0142"
+        style="width:14em" autocomplete="off"></label>
+      <label>Label <input id="faxlabel" type="text" placeholder="FORM-1" style="width:14em" maxlength="40"></label>
+      <label>PDF <input id="faxfile" type="file" accept="application/pdf"></label>
+      <label><input id="faxconfirm" type="checkbox"> I mean it &mdash; this dials the number above and delivers the document.</label>
+      <div class="bar">
+        <button id="faxsend" type="button">Send fax</button>
+        <span class="msg" id="faxmsg" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+    <details class="prov"><summary>How a fax leaves this house</summary>
+      <div style="font-family:var(--serif);font-size:.92rem;color:var(--ink2);margin-top:8px">
+        The PDF is rendered to a Group-4 TIFF and Asterisk dials the number on the
+        <code>voipms-fax</code> trunk view with <code>SendFax(&hellip;,f)</code>: plain G.711 audio,
+        because VoIP.ms never accepts the T.38 switch (measured 2026-09-27; without
+        <code>f</code> the call aborts). A call marked ANSWERED is not a delivered fax &mdash;
+        the outcome column comes from the fax counters. The Canon MX922 still works too:
+        dial <b>8</b> + 1 + number from it. All of this is the <code>fax</code> CLI
+        (<code>~/Projects/fax</code>); this panel only calls it.
+      </div>
+      <span class="src">/usr/local/bin/fax --local --json send &lt;pdf&gt; &lt;number&gt;</span>
+    </details>
+  </div>
+  <div id="faxlog"></div>
+</section>
+
+</main>
+
+<footer id="foot"></footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

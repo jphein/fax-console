@@ -17,6 +17,9 @@ fax = "faxcli.cli:main"
 where = ["."]
 include = ["faxcli*", "faxconsole*"]
 
+[tool.setuptools.package-data]
+faxconsole = ["static/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
