@@ -46,7 +46,7 @@ function freshness(ok, why){
     const at = document.documentElement.dataset.recorded || "";
     el.appendChild(document.createTextNode(at ? "PBX data recorded " + at : "static copy"));
     el.title = "A static copy of replay data: the PBX values were recorded" + (at ? " " + at : "")
-             + ", and the VoIP.ms values are a synthesized sample. Nothing on this page is live.";
+             + "; the VoIP.ms values are sample data (illustrative, not a real account). Nothing on this page is live.";
     return;
   }
   if(ok){
@@ -128,8 +128,8 @@ function renderVoipms(v){
            trunk.</b> One of the two is stale or the registration is flapping;
            neither view alone can tell you which.</div>` : "");
   el.innerHTML = `<div class="cs-sum">${reg}
-      <span class="cs-win">${STATIC ? "a synthesized sample: VoIP.ms was never recorded"
-        : "balance read "+esc(age)+(synth?" &middot; a synthesized sample":"")}${v.stale?" &middot; STALE":""}</span></div>
+      <span class="cs-win">${STATIC ? "sample data (illustrative, not a real account)"
+        : "balance read "+esc(age)+(synth?" &middot; sample data (illustrative, not a real account)":"")}${v.stale?" &middot; STALE":""}</span></div>
     <div class="card">
       <div class="vm-bal${low?" vm-low":""}">$${bal.toFixed(2)}</div>
       <div class="vm-sub">VoIP.ms balance${low
@@ -140,7 +140,7 @@ function renderVoipms(v){
     ${v.did_description?`<div class="vm-sub">DID: ${esc(v.did_description)}${
        v.did_sms_enabled?" &middot; SMS enabled":""}${v.did_e911?" &middot; E911":""}</div>`:""}
     ${v.error?`<div class="cs-amb">Last poll error: ${esc(v.error)}</div>`:""}
-    ${prov("source",synth?"synthesized fixtures (tests/fixtures/voipms), never captured from real API calls"
+    ${prov("source",synth?"sample data: synthesized fixtures (tests/fixtures/voipms), not a real account"
                         :"voip.ms API, polled every 300s in the background")}`;
 }
 async function loadVoipms(){
@@ -287,7 +287,7 @@ async function load(){
     if(foot) foot.textContent=
       (STATIC ? "This is a static copy: the PBX values were recorded "
                 +(document.documentElement.dataset.recorded || "")
-                +", and the VoIP.ms values are a synthesized sample. Each carries the command that produced it — "
+                +"; the VoIP.ms values are sample data (illustrative, not a real account). Each carries the command that produced it — "
               : "Every live value on this page carries the command that produced it — ")
       +"open how this was read on any tile. Where a state could not be read "
       +"it says not probed rather than guessing, because a wrong green dot is "

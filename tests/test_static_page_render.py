@@ -100,6 +100,7 @@ def test_the_chip_gives_the_capture_time_never_live(rendered):
 
 
 CHIP_DISCLAIMER = "Nothing on this page is live."      # the one sentence allowed to say "live"
+SAMPLE = "sample data (illustrative, not a real account)"    # the VoIP.ms fixtures are synthesized
 SHOWN_ATTRS = re.compile(r"""\b(?:title|aria-label|placeholder|alt|value)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 INLINE = "b|i|em|strong|span|a|code|small|abbr|sub|sup|mark|u|s|q|kbd|var|cite"
 INLINE_TAGS = re.compile(rf"</?(?:{INLINE})\b[^>]*>", re.I)
@@ -148,6 +149,7 @@ def test_the_tiles_rendered_and_sending_is_off(rendered):
     assert rendered["sendDisabled"] is True
     # The VoIP.ms fixtures are synthesized, never captured: the tile must say so and never call them recorded
     # (the Oracle, on PR 16). Without its static branch it read "never", which no countdown pattern catches.
-    assert "a synthesized sample: VoIP.ms was never recorded" in text["voipms"], text["voipms"][:200]
+    assert SAMPLE in text["voipms"], text["voipms"][:200]                    # the lead's wording
     assert "recording" not in text["voipms"] and "as recorded" not in text["voipms"], text["voipms"][:200]
-    assert "the VoIP.ms values are a synthesized sample" in text["foot"], text["foot"][:200]
+    assert f"the VoIP.ms values are {SAMPLE}" in text["foot"], text["foot"][:200]
+    assert "every value" not in text["foot"], text["foot"][:200]           # nothing claims all was recorded
