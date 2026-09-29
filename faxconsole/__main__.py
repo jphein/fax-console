@@ -86,6 +86,7 @@ def build(
             replay=True,
             voipms=voipms_poller,
             replay_root=tmpdir,
+            replay_fixture_dir=os.path.abspath(a.replay),   # as given, as error messages carry it
         )
 
         def _cleanup() -> None:

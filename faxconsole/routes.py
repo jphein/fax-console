@@ -197,6 +197,7 @@ class Config:
     replay: bool = False             # replay mode: POST /api/fax/send → dry run
     voipms: Any = None               # VoipMsPoller instance, or None
     replay_root: str | None = None   # replay mode: the temp dir that runtime paths are shown relative to
+    replay_fixture_dir: str | None = None   # replay mode: the --replay DIR, masked exactly in error text
 
     def __post_init__(self) -> None:
         from faxcli.transport import ReplayTransport  # noqa: PLC0415
@@ -451,23 +452,30 @@ def _public_path(config: Config, path: str) -> str:
 
 # _ABS_PATH_RE finds the longest absolute path token in an error string.
 # Matches a '/' followed by non-whitespace, non-quote characters.
-_ABS_PATH_RE = re.compile(r"(/[^\s'\"]+)")
+# A URL, or an absolute path that is not already a "replay:/…" token (nor part of a URL).
+_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"]+")
+_ABS_PATH_RE = re.compile(r"(?<![\w:/])(/[^\s'\"]+)")
 
 
 def _mask_error(config: Config, text: str) -> str:
-    """In replay mode, replace every absolute path inside *text* using the
-    same rules as ``_public_path``: replay-root-relative paths become
-    ``replay:/…`` and other absolute paths become ``replay:<basename>``.
+    """In replay mode, take every machine path out of *text*, an error message. Live mode, which only
+    the LAN sees, returns it unchanged.
 
-    In live mode the text is returned unchanged.
+    First the directories replay knows are replaced EXACTLY: the replay root (the temp dir) and the
+    fixture dir become "replay:". An exact replacement survives a space or a quote inside the name.
+    Then any other URL or absolute path becomes a constant, never its basename, which is also a name
+    from the machine.
+
+    Review of PR 8, S-a: the first version masked token by token. A token ends at a space or a quote,
+    so a deploy path such as "/srv/x y/fixtures" left " y/fixtures" behind.
     """
     if not config.replay:
         return text
-
-    def _replace(m: re.Match) -> str:
-        return _public_path(config, m.group(1))
-
-    return _ABS_PATH_RE.sub(_replace, text)
+    known = [d.rstrip(os.sep) for d in (config.replay_root, config.replay_fixture_dir) if d]
+    for d in sorted({d for d in known if d}, key=len, reverse=True):
+        text = text.replace(d + os.sep, "replay:/").replace(d, "replay:")
+    text = _URL_RE.sub("replay:<url>", text)
+    return _ABS_PATH_RE.sub("replay:<path>", text)
 
 
 def _route_version(config: Config | None = None) -> Response:

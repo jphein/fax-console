@@ -80,3 +80,9 @@ def test_the_adapters_500_is_masked(replay, monkeypatch):
     assert data.startswith(b"HTTP/1.0 500 "), data[:80]
     _no_machine_path(data.decode(errors="replace"), fx, config.replay_root)
 
+
+def test_a_dir_name_with_spaces_leaves_no_fragment(replay):
+    """S-a: masking token by token stops at a space, and the rest of the dir name leaked."""
+    config, _fx = replay
+    for route in ("/api/fax/log", "/api/fax", "/api/voipms"):
+        assert MARK not in handle("GET", route, {}, b"", config).body.decode(), route
