@@ -103,6 +103,7 @@ recording under `docs/bob-runs/`, and each run is its own commit.
 | 01:35–01:47 | – | – | controls for a gateway-pin fix ("reply ok", in the sandbox): 3 answered, since the sandbox drops an outside gateway variable; a gateway planted in Bob's settings broke the run with `--gateway-url` and without it | the flag does not pin the gateway, so it was not used; then all runs held (see Budget) | 0.065 |
 | 09:00 | – | – | the policy control for PR 6, in a throwaway clone ("reply ok"): a gateway planted in Bob's settings broke the run without the policy file and not with it; the baseline answered | the read-only policy locks the gateway; runs resume after PR 6 merges | 0.044 |
 | 09:26 | 11 | `d01d3024` | review fixes: the public replay surface, headers, the server's timeout and permit, the entry point, the replay spool, the `numbers.py` rename | kept; the first run through the PR 5 wrapper and under the PR 6 lock (its log shows the policy loaded and all 46 requests to IBM); stopped at the cap with the suite red, finished by the reviewer | 6.100 |
+| 09:44 | 12 | `8b678162` | deliberate fixes to legacy behaviours (a failed originate, a failed stats read, an empty CDR field), hardening, and `docs/changes.md` | kept; review reverted a replay transport that claimed an originate it could not replay, and closed a temp-dir leak and a limit bug | 5.100 |
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills them in (see **Budget** below).
@@ -125,7 +126,7 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | – | 9/29 01:35 | Gateway-pin controls | Tiny sandboxed runs testing whether `--gateway-url` beats a redirect: an outside env var is dropped by the sandbox (both answered "ok"); a planted `settings.gatewayUrl` breaks the run, with the flag or without | 3 answered, 2 failed | 0.065 | The flag was not proven; the fix is PR 5's environment pin |
 | – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
 | 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | Kept: all seven items. Bob stopped at the cap with the suite red, having not yet updated `build()`'s test callers, and the replay-path mask leaked when inbox and spool share no directory. The reviewer fixed both, plus a second `TRUNK` definition |
-| 12 | 9/29 09:44 | [Faxcli fixes](bob-runs/12-faxcli-fixes.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.10).) | 48 | 5.100 | review pending |
+| 12 | 9/29 09:44 | [Faxcli fixes](bob-runs/12-faxcli-fixes.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.10).) | 48 | 5.100 | Kept: the three deliberate fixes, the hardening and `docs/changes.md`. Review reverted a replay transport that claimed successful originates, and fixed a temp dir that leaked on a failed render and a CDR limit of 0 that returned every line |
 
 **Running total: 56.92 Bobcoins** (after run 12).
 
@@ -419,6 +420,27 @@ capped at the sum of their plan caps (6 + 4). That is under the 15 that needs th
     - With the leak reintroduced, Bob's 5 surface tests pass and the reviewed ones fail 4.
   - **A second `TRUNK` definition,** in `faxcli/cdr.py` since run 4, is now the only one.
 - **Cost.** 6.10, the full cap.
+
+### Run 12: deliberate fixes to legacy behaviours
+- **What Bob did.** Bob made three fixes like finding A, each pinned against the frozen legacy code:
+  - a failed originate raises instead of reporting `ok: true`;
+  - a failed "before" stats read gives an unmeasured outcome instead of counting from zero;
+  - an empty CDR `file` field matches nothing instead of every send.
+
+  Then three hardening items: a `mkdtemp` render path, `--` before the ssh host, and a local CDR read that
+  honours its limit. It listed every deliberate divergence in [`docs/changes.md`](changes.md). The run was
+  under the PR 6 lock (policy loaded, all 46 requests to IBM), with its work log.
+- **Kept.** All of it.
+- **Rejected or fixed, with reasons.**
+  - **The replay transport started answering `channel originate` with success** so that Bob's new tests
+    could drive a successful send. A transport that did nothing then reported that it had, which is the
+    pattern finding A removed, and nothing in the product needed it. It is reverted, and the tests use an
+    explicit test double.
+  - **The `mkdtemp` dir leaked on a failed render.** Cleanup is now in a `finally`.
+  - **A CDR limit of 0 returned every line** (`lines[-0:]`), and the whole file was still read into memory,
+    though `docs/changes.md` said otherwise. A deque keeps only the tail, and the document now matches the
+    code.
+- **Cost.** 5.10, the full cap.
 
 ## Who wrote what
 | Author | What |
