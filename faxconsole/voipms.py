@@ -15,16 +15,19 @@ Every legacy comment and design constraint is preserved:
 I/O seams (all injectable for tests):
   · http(method, params) → dict     — replaces urllib.request
   · clock() → float                 — replaces time.time
-  · sleep(secs)                     — replaces time.sleep
+  · sleep(secs)                     — replaces time.sleep (default: waits on stop event)
   · cache_path: str                 — replaces VOIPMS_CACHE_FILE
-  · creds_path: str                 — replaces VOIPMS_ENV
+  · creds: callable or str          — replaces VOIPMS_ENV; callable → (user, pw, did);
+                                       str → path passed to _creds()
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import threading
+import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
@@ -116,7 +119,7 @@ def _creds(creds_path: str) -> tuple[str, str, str]:
     if not user or not pw:
         # ⛔ NAMES THE PATH AND THE MISSING KEY, NEVER A VALUE (e:754–756).
         raise KeyError(
-            "VOIPMS_USER and VOIPMS_PASS must both be set in %s" % creds_path
+            f"VOIPMS_USER and VOIPMS_PASS must both be set in {creds_path}"
         )
     return user, pw, (did or "")
 
@@ -135,6 +138,29 @@ def _live_http(method: str, params: dict[str, str]) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# fixture_http — replay helper
+# ---------------------------------------------------------------------------
+
+def fixture_http(fixture_dir: str | os.PathLike) -> Callable[[str, dict], dict]:
+    """Return an http(method, params) callable that serves ``fixture_dir/<method>.json``.
+
+    Raises ``KeyError`` for unknown methods; never touches the network.
+    """
+    from pathlib import Path  # noqa: PLC0415
+
+    base = Path(fixture_dir)
+
+    def _http(method: str, params: dict[str, str]) -> dict:  # noqa: ARG001
+        path = base / f"{method}.json"
+        if not path.exists():
+            raise KeyError(f"fixture_http: no fixture for method {method!r} in {base}")
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    return _http
+
+
+# ---------------------------------------------------------------------------
 # VoipMsPoller (legacy e:760–1003)
 # ---------------------------------------------------------------------------
 
@@ -149,9 +175,10 @@ class VoipMsPoller:
     Injectable seams (all have safe defaults for live mode):
       ``http``        — callable(method, params) → dict.  Default: real urllib.
       ``clock``       — callable() → float.  Default: time.time.
-      ``sleep``       — callable(secs).  Default: time.sleep.
+      ``sleep``       — callable(secs).  Default: waits on stop event (exits in ≤ secs).
       ``cache_path``  — where to persist the snapshot.
-      ``creds_path``  — credential file (VOIPMS_USER / VOIPMS_PASS / VOIPMS_DID).
+      ``creds``       — callable() → (user, pw, did) OR a path string.
+                         Default: reads _DEFAULT_CREDS file via _creds().
       ``legacy_cache``— legacy seed-cache path; read-once if our own is absent.
       ``subaccount``  — VoIP.ms sub-account name.
       ``intervals``   — per-section poll intervals in seconds.
@@ -166,7 +193,7 @@ class VoipMsPoller:
         clock: Callable[[], float] | None = None,
         sleep: Callable[[float], None] | None = None,
         cache_path: str | None = None,
-        creds_path: str | None = None,
+        creds: Callable[[], tuple[str, str, str]] | str | None = None,
         legacy_cache: str | None = None,
         subaccount: str | None = None,
         intervals: dict[str, int] | None = None,
@@ -177,16 +204,31 @@ class VoipMsPoller:
 
         self._http = http if http is not None else _live_http
         self._clock = clock if clock is not None else _time.time
-        self._sleep = sleep if sleep is not None else _time.sleep
         self._cache_path = cache_path or _DEFAULT_CACHE
-        self._creds_path = creds_path or _DEFAULT_CREDS
         self._legacy_cache = legacy_cache or _LEGACY_CACHE
         self._subaccount = subaccount or VOIPMS_SUBACCOUNT
         self._intervals = intervals or VOIPMS_INTERVALS
         self._low_balance = low_balance if low_balance is not None else VOIPMS_LOW_BALANCE
         self._stale_after = stale_after if stale_after is not None else VOIPMS_STALE_AFTER
 
+        # Credentials: callable or path string
+        if callable(creds):
+            self._creds = creds
+        else:
+            creds_path = creds if isinstance(creds, str) else _DEFAULT_CREDS
+            self._creds: Callable[[], tuple[str, str, str]] = (
+                lambda p=creds_path: _creds(p)
+            )
+
         self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+
+        # Default sleep: waits on stop event so stop() wakes the loop immediately.
+        if sleep is not None:
+            self._sleep = sleep
+        else:
+            self._sleep = lambda secs: self._stop_event.wait(secs)
+
         self._data: dict[str, Any] = {
             "balance": None, "spent_today": None, "calls_today": None,
             "time_today": None, "spent_total": None, "calls_total": None,
@@ -203,7 +245,6 @@ class VoipMsPoller:
         }
         # ⛔ NOT IN _data, THEREFORE NOT PERSISTED (legacy e:804–810).
         self._started = False
-        self._stop_event = threading.Event()
         self._load()
 
     # ------------------------------------------------------------------
@@ -216,20 +257,18 @@ class VoipMsPoller:
             (self._cache_path, False),
             (self._legacy_cache, True),
         ):
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 with open(path, encoding="utf-8") as fh:
                     disk = json.load(fh)
-            except (OSError, ValueError):
-                continue
-            if isinstance(disk, dict):
-                self._data.update({k: v for k, v in disk.items()
-                                   if k in _PERSIST})
-                # ⭐ SEED ONCE, FROM THE RETIRING SERVICE, READ-ONLY (e:825).
-                return
+                if isinstance(disk, dict):
+                    self._data.update({k: v for k, v in disk.items()
+                                       if k in _PERSIST})
+                    # ⭐ SEED ONCE, FROM THE RETIRING SERVICE, READ-ONLY (e:825).
+                    return
 
     def _save(self) -> None:
         """Write state to disk atomically (legacy e:837–845)."""
-        try:
+        with contextlib.suppress(OSError):
             state_dir = os.path.dirname(self._cache_path)
             os.makedirs(state_dir, exist_ok=True)
             tmp = self._cache_path + ".tmp"
@@ -237,8 +276,6 @@ class VoipMsPoller:
                 json.dump({k: self._data[k] for k in _PERSIST
                            if k in self._data}, fh)
             os.replace(tmp, self._cache_path)  # atomic; never a torn file
-        except OSError:
-            pass   # a cache we cannot persist is still a cache
 
     def _call(self, method: str, user: str, pw: str, **params: str) -> dict:
         """Call the VoIP.ms REST API (legacy e:847–867)."""
@@ -246,23 +283,30 @@ class VoipMsPoller:
                       "method": method, **params}
         try:
             body = self._http(method, api_params)
+        except urllib.error.HTTPError as e:
+            # ⛔ HTTP ERRORS BEFORE SCRUB (legacy e:855–859).
+            hint = (
+                " — a bare 403 here is usually the WAF rejecting the "
+                "User-Agent, not the credentials or the IP whitelist"
+                if e.code == 403 else ""
+            )
+            raise RuntimeError(f"{method}: HTTP {e.code}{hint}") from None
         except Exception as e:
             # ⛔ SCRUBBED, AND `from None` (legacy e:861–864).
-            raise RuntimeError(_scrub("%s: %s" % (method, e), pw)) from None
+            raise RuntimeError(_scrub(f"{method}: {e}", pw)) from None
         if body.get("status") != "success":
-            raise RuntimeError("%s: %s" % (method, body.get("status")))
+            raise RuntimeError(f"{method}: {body.get('status')}")
         return body
 
     def _refresh_once(self) -> None:
         """One poll cycle (legacy e:869–954)."""
         now = self._clock()
         try:
-            user, pw, did = _creds(self._creds_path)
+            user, pw, did = self._creds()
         except (OSError, KeyError) as e:
             with self._lock:
                 # ⛔ NAMES THE PATH AND THE MISSING KEY; no value (legacy e:874–878).
-                self._data["error"] = "credentials unreadable (%s): %s" % (
-                    self._creds_path, e)
+                self._data["error"] = f"credentials unreadable: {e}"
             return
 
         errs: list[str] = []
@@ -276,8 +320,8 @@ class VoipMsPoller:
                 if section == "balance":
                     b = self._call("getBalance", user, pw, advanced="true")["balance"]
 
-                    def _m(key: str) -> tuple[Any, bool]:
-                        raw = b.get(key)
+                    def _m(key: str, _b: dict = b) -> tuple[Any, bool]:
+                        raw = _b.get(key)
                         return raw, (raw not in (None, ""))
 
                     _st, _st_m = _m("spent_today")
@@ -336,10 +380,8 @@ class VoipMsPoller:
         # A short first delay lets the HTTP server bind and answer immediately.
         self._sleep(2)
         while not self._stop_event.is_set():
-            try:
+            with contextlib.suppress(Exception):
                 self._refresh_once()
-            except Exception:
-                pass  # never let the thread die
             self._sleep(30)
 
     # ------------------------------------------------------------------
@@ -356,7 +398,7 @@ class VoipMsPoller:
         t.start()
 
     def stop(self) -> None:
-        """Signal the background loop to exit.  Legacy had none; added for tests."""
+        """Signal the background loop to exit.  Returns immediately."""
         self._stop_event.set()
 
     def snapshot(self) -> dict[str, Any]:
@@ -369,7 +411,8 @@ class VoipMsPoller:
             d["polling"] = self._started
 
         newest = max(fetched.values()) if fetched else 0
-        age = int(self._clock() - newest) if newest else None
+        now_ts = self._clock()
+        age = int(now_ts - newest) if newest else None
         bal = d.get("balance")
 
         d["age"] = age
@@ -383,9 +426,8 @@ class VoipMsPoller:
         d["months_left"] = round(bal / 2.35, 1) if bal is not None else None
         d["days_to_billing"] = None
         if d.get("did_next_billing"):
-            try:
+            with contextlib.suppress(ValueError):
                 nb = datetime.datetime.strptime(d["did_next_billing"], "%Y-%m-%d")
-                d["days_to_billing"] = (nb - datetime.datetime.now()).days  # noqa: DTZ005
-            except ValueError:
-                pass
+                now_dt = datetime.datetime.fromtimestamp(now_ts)  # noqa: DTZ006
+                d["days_to_billing"] = (nb - now_dt).days
         return d
