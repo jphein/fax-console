@@ -595,3 +595,77 @@ def test_an_unreadable_git_index_stops_the_start_and_nothing_is_purged(tmp_path)
     r = sandbox(repo, env)
     assert r.returncode == 2 and "cannot check" in r.stderr and not argv.exists(), r.stderr
     assert tracked.exists()
+
+
+@pytest.mark.parametrize("var", ["GIT_INDEX_FILE", "GIT_DIR"])
+def test_an_inherited_git_index_or_dir_cannot_hide_a_tracked_file(tmp_path, var):
+    """The tracked-file check must read this tree's own index. A caller's private GIT_INDEX_FILE, or a hook's
+    GIT_DIR, would show an index in which the tracked file is absent, and the file would be purged (the
+    standing Oracle's Low on #21). bob-sandbox.sh unsets both before its first git call."""
+    repo, env, argv = sandbox_repo(tmp_path, var.lower())
+    tracked = repo / "pkg" / "__pycache__" / "notes.txt"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(tracked)], cwd=repo, check=True)
+    other = tmp_path / var.lower() / "other"
+    subprocess.run(["git", "init", "-q", str(other)], check=True)
+    value = str(other / ".git" / "index") if var == "GIT_INDEX_FILE" else str(other / ".git")
+    env = {**env, var: value}
+    shown = subprocess.run(["git", "ls-files"], cwd=repo, env=env, capture_output=True, text=True,
+                           check=False)
+    assert shown.returncode == 0 and shown.stdout == "", "the inherited index lists the file: proves nothing"
+    r = sandbox(repo, env)
+    assert r.returncode == 2 and "holds a tracked file" in r.stderr and not argv.exists(), r.stderr
+    assert tracked.exists()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list a mode-000 directory")
+@pytest.mark.parametrize("d", [".claude", ".agents"])
+def test_an_unlistable_skills_dir_stops_the_start(tmp_path, d):
+    """A skills directory that cannot be listed might hold a skill, so the start stops. The old check read an
+    ls failure as "empty" (drift-gems, after #21). The purge's own listing would refuse it too; this test
+    pins the skills check's own refusal."""
+    repo, env, argv = sandbox_repo(tmp_path, d.strip("."))
+    sk = repo / d
+    sk.mkdir()
+    sk.chmod(0)
+    try:
+        r = sandbox(repo, env)
+    finally:
+        sk.chmod(0o755)
+    msg = f"cannot list {repo.resolve() / d}"
+    assert r.returncode == 2 and msg in r.stderr and not argv.exists(), r.stderr
+
+
+def test_the_sandbox_purges_again_after_the_run_and_keeps_its_exit_code(tmp_path):
+    """Nothing a run leaves in a __pycache__ outlives it on the host: the sandbox purges again once the run
+    ends. The run's own exit code is kept, since bob-run.sh records it in the ledger (the lead, after #21).
+    The fake sudo stands in for the run: it plants a cache, marks that it did, and exits 3."""
+    repo, env, argv = sandbox_repo(tmp_path, "after")
+    fake = Path(env["PATH"].split(":")[0])
+    cache, mark = repo / "faxconsole" / "__pycache__", tmp_path / "after" / "planted"
+    (fake / "sudo").write_text(f"#!/bin/sh\nmkdir -p {cache} && : > {cache}/m.cpython-314.pyc && : > {mark}\n"
+                               "exit 3\n", encoding="utf-8")
+    r = sandbox(repo, env)
+    assert mark.exists(), "the run never planted: the test would prove nothing"
+    assert r.returncode == 3 and not cache.exists(), r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list a mode-000 directory")
+def test_a_refused_purge_after_the_run_only_warns_and_the_next_start_is_refused(tmp_path):
+    """A run can leave the tree unlistable, say with a mode-000 directory. The purge after the run then
+    refuses: it warns and keeps the run's exit code. The next start refuses too, until the tree is fixed
+    (fail closed)."""
+    repo, env, argv = sandbox_repo(tmp_path, "afterref")
+    fake = Path(env["PATH"].split(":")[0])
+    locked = repo / "locked"
+    (fake / "sudo").write_text(f"#!/bin/sh\nmkdir -p {locked} && chmod 000 {locked}\nexit 0\n",
+                               encoding="utf-8")
+    try:
+        r = sandbox(repo, env)
+        assert r.returncode == 0 and "the purge after the run refused" in r.stderr, r.stderr
+        again = sandbox(repo, env)
+        assert again.returncode == 2 and "could not all be listed" in again.stderr, again.stderr
+    finally:
+        if locked.exists():
+            locked.chmod(0o755)
