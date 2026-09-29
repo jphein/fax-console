@@ -230,6 +230,14 @@ class TestTrunkDefinedOnce:
         from faxcli.api import TRUNK
         assert TRUNK == "voipms-fax"
 
+    def test_trunk_is_one_definition(self):
+        """Review of run 11: faxcli/cdr.py also defined TRUNK, so there were still two."""
+        import faxcli.api as api
+        import faxcli.cdr as cdr
+        assert api.TRUNK is cdr.TRUNK
+        sources = [p.read_text() for p in __import__("pathlib").Path("faxcli").glob("*.py")]
+        assert sum(s.count('TRUNK = "voipms-fax"') for s in sources) == 1
+
     def test_cli_does_not_define_trunk(self):
         """cli.py must not define TRUNK itself — it was the duplicate."""
         import faxcli.cli as _cli

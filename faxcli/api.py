@@ -22,7 +22,7 @@ from faxcli.models import DryRunResult, SendResult
 from faxcli.phone_numbers import normalize
 from faxcli.transport import Transport
 
-TRUNK = "voipms-fax"
+TRUNK = cdr_mod.TRUNK   # one definition, in faxcli.cdr, the lowest module that needs it
 SPOOL = "/var/spool/asterisk/fax"
 
 __all__ = ["SendError", "send"]
