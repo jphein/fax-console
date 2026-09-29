@@ -150,6 +150,8 @@ mid-way would have to re-read everything on resume, which costs more than the he
 full-suite pass. A fresh run 5 has to re-read about 1,900 lines of its own package and tests
 before it edits them. 3 would likely stop mid-fix again.
 
+**Cap for run 11 (review fixes in `faxconsole/`): 6,** as planned. It covers seven small items, the first being the public replay surface, with tests for each, across files that runs 6–9 wrote. From this run on, the wrapper from PR 5 reserves the cap and writes the run's row itself.
+
 **Runs on hold (9/29 01:40).** The independent review found two ways a Bob run could reach the workstation or
 its API key, in this branch's older wrapper as well:
 - a gateway URL planted in the persistent Bob home, which the next run would obey;
