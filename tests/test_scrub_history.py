@@ -491,3 +491,22 @@ def test_a_deny_list_with_no_entries_is_refused(repo, tmp_path):
 
 def test_a_missing_deny_list_is_refused_when_required(repo):
     assert scrub(repo, "--stdin", "t", "--require-deny", stdin="x\n").returncode == 2
+
+
+def test_the_shadow_mode_reads_the_disk_and_nothing_else(repo):
+    """test.sh runs `--shadow` before the sandbox (the Oracle's delta on PR 11). It sees what Python would
+    import, tracked or not: a json.py, a json symlink, tests/re.py and a scripts/hashlib/ package. It
+    scans no content, so a phone number in a file is not its business (the commit gates own that)."""
+    (repo / "notes.txt").write_text(f"call {PHONE}\n", encoding="utf-8")
+    assert scrub(repo, "--shadow").returncode == 0, "a content finding must not fail --shadow"
+    (repo / "pkg").mkdir()
+    (repo / "pkg" / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "json.py").write_text("x = 1\n", encoding="utf-8")                    # untracked, unstaged
+    (repo / "subprocess").symlink_to("pkg")
+    for rel in ("tests/re.py", "scripts/hashlib/__init__.py", "faxcli/json.py", "tests/test_json.py"):
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("x = 1\n", encoding="utf-8")
+    r = scrub(repo, "--shadow")
+    flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
+    assert r.returncode == 1
+    assert flagged == {"json.py", "subprocess", "tests/re.py", "scripts/hashlib/__init__.py"}, r.stdout

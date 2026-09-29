@@ -21,9 +21,33 @@ python3 -m faxconsole --replay /opt/fax-console/fixtures --host 127.0.0.1 --port
 
 ## The reverse proxy (for example Caddy)
 
-- Read timeouts, because the app's handler timeout is an **idle** timeout, not a deadline: a client that trickles bytes can hold a worker for longer. For Caddy, that is `servers { timeouts { read_header 10s  read_body 30s  idle 60s } }`.
-- A body cap a little above the app's 15 MB PDF limit, for Caddy `request_body { max_size 16MB }`. The app already answers 401 or 413 before reading any body (the review of PR 8, M1). The cap keeps an oversized upload from reaching the app at all.
+- Read timeouts, because the app's handler timeout is an **idle** timeout, not a deadline: a client that trickles bytes can hold a worker for longer.
+- A body cap a little above the app's 15 MB PDF limit. The app already answers 401 or 413 before reading any body (the review of PR 8, M1). The cap keeps an oversized upload from reaching the app at all.
 - HSTS on the public name. The app itself sends a CSP and `nosniff`.
+
+For Caddy, with `demo.example.org` standing in for the public name:
+
+```
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 30s
+			idle 60s
+		}
+	}
+}
+
+demo.example.org {
+	request_body {
+		max_size 16MB
+	}
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy 127.0.0.1:8093
+}
+```
+
+A Caddyfile needs each `{` at the end of its line and each `}` on a line of its own, so keep these blocks on separate lines, as shown.
 
 ## Register and check
 
