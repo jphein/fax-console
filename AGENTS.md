@@ -59,4 +59,7 @@ sandbox or in CI.
   **On the workstation, only `scripts/test.sh`**, which runs both inside the sandbox. A test
   suite executes whatever it contains, so agent-written tests never run unsandboxed there. CI runs
   them on GitHub's disposable runners, which have no secrets and no route to the house network.
+- **Host-side Python in this repo always runs with `-I`**, ad-hoc agent commands included. Without it, the
+  working directory or the script's own directory is on `sys.path`, so a module left in the tree (a planted
+  `importlib.py`, say) would run on the host.
 - Docs go in `docs/`. Write plainly and cite the file and line you are describing.

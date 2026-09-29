@@ -506,3 +506,56 @@ def test_the_sandbox_env_keeps_python_bytecode_on_its_own_tmp(tmp_path):
     assert "/home/bob" in dests                                        # the table does read destinations
     bad = ("/", "/tmp", "/tmp/pycache")
     assert not [d for d in dests if d in bad or d.startswith("/tmp/pycache/")], dests
+
+
+def test_every_start_purges_the_trees_pycache_before_bwrap(tmp_path):
+    """A .pyc left in the tree must not survive into a start (the lead and Aurora's Oracle, on #21):
+    - every __pycache__ directory, and any symlink named __pycache__, is gone before bwrap runs;
+    - a link's own target, and a __pycache__ reached only through a linked directory, are outside the tree
+      and stay untouched;
+    - .venv/ (read-only to Bob) and scratch/ (never written) are not walked."""
+    repo, env, argv = sandbox_repo(tmp_path, "purge")
+    outside = tmp_path / "purge" / "outside"
+    (outside / "__pycache__").mkdir(parents=True)
+    (outside / "__pycache__" / "keep.pyc").write_bytes(b"outside")
+    (outside / "data.txt").write_text("keep\n", encoding="utf-8")
+    plants = [repo / "__pycache__", repo / "faxconsole" / "__pycache__", repo / "a" / "b" / "__pycache__",
+              repo / ".bob" / "tmp" / "__pycache__"]
+    for p in plants:
+        p.mkdir(parents=True)
+        (p / "m.cpython-314.pyc").write_bytes(b"planted")
+    (repo / "faxconsole" / "m.py").write_text("X = 1\n", encoding="utf-8")
+    (repo / "tests").mkdir()
+    link = repo / "tests" / "__pycache__"
+    link.symlink_to(outside)                                          # the link goes; its target stays
+    (repo / "linked").symlink_to(outside)                             # not the tree's: never walked into
+    kept = [repo / ".venv" / "lib" / "__pycache__" / "k.pyc", repo / "scratch" / "__pycache__" / "k.pyc"]
+    for k in kept:
+        k.parent.mkdir(parents=True)
+        k.write_bytes(b"kept")
+    r = sandbox(repo, env)
+    assert r.returncode == 0 and argv.exists(), r.stderr
+    assert not [p for p in plants if p.exists()] and not link.is_symlink() and not link.exists()
+    assert (outside / "__pycache__" / "keep.pyc").exists() and (outside / "data.txt").exists()
+    assert (repo / "linked").is_symlink() and (repo / "faxconsole" / "m.py").exists()
+    assert all(k.exists() for k in kept), kept
+
+
+def test_a_tracked_file_in_a_pycache_stops_the_start_and_nothing_is_purged(tmp_path):
+    """Only cache artifacts are purged: a __pycache__ that holds a tracked file is not one. The start stops
+    before bwrap, and since every check runs before the first deletion, nothing is deleted (the lead, on
+    #21)."""
+    repo, env, argv = sandbox_repo(tmp_path, "tracked")
+    # Caches around the tracked one, in several directories: a purge that deleted as it went would, in almost
+    # any walk order, have removed one of them before reaching the tracked file.
+    caches = [repo / d / "__pycache__" / "m.cpython-314.pyc" for d in ("aa", "faxconsole", "tests", "zz")]
+    for c in caches:
+        c.parent.mkdir(parents=True)
+        c.write_bytes(b"cache")
+    tracked = repo / "mm" / "__pycache__" / "notes.txt"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(tracked)], cwd=repo, check=True)
+    r = sandbox(repo, env)
+    assert r.returncode == 2 and "holds a tracked file" in r.stderr and not argv.exists(), r.stderr
+    assert tracked.exists() and all(c.exists() for c in caches)
