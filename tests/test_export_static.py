@@ -63,7 +63,6 @@ def test_app_js_reads_every_get_through_api():
     assert 'const api = p => STATIC ? "api" + p.slice(4) + ".json" : p;' in js
     assert 'document.getElementById("faxsend").disabled=true' in js
     # What the static page actually renders is tested by running app.js: tests/test_static_page_render.py
-    assert 'STATIC ? "This is a static copy, and every value on it was recorded.' in js
 
 
 # realm-sigil's README: "Static sites omit server-only fields". Spelled out here, not taken from the
@@ -77,9 +76,9 @@ def test_the_version_is_the_static_sigil(site):
     assert not SIGIL_SERVER_ONLY & set(v), SIGIL_SERVER_ONLY & set(v)
 
 
-def test_the_voipms_time_is_the_capture_time_in_utc(site):
-    # tests/fixtures/capture.json: 2026-09-28 22:25 PDT, the same instant as 2026-09-29 05:25 UTC
-    assert json.loads(site["api/voipms.json"])["fetched_at"] == "2026-09-29 05:25:00 UTC"
+def test_the_capture_label_is_derived_from_captured_at():
+    # one source of truth: capture.json's captured_at and zone give the README's 2026-09-28 22:25 PDT
+    assert ex.capture("tests/fixtures")[1] == "2026-09-28 22:25 PDT"
 
 
 def test_two_exports_are_byte_identical(site):
@@ -93,10 +92,11 @@ def test_two_exports_are_byte_identical(site):
     assert one.getvalue() == two.getvalue(), sorted(n for n in site if site[n] != again.get(n))
 
 
-def test_the_voipms_json_carries_no_frozen_countdown(site):
+def test_the_synthesized_voipms_json_carries_no_time(site):
+    """tests/fixtures/voipms is synthesized, never captured: no fetch time, nothing computed from a clock."""
     v = json.loads(site["api/voipms.json"])
-    frozen = {"age", "stale", "days_to_billing", "polling"}      # spelled out, not the code's list
-    assert not frozen & set(v), frozen & set(v)
+    unmeasured = {"age", "stale", "days_to_billing", "polling", "fetched_at"}     # not the code's list
+    assert not unmeasured & set(v), unmeasured & set(v)
 
 
 def test_nothing_from_the_machine(site):

@@ -44,8 +44,9 @@ function freshness(ok, why){
     el.className = "rs-chip stale";
     el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
     const at = document.documentElement.dataset.recorded || "";
-    el.appendChild(document.createTextNode(at ? "recorded " + at : "static copy"));
-    el.title = "A static copy of replay data" + (at ? " recorded " + at : "") + ". Nothing on this page is live.";
+    el.appendChild(document.createTextNode(at ? "PBX data recorded " + at : "static copy"));
+    el.title = "A static copy of replay data: the PBX values were recorded" + (at ? " " + at : "")
+             + ", and the VoIP.ms values are a synthesized sample. Nothing on this page is live.";
     return;
   }
   if(ok){
@@ -96,11 +97,12 @@ function renderVoipms(v){
      catastrophic, and the page cannot tell which — so it reports both and lets
      neither hide the other. */
   const low = v.balance_low === true;
-  /* A static replay says the balance is from the recording, and gives the billing date, not a countdown.
-     Ages are computed at export, and "read 0s ago" or "in 32 days" on a page seen weeks later would claim
-     a freshness nobody measured (finding A). The trunk tile drops its "renews in" countdown likewise. */
-  const age = STATIC ? "from the recording"
-            : v.age===null||v.age===undefined ? "never"
+  /* The VoIP.ms fixtures are synthesized, never captured (tests/fixtures/voipms/README.md). In replay the
+     tile says so, and a static copy gives it no time at all: no age, and the billing date instead of a
+     countdown. "read 0s ago" or "in 32 days" on a page seen weeks later would claim a freshness nobody
+     measured (finding A; the Oracle, on PR 16). The trunk tile drops its "renews in" countdown likewise. */
+  const synth = STATIC || REPLAY_MODE;
+  const age = v.age===null||v.age===undefined ? "never"
             : (v.age<90 ? v.age+"s ago"
                : (v.age<5400 ? Math.round(v.age/60)+"m ago"
                              : Math.round(v.age/3600)+"h ago"));
@@ -126,7 +128,8 @@ function renderVoipms(v){
            trunk.</b> One of the two is stale or the registration is flapping;
            neither view alone can tell you which.</div>` : "");
   el.innerHTML = `<div class="cs-sum">${reg}
-      <span class="cs-win">balance read ${esc(age)}${v.stale?" &middot; STALE":""}</span></div>
+      <span class="cs-win">${STATIC ? "a synthesized sample: VoIP.ms was never recorded"
+        : "balance read "+esc(age)+(synth?" &middot; a synthesized sample":"")}${v.stale?" &middot; STALE":""}</span></div>
     <div class="card">
       <div class="vm-bal${low?" vm-low":""}">$${bal.toFixed(2)}</div>
       <div class="vm-sub">VoIP.ms balance${low
@@ -137,7 +140,7 @@ function renderVoipms(v){
     ${v.did_description?`<div class="vm-sub">DID: ${esc(v.did_description)}${
        v.did_sms_enabled?" &middot; SMS enabled":""}${v.did_e911?" &middot; E911":""}</div>`:""}
     ${v.error?`<div class="cs-amb">Last poll error: ${esc(v.error)}</div>`:""}
-    ${prov("source",STATIC?"voip.ms API, as recorded; a static copy polls nothing"
+    ${prov("source",synth?"synthesized fixtures (tests/fixtures/voipms), never captured from real API calls"
                         :"voip.ms API, polled every 300s in the background")}`;
 }
 async function loadVoipms(){
@@ -282,8 +285,9 @@ async function load(){
   fetch(api("/api/version")).then(r=>r.json()).then(v=>{
     const foot=document.getElementById("foot");
     if(foot) foot.textContent=
-      (STATIC ? "This is a static copy, and every value on it was recorded. Each carries the command "
-                +"that produced it — "
+      (STATIC ? "This is a static copy: the PBX values were recorded "
+                +(document.documentElement.dataset.recorded || "")
+                +", and the VoIP.ms values are a synthesized sample. Each carries the command that produced it — "
               : "Every live value on this page carries the command that produced it — ")
       +"open how this was read on any tile. Where a state could not be read "
       +"it says not probed rather than guessing, because a wrong green dot is "

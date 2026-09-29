@@ -95,20 +95,28 @@ def site_html():
 
 def test_the_chip_gives_the_capture_time_never_live(rendered):
     chip = rendered["chip"]
-    assert chip["text"] == "recorded 2026-09-28 22:25 PDT", chip          # tests/fixtures/capture.json
+    assert chip["text"] == "PBX data recorded 2026-09-28 22:25 PDT", chip      # tests/fixtures/capture.json
     assert "Nothing on this page is live" in chip["title"], chip
 
 
 CHIP_DISCLAIMER = "Nothing on this page is live."      # the one sentence allowed to say "live"
-SHOWN_ATTRS = re.compile(r'\b(?:title|aria-label|placeholder|alt)="([^"]*)"')
+SHOWN_ATTRS = re.compile(r"""\b(?:title|aria-label|placeholder|alt|value)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
+INLINE = "b|i|em|strong|span|a|code|small|abbr|sub|sup|mark|u|s|q|kbd|var|cite"
+INLINE_TAGS = re.compile(rf"</?(?:{INLINE})\b[^>]*>", re.I)
 
 
 def views(markup):
-    """What a reader can see in some markup, entities decoded: the text with tags removed (so li<b></b>ve
-    reads "live"), the text with tags as spaces, and the attributes a browser shows (the Oracle, on PR 16)."""
+    """What a reader can see in some markup, entities decoded (the Oracle, on PR 16):
+    - the text with tags removed, so li<b></b>ve reads "live";
+    - the text with tags as spaces;
+    - the text as a browser lays it out, with inline tags removed and block tags as spaces, so
+      <h3>calls</h3><span>li<b></b>ve</span> reads "calls live";
+    - the attributes a browser shows, quoted either way."""
     markup = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", markup)
-    out = [html.unescape(re.sub(r"<[^>]*>", "", markup)), html.unescape(re.sub(r"<[^>]*>", " ", markup))]
-    return out + [html.unescape(v) for v in SHOWN_ATTRS.findall(markup)]
+    out = [re.sub(r"<[^>]*>", "", markup), re.sub(r"<[^>]*>", " ", markup),
+           re.sub(r"<[^>]*>", " ", INLINE_TAGS.sub("", markup))]
+    out += [a or b for a, b in SHOWN_ATTRS.findall(markup)]
+    return [html.unescape(t) for t in out]
 
 
 def claims(texts):
@@ -138,6 +146,8 @@ def test_the_tiles_rendered_and_sending_is_off(rendered):
     assert text.get("live") and text.get("voipms") and text.get("fax"), sorted(text)
     assert "Fax could not be read" not in text["fax"] and "Last poll error" not in text["voipms"], text
     assert rendered["sendDisabled"] is True
-    # the VoIP.ms tile says where its balance came from. Without its static branch it read "never", since the
-    # export drops the age: false as well, and no countdown pattern catches it.
-    assert "balance read from the recording" in text["voipms"], text["voipms"][:200]
+    # The VoIP.ms fixtures are synthesized, never captured: the tile must say so and never call them recorded
+    # (the Oracle, on PR 16). Without its static branch it read "never", which no countdown pattern catches.
+    assert "a synthesized sample: VoIP.ms was never recorded" in text["voipms"], text["voipms"][:200]
+    assert "recording" not in text["voipms"] and "as recorded" not in text["voipms"], text["voipms"][:200]
+    assert "the VoIP.ms values are a synthesized sample" in text["foot"], text["foot"][:200]

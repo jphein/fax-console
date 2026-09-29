@@ -8,7 +8,7 @@ This renders every GET route in replay mode, from the recorded and fictional fix
   since Pages sends no headers.
 - .nojekyll, so that Pages serves the files as they are.
 The version drops the fields that only a running server has (started, uptime, runtime, os, host, pid),
-as the realm-sigil static contract does, and the VoIP.ms fetched_at is given in UTC, not the host's zone.
+as the realm-sigil static contract does. The VoIP.ms fixtures are synthesized, so their JSON carries no time.
 
 It writes a tar stream to stdout. scripts/export-static.sh runs it inside the OS sandbox and extracts the
 stream on the host, so the files never land in a directory Bob can write.
@@ -21,6 +21,7 @@ import json
 import os
 import sys
 import tarfile
+import zoneinfo
 from typing import BinaryIO
 
 from faxconsole.__main__ import build
@@ -33,17 +34,10 @@ GET_API_ROUTES = ("/api/voipms", "/api/fax/status", "/api/fax/log", "/api/fax",
 PAGE_ASSETS = ("app.css", "app.js", "favicon.svg")
 # realm-sigil: "Static sites omit server-only fields".
 SERVER_ONLY = ("started", "uptime", "runtime", "os", "host", "pid")
-# VoIP.ms fields computed from the export's own clock: a static copy would freeze them into a countdown.
-# The page's static mode reads fetched_at and did_next_billing instead.
-VOIPMS_FROZEN = ("age", "stale", "days_to_billing", "polling")
-
-
-def utc(local: str) -> str:
-    """The poller writes fetched_at in the host's local time. A static site would freeze that zone onto a
-    public page, so the export gives the same instant in UTC. (The export pins the poller's clock to the
-    fixtures' capture time, so this is that time.)"""
-    t = datetime.datetime.strptime(local, "%Y-%m-%d %H:%M:%S").astimezone(datetime.timezone.utc)
-    return t.strftime("%Y-%m-%d %H:%M:%S UTC")
+# The VoIP.ms fixtures are synthesized, never captured (tests/fixtures/voipms/README.md). So the export
+# carries no time for them: no fetched_at, and nothing computed from a clock, which a static copy would
+# also freeze into a countdown (the Oracle, on PR 16).
+VOIPMS_UNMEASURED = ("age", "stale", "days_to_billing", "polling", "fetched_at")
 
 
 def api_file(route: str) -> str:
@@ -69,11 +63,13 @@ def staticize(page: bytes, recorded: str) -> bytes:
 
 
 def capture(fixtures: str) -> tuple[float, str]:
-    """The fixtures' own capture time, committed with them (capture.json), and its label. The export dates the
-    replay by it, never by its own clock: the data are that old, and two exports then agree byte for byte."""
+    """When the recorded PBX fixtures (asterisk/, cdr/) were captured, committed with them in
+    capture.json, and its label, derived from it: one source of truth. The export dates the replay by it,
+    never by its own clock, so the data are shown as old as they are and two exports agree byte for byte."""
     with open(os.path.join(fixtures, "capture.json"), encoding="utf-8") as f:
         meta = json.load(f)
-    return datetime.datetime.fromisoformat(meta["captured_at"]).timestamp(), meta["label"]
+    at = datetime.datetime.fromisoformat(meta["captured_at"])
+    return at.timestamp(), at.astimezone(zoneinfo.ZoneInfo(meta["zone"])).strftime("%Y-%m-%d %H:%M %Z")
 
 
 def export(fixtures: str) -> dict[str, bytes]:
@@ -91,9 +87,7 @@ def export(fixtures: str) -> dict[str, bytes]:
             if route == "/api/version":
                 body = {k: v for k, v in body.items() if k not in SERVER_ONLY}
             if route == "/api/voipms":
-                body = {k: v for k, v in body.items() if k not in VOIPMS_FROZEN}
-                if body.get("fetched_at"):
-                    body["fetched_at"] = utc(body["fetched_at"])
+                body = {k: v for k, v in body.items() if k not in VOIPMS_UNMEASURED}
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
         files["index.html"] = staticize(page.body, label)        # the chip shows "recorded <label>"
