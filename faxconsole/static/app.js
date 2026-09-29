@@ -11,6 +11,14 @@ const prov = (label,cmd,raw) => !cmd ? "" :
   (raw?`<span class="src">${esc(raw)}</span>`:"")+`</details>`;
 const kb = n => n<1024?n+" B":n<1048576?(n/1024).toFixed(0)+" KB":(n/1048576).toFixed(1)+" MB";
 
+/* ---- the static replay (GitHub Pages) -------------------------------------
+   The static export (faxconsole/export.py) sets <html data-static="1">. Every GET then reads
+   api/<route>.json beside the page. The URL is relative, because Pages serves the site under
+   /fax-console/. Sends are off, since a static site cannot make even a dry run. When faxconsole
+   serves the page itself, nothing changes. */
+const STATIC = document.documentElement.dataset.static === "1";
+const api = p => STATIC ? "api" + p.slice(4) + ".json" : p;
+
 /* ---- replay mode ---------------------------------------------------------
    The page learns the mode from a field that handle() provides.
    In replay mode a send is a dry run and nothing is dialled. */
@@ -117,7 +125,7 @@ function renderVoipms(v){
     ${prov("source","voip.ms API, polled every 300s in the background")}`;
 }
 async function loadVoipms(){
-  try{ renderVoipms(await (await fetch("/api/voipms")).json()); }
+  try{ renderVoipms(await (await fetch(api("/api/voipms"))).json()); }
   catch(e){
     const el=document.getElementById("voipms");
     if(el && !VOIPMS_SEEN)
@@ -198,7 +206,7 @@ function renderFax(d){
     what the counters above say, and <code>fax send --wait</code> reports it per send.</p>`;
 }
 async function loadFax(){
-  try{ renderFax(await (await fetch("/api/fax",{cache:"no-store"})).json()); }
+  try{ renderFax(await (await fetch(api("/api/fax"),{cache:"no-store"})).json()); }
   catch(e){ renderFax({ok:false,src:"/api/fax",why:String(e)}); }
 }
 
@@ -238,8 +246,8 @@ async function load(){
     /* load() reads /api/pbx/trunk and /api/pbx/calls for the Live-state tiles,
        instead of the legacy /api/state. */
     [trunk, calls] = await Promise.all([
-      fetch("/api/pbx/trunk",{cache:"no-store"}).then(r=>r.json()),
-      fetch("/api/pbx/calls",{cache:"no-store"}).then(r=>r.json()),
+      fetch(api("/api/pbx/trunk"),{cache:"no-store"}).then(r=>r.json()),
+      fetch(api("/api/pbx/calls"),{cache:"no-store"}).then(r=>r.json()),
     ]);
   }catch(e){
     /* Leave the previous snapshot on screen -- it is the best information
@@ -254,7 +262,7 @@ async function load(){
   Promise.allSettled([loadVoipms(), loadFax()]);
 
   /* Footer: version line */
-  fetch("/api/version").then(r=>r.json()).then(v=>{
+  fetch(api("/api/version")).then(r=>r.json()).then(v=>{
     const foot=document.getElementById("foot");
     if(foot) foot.textContent=
       "Every live value on this page carries the command that produced it — "
@@ -269,13 +277,20 @@ async function load(){
 (async () => {
   /* Check replay mode from the server */
   try{
-    const v = await fetch("/api/version").then(r=>r.json());
+    const v = await fetch(api("/api/version")).then(r=>r.json());
     if(v && v.replay){
       REPLAY_MODE = true;
       const banner=document.getElementById("replay-banner");
       if(banner) banner.style.display="block";
     }
   }catch(_){}
+  if(STATIC){
+    document.getElementById("faxsend").disabled=true;
+    const m=document.getElementById("faxmsg");
+    m.className="msg";
+    m.textContent="This is a static replay, so sending is off. For a dry-run send, run it locally: "
+      +"python3 -m faxconsole --replay tests/fixtures";
+  }
   load();
   setInterval(load, 20000);
 })();
