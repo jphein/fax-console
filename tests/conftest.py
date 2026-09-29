@@ -8,8 +8,10 @@ import subprocess
 
 import pytest
 
-TOOLING_TESTS = {"test_sandbox_guard.py", "test_scrub_history.py", "test_scrub_rules.py",
-                 "test_bob_usage.py", "test_bob_run.py"}
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOLING_TESTS = {os.path.join(TESTS_DIR, f) for f in ("test_sandbox_guard.py", "test_scrub_history.py",
+                                                       "test_scrub_rules.py", "test_bob_usage.py",
+                                                       "test_bob_run.py")}
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +29,7 @@ def _block_real_subprocesses(monkeypatch, request):
     # Skip the guard for the tests of the repository's own tooling: they run the sandbox hooks, the
     # scrub gate and the Bob wrapper as processes, on throwaway repositories and files, by design.
     # The guard is for the package's tests, which must never reach a real PBX.
-    if request.fspath.basename in TOOLING_TESTS:
+    if str(request.fspath) in TOOLING_TESTS:              # these files, here: not any namesake
         yield
         return
 

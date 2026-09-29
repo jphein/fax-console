@@ -39,6 +39,10 @@ CAUGHT = [
     ("credential", j("Authorization: Bearer ", "a1B2c3D4e5F6g7H8i9J0k1L2")),
     ("credential", j("PuTTY-User-", "Key-File-3: ssh-ed25519")),
     ("credential", j('{"text": "env\\n', "BOB_API_KEY=", 'abcdef1234567"}')),    # after an escaped \n
+    ("credential", j("sk-", "A1b2C3d4E5f6G7h8I9j0K1l2", "M3n4O5p6Q7r8S9t0U1v2W3x4")),   # legacy, 48
+    ("credential", j("https://hooks.slack.com/", "services/T0FAKE00/B0FAKE00/",
+                     "abcdefghijklmnop")),
+    ("credential-assignment", j('api_token = "', 'q7Rf9LmZ2x"')),                         # Aurora's control
     # credential assignments
     ("credential-assignment", j('password="', 'hunter2hunter2"')),
     ("credential-assignment", j("DB_PASSWORD=", "hunter2hunter2")),
@@ -82,6 +86,8 @@ PASSED = [
     'token_url = "https://auth.example.com/token"',
     "SECRET_FILE=~/.config/fax-console/secret",
     "password = None",
+    'write_token = "test-token"; secret = "test-secret-token-abc123"; token = "wrong-token"',  # Bob's fakes
+    'token_type = "bearer"; secret_name = "db-password"; password_field = "pw"',               # descriptors
     "AKIAIOSFODNN7EXAMPLE",                                  # AWS's documented example key
     # addresses and names that identify nothing
     "00:00:5e:00:53:01 and ff:ff:ff:ff:ff:ff at 12:34:56",  # RFC 7042 documentation MAC
@@ -112,6 +118,23 @@ def test_rule_fires(rule, text):
 def test_ordinary_text_passes(text):
     r = scrub(text)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("name,text", [
+    ("app.env", j("password=", "hunter22xyz\n")),
+    ("settings.ini", j("[db]\npassword = ", "hunterhunter\n")),
+    ("app.yaml", j("service:\n  token: ", "abcdef123456ghij\n")),
+])
+def test_in_config_files_an_unquoted_value_is_a_literal(tmp_path, name, text):
+    (tmp_path / name).write_text(text, encoding="utf-8")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": "/nonexistent/scrub-deny.txt"}
+    run = [str(SCRIPT), "--paths", str(tmp_path / name)]
+    r = subprocess.run(["bash", *run], env=env, capture_output=True, text=True, check=False, timeout=60)
+    assert r.returncode == 1 and "[credential-assignment]" in r.stdout
+    (tmp_path / "same.py").write_text(text.replace("[db]\n", ""), encoding="utf-8")   # in code, a name
+    r = subprocess.run(["bash", str(SCRIPT), "--paths", str(tmp_path / "same.py")], env=env,
+                       capture_output=True, text=True, check=False, timeout=60)
+    assert r.returncode == 0, r.stdout
 
 
 @pytest.mark.parametrize("line", [

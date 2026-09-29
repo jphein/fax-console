@@ -70,9 +70,21 @@ SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "to
 SECRET_JOINED = ("apikey", "accesskey", "privatekey", "secretkey")
 PLACEHOLDER = re.compile(
     r"^(?:<.*>|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%\(?\w*\)?s|\{\w*\}|x{3,}|\*{3,}|\.{3}|…|changeme"
-    r"|change[_-]me|example\w*|dummy\w*|fake\w*|test\w*|none|null|nil|redacted|placeholder|your[_-]?\w*"
+    r"|change[_-]me|example[\w-]*|dummy[\w-]*|fake[\w-]*|test[\w-]*|wrong[\w-]*|bogus[\w-]*|invalid[\w-]*"
+    r"|none|null|nil|redacted|placeholder|your[\w-]*"
     r"|false|true|secret|password|token)$", re.IGNORECASE)
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
+# A key that ends in one of these describes a secret without holding one: token_type, secret_name.
+DESCRIPTORS = {"name", "names", "type", "kind", "id", "ids", "path", "file", "dir", "url", "uri", "header",
+               "field", "label", "prefix", "env", "var", "length", "len", "count", "ttl", "expiry", "expires",
+               "format", "mode", "scope", "endpoint", "hint", "policy", "version", "source", "store", "backend"}
+# In these files an unquoted value is a literal, however much it looks like a code name.
+CONFIG_KINDS = (".env", ".ini", ".cfg", ".conf", ".yaml", ".yml", ".toml", ".properties")
+# The owner's commit address, published on every commit (GitHub shows it), kept as a SHA-256 so the gate
+# does not spell it out. Any other identity is scanned with every rule, the private list included.
+PUBLIC_IDENTITY_SHA256 = {
+    "85423212e328e52c9565489a296443f93384a6c4a5b8c905ee61752d89fcd1d9": "the owner's commit address",
+}
 
 GENERIC = [
     ("private-ipv4", re.compile(
@@ -87,7 +99,8 @@ GENERIC = [
         r"|\bgh[pousr]_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}|\bxox[abprs]-[A-Za-z0-9-]{10,}"
         r"|\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.|\bbob_rt_[0-9a-f]{16,}"
         r"|\b(?:AKIA|ASIA)[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{35}|\bsk-(?:ant|proj)-[A-Za-z0-9_-]{16,}"
-        r"|\bBearer\s+[A-Za-z0-9._~+/=-]{20,}"
+        r"|\bBearer\s+[A-Za-z0-9._~+/=-]{20,}|\bsk-[A-Za-z0-9]{48}\b"
+        r"|https://hooks\.slack\.com/services/[A-Za-z0-9/_-]{20,}"
         # no \b before these names: in a JSON transcript they follow an escaped "\n"
         r"|(?:BOB_API_KEY|VOIPMS_PASS|TELEPHONY_CONSOLE_TOKEN)=(?![$%{<])[^\s\"'<>*\\]{6,}")),
     # key = value where the key names a secret. Which values count is decided in allowed(). The key
@@ -158,12 +171,19 @@ def key_words(key):
     return parts, "".join(parts)
 
 
-def secret_value(m):
+def is_config(kind):
+    base = os.path.basename(kind.lower())
+    return base.endswith(CONFIG_KINDS) or base.startswith(".env")
+
+
+def secret_value(m, kind=""):
     """True when a `key = value` names a secret and the value looks like one."""
     key, quoted, v = m.group("key"), m.group("q"), m.group("v")
     parts, joined = key_words(key)
     if not (SECRET_WORDS.intersection(parts) or any(s in joined for s in SECRET_JOINED)):
         return False                                   # compass=, bypass=, max_tokens=
+    if parts and parts[-1] in DESCRIPTORS:
+        return False                                   # token_type = "bearer": about a secret, not one
     if (len(v) < 6 or v.isdigit() or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
             or v.startswith(("/", "~/", "./", "../"))):
         return False                                   # a flag, a TTL, a placeholder, a URL, a path
@@ -171,13 +191,13 @@ def secret_value(m):
         return True                                    # a quoted literal is a value, whatever it says
     if m.string[m.end():m.end() + 1] in ("(", "["):
         return False                                   # a call or a subscript: code
-    if key == key.upper() and not re.search(r"[ \t]", m.group("op")):
-        return not v.startswith(("$", "%"))            # DB_PASSWORD=...: shell syntax, a literal
+    if (key == key.upper() and not re.search(r"[ \t]", m.group("op"))) or is_config(kind):
+        return not v.startswith(("$", "%"))            # DB_PASSWORD=..., or any .env/.ini/.yaml value
     # Code: password=password, token=self.token, password: SecretStr, TOKEN_RX = re.compile(...)
     return not IDENT.match(v)
 
 
-def allowed(rule, m):
+def allowed(rule, m, kind=""):
     s = m.group(0)
     if rule == "phone-number":
         raw = re.sub(r"\D", "", s)
@@ -206,7 +226,7 @@ def allowed(rule, m):
     if rule == "credential":
         return s.startswith(("AKIA", "ASIA")) and s.endswith("EXAMPLE")   # AWS's documented example
     if rule == "credential-assignment":
-        return not secret_value(m)
+        return not secret_value(m, kind)
     if rule == "mac-address":
         v = s.lower().replace("-", ":")
         return (v in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff")
@@ -295,13 +315,13 @@ class _Pairs(list):
 
 
 def json_strings(obj):
-    if isinstance(obj, _Pairs):
-        for k, v in obj:
+    """Every key and value, and each member with a scalar value also as `key: "value"`, so a rule
+    about a key and its value (a password, an API key) sees them together."""
+    if isinstance(obj, (_Pairs, dict)):
+        for k, v in (obj if isinstance(obj, _Pairs) else obj.items()):
             yield str(k)
-            yield from json_strings(v)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            yield str(k)
+            if isinstance(v, (str, int, float, bool)):
+                yield f'{k}: "{v}"'
             yield from json_strings(v)
     elif isinstance(obj, list):
         for v in obj:
@@ -340,16 +360,16 @@ def lines_of(kind, text):
         yield str(n), line
 
 
-# The end of one string literal and the start of the next: `", "`, `" + "`, `" "`.
-LITERAL_JOIN = re.compile(r"""(["'])\s*[,+]?\s*\1""")
+# The end of one string literal and the start of the next, `", "`, `" + '`, `" b"`, across newlines too.
+LITERAL_JOIN = re.compile(r"""["']\s*[,+]?\s*(?:[bBrRuUfF]{1,2})?["']""")
 
 
 def scan(name, text, rules, kind=""):
     """Findings for each line. The private rules also read the line with adjacent string literals
     joined: a test vector split across string literals with j() is invisible to a regex, but a
     vector must never be a real value, so a private hit there is always a leak (PR #2, 9/29 00:15)."""
-    hits, private = [], [r for r in rules if r[0].startswith("deny-list#")]
-    for where, line in lines_of(kind or name, text):
+    hits, private, kind = [], [r for r in rules if r[0].startswith("deny-list#")], kind or name
+    for where, line in lines_of(kind, text):
         views = [(line, rules)]
         joined = LITERAL_JOIN.sub("", line) if private else line
         if joined != line:
@@ -357,8 +377,14 @@ def scan(name, text, rules, kind=""):
         for view, view_rules in views:
             for rule, rx in view_rules:
                 hit = f"{name}:{where}: [{rule}]"        # where and which rule; never the value
-                if hit not in hits and any(not allowed(rule, m) for m in rx.finditer(view)):
+                if hit not in hits and any(not allowed(rule, m, kind) for m in rx.finditer(view)):
                     hits.append(hit)
+    if private:                                          # a split a formatter wrapped over lines
+        whole = LITERAL_JOIN.sub("", text)
+        if whole != text:
+            for rule, rx in private:
+                if not any(h.endswith(f"[{rule}]") for h in hits) and rx.search(whole):
+                    hits.append(f"{name}:joined: [{rule}]")
     return hits
 
 
@@ -405,9 +431,9 @@ LOCAL_DOMAINS = (".local", ".lan", ".localdomain", ".home.arpa", ".internal", "(
 
 
 def identities(label, raw, rules):
-    """Commit and tag identities. An identity's e-mail is published by design (GitHub shows it on
-    every commit), so the e-mail rule and the private list do not apply to the address. Its shape
-    is checked instead, for the machine-local host an unconfigured `user.email` leaks."""
+    """Commit and tag identities. The owner's address is published by design (GitHub shows it on
+    every commit), so the e-mail rule and the private list skip it, and only it. Every address is
+    checked for the machine-local host an unconfigured `user.email` leaks."""
     hits = []
     addr_rules = [r for r in rules if r[0] != "email" and not r[0].startswith("deny-list#")]
     for line in raw.split(b"\n\n", 1)[0].split(b"\n"):
@@ -416,21 +442,23 @@ def identities(label, raw, rules):
             continue
         kind, name, email = (g.decode("utf-8", "replace") for g in m.groups())
         hits += scan(f"{label}:<{kind} name>", name, rules)
-        hits += scan(f"{label}:<{kind} e-mail>", email, addr_rules)
+        owner = hashlib.sha256(email.strip().lower().encode()).hexdigest() in PUBLIC_IDENTITY_SHA256
+        hits += scan(f"{label}:<{kind} e-mail>", email, addr_rules if owner else rules)
         dom = email.rpartition("@")[2].lower()
         if "." not in dom or dom.endswith(LOCAL_DOMAINS):
             hits.append(f"{label}:<{kind} e-mail>: [machine-local-identity]")
     return hits
 
 
-def history(rules):
-    """Everything HEAD publishes, as (label, path, data) items plus identity findings."""
+def history(rules, rev="HEAD"):
+    """Everything `rev` publishes, as (label, path, data) items plus identity findings."""
     items, hits = [], []
     # 1. Every added line, at its real line number. Hunk lengths are counted, so an added line
     #    that itself starts with "++ " is content, not a file header. Merges are diffed against
     #    their first parent, so a resolution that only a merge commit adds is scanned too.
-    log = git("log", "HEAD", "-p", "--no-color", "--no-ext-diff", "--unified=0", "--no-renames",
+    log = git("log", rev, "-p", "--no-color", "--no-ext-diff", "--no-textconv", "--unified=0", "--no-renames",
               "--diff-merges=first-parent", "--format=%x00%h").decode("utf-8", "replace")
+    as_binary = set()     # (commit, path) git showed as "Binary files ... differ": .gitattributes can say so
     sha = path = "?"
     lineno = rem_old = rem_new = 0
     added = {}    # (commit, path) -> {new-file line number: text}
@@ -449,6 +477,10 @@ def history(rules):
             rem_old = rem_new = 0                          # malformed: read it as a header line
         if line.startswith("\0"):
             sha = line[1:]
+        elif line.startswith("Binary files ") and line.endswith(" differ"):
+            b = re.search(r" and (?:b/)?(.+) differ$", line)
+            if b and b.group(1) != "/dev/null":
+                as_binary.add((sha[:7], b.group(1)))
         elif line.startswith("+++ "):
             path = line[6:] if line.startswith("+++ b/") else line[4:]
         elif line.startswith("@@ "):
@@ -465,7 +497,7 @@ def history(rules):
     # 2. Every blob version that is not plain text (and every .json version, decoded whole), and
     #    every file name. The -z raw listing is a stream of NUL-terminated tokens: a commit id,
     #    then ":meta" and path pairs.
-    toks = git("log", "HEAD", "--raw", "--no-abbrev", "--no-renames", "--diff-merges=first-parent", "-z",
+    toks = git("log", rev, "--raw", "--no-abbrev", "--no-renames", "--diff-merges=first-parent", "-z",
                "--format=%x00%x00%h").split(b"\0")
     blobs, names, c, i = {}, set(), "?", 0
     while i < len(toks):
@@ -474,19 +506,20 @@ def history(rules):
             meta, p = t.decode().split(), toks[i + 1].decode("utf-8", "replace")
             names.add(p)
             if len(meta) >= 5 and not meta[4].startswith("D") and meta[1] != "160000":
-                blobs.setdefault(meta[3], (f"{c}:{p}", p))       # not a deletion, not a submodule
+                blobs.setdefault(meta[3], (f"{c}:{p}", p, (c, p) in as_binary))   # not deleted, not a submodule
             i += 2
             continue
         if t:
             c = t.decode()[:7]
         i += 1
     objs = cat_objects(list(blobs))
-    for bid, (label, p) in blobs.items():
-        if text_of(p, objs[bid]) is None or is_pdf(p, objs[bid]) or p.lower().endswith(".json"):
+    for bid, (label, p, shown_binary) in blobs.items():
+        if (shown_binary or text_of(p, objs[bid]) is None or is_pdf(p, objs[bid])
+                or p.lower().endswith(".json")):
             items.append((label, p, objs[bid]))                    # other text: step 1 has it
     items += [(f"<file name> {n}", None, n.encode()) for n in sorted(names)]
     # 3. Every commit message and identity, and every tag on this history.
-    commits = git("rev-list", "HEAD").decode().split()
+    commits = git("rev-list", rev).decode().split()
     objs = cat_objects(commits)
     for c in commits:
         body = objs[c].split(b"\n\n", 1)[1] if b"\n\n" in objs[c] else b""
@@ -506,6 +539,24 @@ def history(rules):
     return items, hits
 
 
+def masked(hit, rules):
+    """A finding's location with any matched value in it (a file or tag name) replaced by ***."""
+    where, sep, what = hit.rpartition(": [")
+    if not sep:
+        return hit
+    spans = sorted((m.start(), m.end()) for rule, rx in rules for m in rx.finditer(where)
+                   if not allowed(rule, m, where))
+    merged = []
+    for a, b in spans:                                   # overlapping matches become one span
+        if merged and a <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    for a, b in reversed(merged):
+        where = where[:a] + "***" + where[b:]
+    return where + sep + what
+
+
 def main(argv):
     require = "--require-deny" in argv
     argv = [a for a in argv if a != "--require-deny"]
@@ -517,15 +568,22 @@ def main(argv):
         items = [(p, p, open(p, "rb").read()) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
     elif argv[0] == "--staged":
-        names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR").decode().split("\0") if p]
-        items = [(p, p, git("show", f":{p}")) for p in names]
+        names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT").decode().split("\0")
+                 if p]
+        items = [(p, p, git("cat-file", "blob", f":{p}")) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", None, open(argv[1], "rb").read())]
     elif argv[0] == "--stdin" and len(argv) == 2:
         items = [(f"<{argv[1]}>", None, sys.stdin.buffer.read())]
-    elif argv[0] == "--history" and len(argv) == 1:
-        items, hits = history(rules)
+    elif argv[0] == "--history" and len(argv) in (1, 2):
+        rev = argv[1] if len(argv) == 2 else "HEAD"
+        try:
+            rev = git("rev-parse", "--verify", "--end-of-options", f"{rev}^{{commit}}").decode().strip()
+        except subprocess.CalledProcessError:
+            print(f"scrub-check: not a commit: {rev}", file=sys.stderr)
+            return 2
+        items, hits = history(rules, rev)
     elif argv[0] == "--paths" and len(argv) > 1:
         for p in argv[1:]:
             if os.path.isdir(p):
@@ -536,13 +594,14 @@ def main(argv):
             else:
                 items.append((p, p, open(p, "rb").read()))
     else:
-        print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL | --history] [--require-deny]",
+        print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL | --history [REV]]"
+              " [--require-deny]",
               file=sys.stderr)
         return 2
     for label, path, data in items:
         hits += check(label, path, data, rules)
     if hits:
-        print("\n".join(hits))
+        print("\n".join(masked(h, rules) for h in hits))
         print(f"scrub-check: {len(hits)} finding(s) in {len(items)} item(s) -- NOT clean", file=sys.stderr)
         return 1
     print(f"scrub-check: clean ({len(items)} item(s), {len(rules)} rules)", file=sys.stderr)

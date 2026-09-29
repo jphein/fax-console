@@ -10,6 +10,7 @@ passes the scrub itself.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -129,6 +130,36 @@ def test_history_scans_a_merge_resolution(repo):
     assert r.returncode == 1 and "f.txt:1: [phone-number]" in r.stdout
 
 
+@pytest.mark.parametrize("attr", ["*.txt binary", "*.txt -diff"])
+def test_gitattributes_cannot_hide_text_from_history(repo, attr):
+    commit(repo, ".gitattributes", attr + "\n", "attributes")
+    commit(repo, "notes.txt", "call " + PHONE + "\n", "a number")
+    commit(repo, "notes.txt", "nothing\n", "gone again")
+    assert scrub(repo).returncode == 0
+    r = scrub(repo, "--history")
+    assert r.returncode == 1 and "notes.txt:1: [phone-number]" in r.stdout
+
+
+def test_history_of_a_named_ref(repo):
+    git(repo, "switch", "-q", "-c", "side")
+    commit(repo, "s.env", j("BOB_API_KEY", "=", "abcdef123456\n"), "side secret")
+    git(repo, "switch", "-q", "main")
+    assert scrub(repo, "--history").returncode == 0
+    assert scrub(repo, "--history", "side").returncode == 1          # what a push of side publishes
+    assert scrub(repo, "--history", "no-such-ref").returncode == 2
+
+
+def test_a_typechange_is_scanned_when_staged(repo):
+    (repo / "link").symlink_to("ok.txt")
+    git(repo, "add", "link")
+    git(repo, "commit", "-q", "-m", "a link")
+    (repo / "link").unlink()
+    (repo / "link").write_text("call " + PHONE + "\n", encoding="utf-8")
+    git(repo, "add", "link")
+    r = scrub(repo, "--staged")
+    assert r.returncode == 1 and "link:1: [phone-number]" in r.stdout
+
+
 def test_history_covers_only_what_this_ref_publishes(repo):
     git(repo, "switch", "-q", "-c", "side")
     commit(repo, "s.env", j("BOB_API_KEY", "=", "abcdef123456\n"), "side secret")
@@ -139,6 +170,13 @@ def test_history_covers_only_what_this_ref_publishes(repo):
 
 
 # ---------------------------------------------------------------- names, identities, tags
+def test_a_finding_never_prints_the_name_that_holds_the_value(repo):
+    commit(repo, j("docs/call-", "202-555-", "0299.txt"), "fine\n", "a name")
+    r = scrub(repo)
+    assert r.returncode == 1 and "[phone-number]" in r.stdout and "0299" not in r.stdout
+    assert "<file name> docs/call-***.txt" in r.stdout
+
+
 def test_file_names_are_published_too(repo):
     commit(repo, j("docs/call-", "202-555-", "0299.txt"), "fine\n", "a name")
     assert "<file name>" in scrub(repo).stdout
@@ -158,15 +196,23 @@ def test_an_unconfigured_identity_leaks_the_host_name(repo):
     assert "<committer e-mail>: [machine-local-identity]" in r.stdout
 
 
-def test_a_published_identity_address_is_not_a_leak(repo, tmp_path):
+def test_only_the_owners_address_is_exempt(repo, tmp_path):
     deny = tmp_path / "deny.txt"
     deny.write_text("corp-mail\n", encoding="utf-8")
     alice = j("alice@", "corp-mail.com")
     ident = {"GIT_AUTHOR_EMAIL": alice, "GIT_COMMITTER_EMAIL": alice}
     git(repo, "commit", "-q", "--allow-empty", "-m", "by alice", env=ident)
-    assert scrub(repo, "--history", deny=deny).returncode == 0          # the identity is published by design
+    r = scrub(repo, "--history", deny=deny)                             # not the owner: every rule applies
+    assert r.returncode == 1 and "<author e-mail>:1: [deny-list#1]" in r.stdout
+    owner = tmp_path / "owner-gate.sh"
+    shutil.copy(SCRIPT, owner)
+    digest = hashlib.sha256(alice.encode()).hexdigest()
+    owner.write_text(owner.read_text(encoding="utf-8").replace(
+        "PUBLIC_IDENTITY_SHA256 = {\n", f'PUBLIC_IDENTITY_SHA256 = {{\n    "{digest}": "test owner",\n'),
+        encoding="utf-8")
+    assert scrub(repo, "--history", deny=deny, script=owner).returncode == 0    # the owner's is published
     git(repo, "commit", "-q", "--allow-empty", "-m", j("see alice@", "corp-mail.com"))
-    r = scrub(repo, "--history", deny=deny)                              # in a message it is a leak
+    r = scrub(repo, "--history", deny=deny, script=owner)                # in a message it is a leak
     assert r.returncode == 1 and "[email]" in r.stdout and "[deny-list#1]" in r.stdout
 
 
@@ -304,6 +350,17 @@ def test_jsonl_is_scanned_as_decoded_strings(repo):
     assert r.returncode == 1 and "run.jsonl:2: [email]" in r.stdout
 
 
+@pytest.mark.parametrize("name,text", [
+    ("cfg.json", '{"db": {"password": "' + j("hunter2", "hunter2") + '"}}\n'),
+    ("run.jsonl", '{"api_key": "' + j("q7Rf9L", "mZ2xKp") + '"}\n'),
+    ("run.jsonl", '{"BOB_API_KEY": "' + j("abcdef", "1234567") + '"}\n'),
+])
+def test_a_json_member_named_like_a_secret_is_caught(repo, name, text):
+    (repo / name).write_text(text, encoding="utf-8")
+    r = scrub(repo)
+    assert r.returncode == 1 and "[credential-assignment]" in r.stdout
+
+
 def test_a_json_blob_in_history_is_decoded_whole(repo):
     commit(repo, "cfg.json", j('{\n  "note": "line\\n@', 'decorator.here",\n  "n": 1\n}\n'), "cfg")
     assert scrub(repo, "--history").returncode == 0
@@ -333,6 +390,12 @@ def test_a_private_value_split_across_literals_is_still_caught(repo, tmp_path):
     r = scrub(repo, "--stdin", "t", "--require-deny", deny=deny, stdin=src)
     assert r.returncode == 1
     assert [x for x in r.stdout.splitlines() if x] == [f"<t>:{n}: [deny-list#1]" for n in (1, 2, 3)]
+    wrapped = 'V = j(\n    "zebra",\n    "fish.house",\n)\n'              # as a formatter wraps it
+    r = scrub(repo, "--stdin", "t", "--require-deny", deny=deny, stdin=wrapped)
+    assert r.returncode == 1 and r.stdout.strip() == "<t>:joined: [deny-list#1]"
+    mixed = 'W = "zebra" \'fish.house\'\nX = b"zebra" b"fish.house"\n'           # mixed quotes, bytes
+    r = scrub(repo, "--stdin", "t", "--require-deny", deny=deny, stdin=mixed)
+    assert r.returncode == 1 and r.stdout.split() == ["<t>:1:", "[deny-list#1]", "<t>:2:", "[deny-list#1]"]
     # the generic rules do not join: a real-shaped positive control stays a quiet vector
     r = scrub(repo, "--stdin", "t", "--require-deny", deny=deny, stdin='BAD = j("10.", "0.9.9")\n')
     assert r.returncode == 0
