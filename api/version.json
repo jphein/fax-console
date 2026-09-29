@@ -1,13 +1,13 @@
 {
- "branch": "unknown",
- "built": "unknown",
- "commit_url": "",
+ "branch": "main",
+ "built": "2026-09-29T22:22:39Z",
+ "commit_url": "https://github.com/jphein/fax-console/commit/210493c",
  "description": "Fax panel back end \u2014 send, receive, and status",
  "dirty": false,
- "hash": "dev",
+ "hash": "210493c",
  "name": "fax.realm.watch",
  "realm": "signal",
  "replay": true,
- "repo": "",
- "version": "Amplified Antenna \u00b7 dev"
+ "repo": "https://github.com/jphein/fax-console",
+ "version": "Keyed Beacon \u00b7 210493c"
 }
