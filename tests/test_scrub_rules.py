@@ -82,6 +82,12 @@ CAUGHT = [
     ("phone-number", j("xcafe", "202", "555", "0299", "beef" * 6, "cc")),        # 40 hex glued to a word
     ("imsi-imei-shape", j("ab", "31015", "0123456789", "cdef" * 5, "abcd")),     # 41 hex: no git id
     ("phone-number", j('{"task_id":"', "ab", "202", "555", "0299", "cdef" * 5, 'a"}')),  # 33 hex
+    # only this team's exact agent-id shape ("a" + 16 hex) is exempt: nothing near it is (#17, 2026-09-29)
+    ("phone-number", j("b1df", "202", "555", "0299", "b9f")),                      # 17 hex, not an "a"
+    ("phone-number", j("a1df", "202", "555", "0299", "b9fc")),                     # 18 hex
+    ("phone-number", j("xa1df", "202", "555", "0299", "b9f")),                     # glued to a word
+    ("phone-number", j("call", "202", "555", "0299", "now")),                      # glued in prose
+    ("phone-number", j("(202) ", "555-", "0299")),                                  # formatted
 ]
 
 PASSED = [
@@ -126,6 +132,10 @@ PASSED = [
     # phone rule on one (the Oracle, PR #6, 2026-09-29); 40 hex is SHA-1, 64 is SHA-256
     j("Merge cafe", "202", "555", "0299", "beef" * 6, "cc into ", "0123abcd" * 5),
     j("This reverts commit ", "cafe", "202", "555", "0299", "beef" * 6, "cc."),
+    # this team's agent ids ("a" + 16 lowercase hex): reviews cite them, and #17's squash message tripped the
+    # phone rule on a digit run inside one. Fictional digits here, never a real id.
+    j("reviewed by the Oracle ", "a1df", "202", "555", "0299", "b9f", "."),
+    j("(agent ", "a", "202", "555", "0299", "cdef12", ")"),
     j("https://github.com/o/r/commit/", "ab", "31015", "0123456789", "cdef" * 5, "abc"),   # IMSI shape
     j('    "', "cafe", "202", "555", "0299", "beef" * 12, 'cc": "a 64-hex id",'),
     j('{"type":"result","task_id":"', "ab", "202", "555", "0299", "cdef" * 5, '"}'),   # Bob's 32 hex
