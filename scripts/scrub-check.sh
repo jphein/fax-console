@@ -587,19 +587,54 @@ STDLIB = set(getattr(sys, "stdlib_module_names", ())) | {"sitecustomize", "userc
 PATH_DIRS = ("", "tests", "scripts")      # the repo root (python -c/-m), and where pytest and scripts run
 
 
+def module_of(fname):
+    """The module a file in a sys.path directory provides, or None. That is json.py, a sourceless
+    json.pyc (imported when no json.py sits beside it), or an extension: json.so,
+    json.abi3.so or json.cpython-314-x86_64-linux-gnu.so."""
+    if fname.endswith((".py", ".pyc")):
+        return fname.rsplit(".", 1)[0]
+    if fname.endswith(".so"):
+        return fname.split(".", 1)[0]
+    return None
+
+
 def shadow_findings(paths):
-    """A .py file or package named like a standard-library module in a directory Python puts first
-    on sys.path is imported instead of the real one, by the next tool that runs there: a planted
-    json.py at the repo root would run on the host, or fake a clean CI (the Oracle, 9/29 01:40)."""
+    """A module or package named like a standard-library one, in a directory Python puts first on
+    sys.path, is imported instead of the real one by the next tool that runs there. A planted json.py
+    at the repo root would run on the host or fake a clean CI (the Oracle, 9/29 01:40). So would a
+    sourceless json.pyc, which .gitignore can hide (the Oracle via Aurora, PR #8), and so would a
+    json.so."""
     hits = []
     for p in paths:
         parts = p.split("/")
-        if parts[-1].endswith(".py") and "/".join(parts[:-1]) in PATH_DIRS and parts[-1][:-3] in STDLIB:
+        if "/".join(parts[:-1]) in PATH_DIRS and module_of(parts[-1]) in STDLIB:
             hits.append(f"{p}: [stdlib-shadow]")
-        elif (len(parts) >= 2 and parts[-1] == "__init__.py" and "/".join(parts[:-2]) in PATH_DIRS
+        elif (len(parts) >= 2 and module_of(parts[-1]) == "__init__" and "/".join(parts[:-2]) in PATH_DIRS
               and parts[-2] in STDLIB):
             hits.append(f"{p}: [stdlib-shadow]")
     return hits
+
+
+def disk_shadow_paths():
+    """What is on disk in the sys.path directories, ignored files too. Python imports what is there,
+    not what git tracks, so a json.pyc hidden by .gitignore must still be seen. Package directories
+    are listed through their __init__ file."""
+    out = []
+    for d in PATH_DIRS:
+        try:
+            entries = sorted(os.listdir(d or "."))
+        except OSError:
+            continue
+        for e in entries:
+            p = f"{d}/{e}" if d else e
+            if os.path.isdir(p) and not os.path.islink(p):
+                try:
+                    out += [f"{p}/{f}" for f in sorted(os.listdir(p)) if module_of(f) == "__init__"]
+                except OSError:
+                    pass
+            else:
+                out.append(p)
+    return out
 
 
 def masked(hit, rules):
@@ -630,7 +665,7 @@ def main(argv):
                  if p and os.path.isfile(p)]
         items = [(p, p, open(p, "rb").read()) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
-        hits += shadow_findings(names)
+        hits += shadow_findings(sorted(set(names) | set(disk_shadow_paths())))
     elif argv[0] == "--staged":
         names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT").decode().split("\0")
                  if p]

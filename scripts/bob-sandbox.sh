@@ -91,7 +91,13 @@ printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
 } > "$envf"
 
 ro=()
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs; do
+# Read-only inside the sandbox: the frozen baseline, git, the guard, the tooling and the evidence; and
+# every path the HOST later executes or sends (the Oracle via Aurora, PR #8 S2). That covers
+# docs/deck (build.sh runs fill.py on the host), docs/video (narration.mjs), demo/ (the test page the
+# host faxes to a public inbox) and scratch/ (the orchestrators' scripts). A path missing at start is
+# skipped. Bob can still create one, but nothing on the host runs a scratch/ that it did not write.
+for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs \
+         docs/deck docs/video demo scratch; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
 # docs/ bound onto itself is a mount point, which cannot be renamed. Renaming it would carry the
