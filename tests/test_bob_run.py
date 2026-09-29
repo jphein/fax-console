@@ -23,6 +23,16 @@ KEY = "fake-" + "key-0123456789abcdef"                  # a stand-in; the real k
 STUB = r"""#!/usr/bin/env bash
 # A stand-in for scripts/bob-sandbox.sh in tests: never Bob, never the network.
 touch "$STUB_MARK"
+# Bob's own log, saved where the caller named it, as the real sandbox does (STUB_LOCK: ok, nopolicy,
+# offorigin, nolog); scripts/bob_lock_check.py reads it after the run
+if [ "${STUB_LOCK:-ok}" != nolog ] && [ -n "${FAX_CONSOLE_BOB_LOG_DIR:-}" ]; then
+  mkdir -p "$FAX_CONSOLE_BOB_LOG_DIR/shell"; lg="$FAX_CONSOLE_BOB_LOG_DIR/shell/bob-shell-t.log"; : > "$lg"
+  [ "${STUB_LOCK:-ok}" = nopolicy ] ||
+    printf '%s\n' '{"module":"PolicyService","msg":"Loaded 1 policy/policies from file: GatewayUrl"}' >> "$lg"
+  gw=https://api.us-east.bob.ibm.com; [ "${STUB_LOCK:-ok}" = offorigin ] && gw=https://attacker.example
+  req='{"module":"Gateway","msg":"HTTP request","data":{"url":"%s/inference/v1/chat/completions"}}'
+  printf "$req\n" "$gw" >> "$lg"
+fi
 case "${STUB_MODE:-ok}" in
   ok)     cost=0.25; st=success; code=0 ;;
   fail)   cost=0.5;  st=error;   code=3 ;;
@@ -71,7 +81,7 @@ def box(tmp_path):
     (repo / "scripts").mkdir(parents=True)
     (repo / "docs" / "bob-runs").mkdir(parents=True)
     (repo / ".bob").mkdir()
-    for f in ("bob-run.sh", "bob_usage.py", "bob-watch.py", "scrub-check.sh"):
+    for f in ("bob-run.sh", "bob_usage.py", "bob-watch.py", "scrub-check.sh", "bob_lock_check.py"):
         shutil.copy2(ROOT / "scripts" / f, repo / "scripts" / f)
     stub = repo / "scripts" / "bob-sandbox.sh"
     stub.write_text(STUB, encoding="utf-8")
@@ -121,6 +131,28 @@ def test_a_run_records_its_measured_cost_and_never_the_key(box):
     for text in (r.stdout, r.stderr, (runs / "5-demo.jsonl").read_text(),
                  (runs / "5-demo.guard.jsonl").read_text(), (box[0] / "docs" / "bob-usage.md").read_text()):
         assert KEY not in text
+
+
+def test_every_run_checks_the_gateway_lock_in_its_own_bob_log(box):
+    r = run(box, "5", "demo", "3")
+    assert r.returncode == 0 and "bob-lock: OK" in r.stdout, r.stdout + r.stderr
+    logs = box[2] / "state" / "fax-console" / "bob-logs"
+    saved = [d.name for d in logs.iterdir()]
+    assert len(saved) == 1 and saved[0].endswith("-5-demo")          # this run's own directory
+    assert "/inference" not in r.stdout                               # origins only
+
+
+@pytest.mark.parametrize("lock", ["nopolicy", "offorigin", "nolog"])
+def test_a_run_whose_log_does_not_show_the_lock_fails_and_keeps_its_reservation(box, lock):
+    r = run(box, "5", "demo", "3", STUB_LOCK=lock)
+    assert r.returncode == 4 and "FAILED the gateway-lock check" in r.stderr, r.stdout + r.stderr
+    assert "rc 4" in row(box, 5) and "| (3) |" in row(box, 5)       # the reported 0.25 is not trusted
+    assert (box[0] / "docs" / "bob-runs" / "5-demo.jsonl").exists()   # the transcript is still published
+
+
+def test_a_failed_run_keeps_its_own_exit_code_when_the_lock_check_also_fails(box):
+    r = run(box, "5", "demo", "3", STUB_MODE="fail", STUB_LOCK="nopolicy")
+    assert r.returncode == 3 and "FAILED the gateway-lock check" in r.stderr
 
 
 def test_a_run_past_the_soft_cap_needs_a_lead_override(box):
@@ -255,3 +287,24 @@ def test_tmux_mode_does_not_inherit_the_servers_variables(box):
         subprocess.run(["tmux", "kill-server"], env={**env, "TMUX_TMPDIR": sock}, capture_output=True,
                        check=False)
         shutil.rmtree(sock, ignore_errors=True)
+
+
+@pytest.mark.parametrize("where", ["outside", "nested", "dotdot", "dot", "taken", "bare"])
+def test_the_real_sandbox_refuses_a_bad_log_directory_before_touching_anything(tmp_path, where):
+    """scripts/bob-sandbox.sh itself (not the stub), in a throwaway repository: a log directory
+    outside bob-logs/, nested, relative-looking or already used is refused, and nothing is made."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    logs = tmp_path / "state" / "fax-console" / "bob-logs"
+    (logs / "taken").mkdir(parents=True)
+    target = {"outside": str(tmp_path / "elsewhere"), "nested": f"{logs}/a/b", "dotdot": f"{logs}/../x",
+              "dot": f"{logs}/.", "taken": f"{logs}/taken", "bare": f"{logs}/"}[where]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / "state"), HOME=str(tmp_path), FAX_CONSOLE_BOB_LOG_DIR=target)
+    r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                       text=True, timeout=60, check=False)
+    assert r.returncode == 2 and "refusing:" in r.stderr, r.stderr
+    assert not (repo / ".bob").exists()                                 # refused before anything was made
+    assert sorted(p.name for p in logs.iterdir()) == ["taken"]

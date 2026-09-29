@@ -41,6 +41,18 @@ for d in .claude .agents; do
   [ -z "$(ls -A "$root/$d" 2>/dev/null)" ] || { echo "refusing: $root/$d is not empty; Bob would read skills there" >&2; exit 2; }
 done
 [ -z "${BOB_HOME:-}" ] || echo "bob-sandbox: BOB_HOME is ignored: Bob's home is made fresh for every start" >&2
+# Bob's own logs are kept, as data, outside the repository: one directory per start. bob-run.sh names
+# it (FAX_CONSOLE_BOB_LOG_DIR) so it can check that run's log afterwards (scripts/bob_lock_check.py);
+# any other caller gets a timestamped one. The name must be new and under $logs. Checked before
+# anything is touched. The variable never reaches Bob, because the sandbox starts from --clearenv.
+logs=${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/bob-logs
+logdir=${FAX_CONSOLE_BOB_LOG_DIR:-$logs/$(date +%Y%m%dT%H%M%S)-$$}
+case "$logdir" in
+  "$logs"/*/*|*/../*|*/..|*/./*|*/.) echo "refusing: FAX_CONSOLE_BOB_LOG_DIR must be one plain directory name under $logs" >&2; exit 2 ;;
+  "$logs"/?*) ;;
+  *) echo "refusing: FAX_CONSOLE_BOB_LOG_DIR must be under $logs" >&2; exit 2 ;;
+esac
+[ ! -e "$logdir" ] || { echo "refusing: $logdir exists; every start gets a new log directory" >&2; exit 2; }
 
 mkdir -p "$root/.bob/tmp"
 touch "$root/.bob/guard.log"
@@ -49,13 +61,12 @@ touch "$root/.bob/guard.log"
 # (Temp files, not fds: sudo closes every inherited descriptor above 2.)
 rt=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/bob-sandbox.XXXXXX"); chmod 700 "$rt"
 # Bob's home is made fresh from the template for every start, and removed afterwards: one run must not
-# leave anything the next run reads (a settings.json naming its own gateway, a .env). Bob's own logs
-# are kept, as data, outside the repository.
+# leave anything the next run reads (a settings.json naming its own gateway, a .env). Its logs go to
+# $logdir (above).
 bob_home="$rt/home"
-logs=${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/bob-logs
 save_logs() {
   if [ -d "$bob_home/.bob/logs" ]; then
-    mkdir -p "$logs" && cp -r "$bob_home/.bob/logs" "$logs/$(date +%Y%m%dT%H%M%S)-$$" 2>/dev/null
+    mkdir -p "$logs" && cp -r "$bob_home/.bob/logs" "$logdir" 2>/dev/null
   fi
   return 0
 }
