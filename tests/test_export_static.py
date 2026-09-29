@@ -151,3 +151,23 @@ def test_the_page_carries_the_realm_version_meta_tag():
 def test_without_build_facts_the_version_says_dev():
     v = json.loads(ex.export("tests/fixtures")["version.json"])
     assert v["hash"] == "dev" and v["commit_url"] == "", v
+
+
+@pytest.mark.parametrize("facts", [
+    ["zzzz999", "main", "2026-09-29T21:54:35Z"],                  # not a hex hash
+    ["abc1234", "fix/a b", "2026-09-29T21:54:35Z"],                # a space: not a branch git would print
+    ["abc1234", "feat/</head>", "2026-09-29T21:54:35Z"],           # markup
+    ["abc1234", "main", "2026-09-29 21:54:35"],                    # not the UTC shape
+])
+def test_the_export_refuses_facts_that_are_not_a_commits(facts, capsys):
+    """export-static.sh reads the facts from git. Anything else is refused, so free text cannot reach the
+    public version (the Oracle, on PR 20)."""
+    assert ex.main(["tests/fixtures", *facts]) == 2
+    assert "refusing" in capsys.readouterr().err
+
+
+def test_the_meta_tag_escapes_markup_for_a_naive_reader():
+    meta = ex.sigil_meta({"branch": "x'y&z\"</head>"})
+    assert "</head>" not in meta and "<" not in meta[1:-1] and ">" not in meta[:-1], meta
+    content = re.search(r"content='([^']*)'", meta).group(1)
+    assert json.loads(html.unescape(content)) == {"branch": "x'y&z\"</head>"}

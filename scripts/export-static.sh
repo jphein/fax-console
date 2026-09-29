@@ -24,7 +24,10 @@ scripts/scrub-check.sh --shadow >/dev/null 2>&1 || { echo "export-static.sh: ref
 hash=$(git rev-parse --short HEAD)
 branch=$(git rev-parse --abbrev-ref HEAD)
 built=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ HEAD)
-scripts/bob-sandbox.sh .venv/bin/python -m faxconsole.export tests/fixtures "$hash" "$branch" "$built" \
+# PYTHONPYCACHEPREFIX: the export runs the committed code, never a .pyc planted in the tree's __pycache__
+# (see scripts/test.sh; the Oracle, on PR 20).
+scripts/bob-sandbox.sh env PYTHONPYCACHEPREFIX=/tmp/pycache \
+  .venv/bin/python -m faxconsole.export tests/fixtures "$hash" "$branch" "$built" \
   | python3 -I scripts/untar-site.py - "$out"
 # The replay surface: nothing derived from this machine may be in the public demo (the lead's rule). The
 # scrub gate knows the house values. This scan knows the machine's own: temp and home paths, the repo's

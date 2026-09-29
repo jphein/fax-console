@@ -19,6 +19,7 @@ import datetime
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 import zoneinfo
@@ -33,6 +34,10 @@ from faxconsole.version import APP_DESC, APP_NAME, APP_REALM, APP_REPO, generate
 GET_API_ROUTES = ("/api/voipms", "/api/fax/status", "/api/fax/log", "/api/fax",
                   "/api/pbx/trunk", "/api/pbx/calls", "/api/pbx/endpoints", "/api/version")
 PAGE_ASSETS = ("app.css", "app.js", "favicon.svg")
+# What a commit's facts look like (scripts/export-static.sh reads them from git). Anything else is refused,
+# so free text cannot reach the public version (the Oracle, on PR 20).
+FACT_SHAPES = {"hash": re.compile(r"[0-9a-f]{7,40}"), "branch": re.compile(r"[A-Za-z0-9._/-]{1,64}"),
+               "built": re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")}
 # The VoIP.ms fixtures are synthesized, never captured (tests/fixtures/voipms/README.md). So the export
 # carries no time for them: no fetched_at, and nothing computed from a clock, which a static copy would
 # also freeze into a countdown (the Oracle, on PR 16).
@@ -51,10 +56,11 @@ def sigil(facts: dict) -> dict:
 
 
 def sigil_meta(data: dict) -> str:
-    """realm-sigil's <meta name="realm-version">: the JSON in a single-quoted attribute. & and ' are
+    """realm-sigil's <meta name="realm-version">: the JSON in a single-quoted attribute. &, ', < and > are
     escaped, which realm-sigil's build.sh does not do. A browser unescapes them, so a reader's JSON.parse
     is unchanged."""
-    content = json.dumps(data).replace("&", "&amp;").replace("'", "&#39;")
+    content = (json.dumps(data).replace("&", "&amp;").replace("'", "&#39;")
+               .replace("<", "&lt;").replace(">", "&gt;"))       # a naive, non-HTML reader stays safe too
     return f"<meta name=\"realm-version\" content='{content}'>"
 
 
@@ -141,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: python -m faxconsole.export FIXTURES [HASH BRANCH BUILT] > site.tar", file=sys.stderr)
         return 2
     facts = dict(zip(("hash", "branch", "built"), args[1:], strict=True)) if len(args) == 4 else None
+    if facts and not all(FACT_SHAPES[k].fullmatch(v) for k, v in facts.items()):
+        print(f"export: refusing facts that are not a commit's: {facts}", file=sys.stderr)
+        return 2
     write_tar(export(args[0], facts), sys.stdout.buffer)
     sys.stdout.buffer.flush()
     return 0
