@@ -510,3 +510,47 @@ def test_the_shadow_mode_reads_the_disk_and_nothing_else(repo):
     flagged = {x.split(":")[0] for x in r.stdout.splitlines() if "[stdlib-shadow]" in x}
     assert r.returncode == 1
     assert flagged == {"json.py", "subprocess", "tests/re.py", "scripts/hashlib/__init__.py"}, r.stdout
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root lists a mode-0311 directory anyway")
+@pytest.mark.parametrize("rel", ["json", "scripts/hashlib", "tests"])
+def test_the_shadow_mode_flags_a_directory_it_cannot_list(repo, rel):
+    """A directory that cannot be listed is a finding, never skipped. Python imports json/__init__.py by
+    path through a directory it may not list (mode 0311), so a check that skipped what it could not list
+    read a planted package as clean (Aurora's audit, after #21). Covered: a package at the root, a package
+    in scripts/, and a sys.path directory itself (tests/). The plant is a finding while listable, the
+    control."""
+    d = repo / rel
+    d.mkdir(parents=True, exist_ok=True)
+    (d / ("re.py" if rel == "tests" else "__init__.py")).write_text("x = 1\n", encoding="utf-8")
+    assert "[stdlib-shadow]" in scrub(repo, "--shadow").stdout                  # seen while listable
+    d.chmod(0o311)
+    try:
+        r = scrub(repo, "--shadow")
+        if rel == "json":           # the threat is real: Python imports the plant through what it cannot list
+            imp = subprocess.run(["python3", "-c", "import json; print(json.x)"], cwd=repo,
+                                 capture_output=True, text=True, check=False)
+            assert imp.stdout.strip() == "1", imp.stderr
+    finally:
+        d.chmod(0o755)
+    assert r.returncode == 1 and f"{rel}/: [unlistable]" in r.stdout, r.stdout + r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 directory anyway")
+def test_test_sh_refuses_a_tree_it_cannot_search_for_stray_bytecode(tmp_path):
+    """test.sh looks for sourceless bytecode (json.pyc, json.so) before anything runs. A directory that find
+    cannot read might hold some, so that refuses too, with a reason; it used to stop only through set -e,
+    with exit 1 and no reason (Aurora's audit, after #21). It stops before any test or sandbox runs."""
+    repo = tmp_path / "t"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPT.parent / "test.sh", repo / "scripts" / "test.sh")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    locked = repo / "locked"
+    locked.mkdir()
+    locked.chmod(0)
+    try:
+        r = subprocess.run(["bash", "scripts/test.sh"], cwd=repo, capture_output=True, text=True, timeout=60,
+                           check=False)
+    finally:
+        locked.chmod(0o755)
+    assert r.returncode == 2 and "could not all be searched" in r.stderr, r.stderr
