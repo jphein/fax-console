@@ -37,7 +37,7 @@ Bob runs inside `scripts/bob-sandbox.sh`, an OS sandbox, and that is the securit
 - a filesystem view of this repo only, with `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`,
   `.venv/`, this file and the run evidence (`docs/bob-usage.md`, `docs/bob-runs/`) read-only;
 - no network path to the LAN or loopback;
-- a clean home directory.
+- a home directory made fresh for every run, with Bob's gateway pinned.
 
 The hooks in `.bob/` are an audit and early-warning layer inside it. **Bob's skills
 directories stay empty:** Bob lists every skill it can find in its prompt, so none from outside
