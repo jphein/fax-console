@@ -209,6 +209,21 @@ def cmd_send(a: argparse.Namespace, transport: Transport, stdout: IO[str]) -> in
 
 
 # ---------------------------------------------------------------------------
+# cmd_inbound
+# ---------------------------------------------------------------------------
+
+def cmd_inbound(a: argparse.Namespace, _transport: Transport, stdout: IO[str]) -> int:
+    """Print the generated dialplan and hook script to stdout; never writes a file."""
+    from faxcli.inbound import InboundConfig, render_dialplan, render_hook  # noqa: PLC0415
+
+    cfg = InboundConfig()
+    print(render_dialplan(cfg), end="", file=stdout)
+    print("", file=stdout)  # blank separator
+    print(render_hook(cfg), end="", file=stdout)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # cmd_test
 # ---------------------------------------------------------------------------
 
@@ -268,6 +283,10 @@ def main(
     q.add_argument("--wait", type=int, default=90)
     q.add_argument("--dry-run", action="store_true")
     q.set_defaults(fn=cmd_test, label=None)
+
+    q = s.add_parser("inbound", help="print generated inbound-fax dialplan and hook script")
+    q.add_argument("--render", action="store_true", help="print dialplan and hook (always on)")
+    q.set_defaults(fn=cmd_inbound)
 
     a = p.parse_args(argv)
 
