@@ -48,8 +48,8 @@ def test_each_api_file_is_the_routes_json_and_shows_no_failure(site):
 
 def test_the_page_is_static_and_keeps_its_csp(site):
     html = site["index.html"].decode()
-    m = re.search(r'<html lang="en" data-static="1" data-recorded="(\d{4}-\d\d-\d\d \d\d:\d\d UTC)">', html)
-    assert m, html[:200]                                          # the capture time the chip shows
+    m = re.search(r'<html lang="en" data-static="1" data-exported="(\d{4}-\d\d-\d\d \d\d:\d\d UTC)">', html)
+    assert m, html[:200]                                          # the export time the chip shows
     assert "a send is a dry run" not in html and "this static copy cannot send" in html
     assert "<h2>Recorded state</h2>" in html and "<h2>Live state</h2>" not in html
     m = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
@@ -62,15 +62,7 @@ def test_app_js_reads_every_get_through_api():
     assert re.findall(r'fetch\("/api/[^"]*"', js) == ['fetch("/api/fax/send"'], "a GET fetch skips api()"
     assert 'const api = p => STATIC ? "api" + p.slice(4) + ".json" : p;' in js
     assert 'document.getElementById("faxsend").disabled=true' in js
-    # nothing computed at export time is shown as current (finding A): a recording time, a billing date
-    assert '"at "+v.fetched_at+", recorded for this static replay"' in js
-    assert 'const bill = STATIC ? (v.did_next_billing ?' in js
-    chip = 'el.appendChild(document.createTextNode(at ? "recorded " + at : "recorded"));'
-    assert chip in js                                             # the chip, never "live"
-    # ...and the static branch runs FIRST: below if(ok), every static load would say "live" again
-    body = js[js.index("function freshness("):]
-    assert body.index("if(STATIC){") < body.index("if(ok){"), "the static branch must come first"
-    assert '${STATIC?" after it was recorded":""}' in js      # the trunk's recorded expiry
+    # What the static page actually renders is tested by running app.js: tests/test_static_page_render.py
     assert 'STATIC ? "This is a static copy, and every value on it was recorded.' in js
 
 

@@ -49,12 +49,12 @@ def api_file(route: str) -> str:
     return "api" + route[len("/api"):] + ".json"
 
 
-def staticize(page: bytes, recorded: str) -> bytes:
-    """Mark the page static, with the time its data was recorded, and carry the CSP as a meta tag. A meta
-    tag cannot carry frame-ancestors."""
+def staticize(page: bytes, exported: str) -> bytes:
+    """Mark the page static, with the time it was exported, and carry the CSP as a meta tag. A meta tag
+    cannot carry frame-ancestors."""
     html = page.decode("utf-8")
     csp = "; ".join(d for d in _CSP.split("; ") if not d.startswith("frame-ancestors"))
-    for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-recorded="{recorded}">'),
+    for old, new in (('<html lang="en">', f'<html lang="en" data-static="1" data-exported="{exported}">'),
                      ("<head>", f'<head>\n<meta http-equiv="Content-Security-Policy" content="{csp}">'),
                      ("<h2>Live state</h2>", "<h2>Recorded state</h2>"),
                      # the live replay's banner promises a dry run, and a static copy cannot even do that
@@ -85,9 +85,10 @@ def export(fixtures: str) -> dict[str, bytes]:
                     body["fetched_at"] = utc(body["fetched_at"])
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
-        # One capture time for the whole snapshot, shown by the page's freshness chip instead of "live".
-        recorded = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        files["index.html"] = staticize(page.body, recorded)
+        # One time for the whole snapshot, shown by the page's freshness chip instead of "live". It is the
+        # export's time: the fixtures themselves were recorded earlier.
+        exported = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        files["index.html"] = staticize(page.body, exported)
         for name in PAGE_ASSETS:
             r = handle("GET", "/" + name, {}, b"", config)
             if r.status != 200:
@@ -100,7 +101,8 @@ def export(fixtures: str) -> dict[str, bytes]:
 
 
 def write_tar(files: dict[str, bytes], out: BinaryIO) -> None:
-    """Regular files only, in name order, with fixed metadata. The same export gives the same bytes."""
+    """Regular files only, in name order, with fixed metadata: the same files give the same bytes. (An
+    export stamps the time it ran on the page, so two exports differ there.)"""
     with tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
         for name in sorted(files):
             info = tarfile.TarInfo(name)

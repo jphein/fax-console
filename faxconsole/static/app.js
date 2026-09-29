@@ -38,14 +38,15 @@ function ago(ms){
 function freshness(ok, why){
   const el = document.getElementById("fresh");
   if(!el) return;
-  /* A static copy measured nothing when it was drawn: its data was recorded at export. So its chip says
-     "recorded", never "live" (finding A; the Oracle, on PR 16). */
+  /* A static copy measured nothing when it was drawn. Its data are the recorded fixtures, rendered when
+     it was exported, so its chip says "exported <time>", never "live" (finding A; the Oracle, on PR 16). */
   if(STATIC){
     el.className = "rs-chip stale";
     el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
-    const at = document.documentElement.dataset.recorded || "";
-    el.appendChild(document.createTextNode(at ? "recorded " + at : "recorded"));
-    el.title = "A static copy of replay data" + (at ? " recorded " + at : "") + ". Nothing on this page is live.";
+    const at = document.documentElement.dataset.exported || "";
+    el.appendChild(document.createTextNode(at ? "exported " + at : "static copy"));
+    el.title = "A static copy of recorded replay data" + (at ? ", exported " + at : "")
+             + ". Nothing on this page is live.";
     return;
   }
   if(ok){
@@ -96,10 +97,10 @@ function renderVoipms(v){
      catastrophic, and the page cannot tell which — so it reports both and lets
      neither hide the other. */
   const low = v.balance_low === true;
-  /* A static replay says when the balance was recorded, and the billing date, not a countdown. Both
-     were computed at export, and "read 0s ago" or "in 32 days" on a page seen weeks later would claim a
-     freshness nobody measured (finding A). */
-  const age = STATIC ? (v.fetched_at ? "at "+v.fetched_at+", recorded for this static replay" : "never")
+  /* A static replay says the balance is from the recording, and gives the billing date, not a countdown.
+     Ages are computed at export, and "read 0s ago" or "in 32 days" on a page seen weeks later would claim
+     a freshness nobody measured (finding A). The trunk tile drops its "renews in" countdown likewise. */
+  const age = STATIC ? "from the recording"
             : v.age===null||v.age===undefined ? "never"
             : (v.age<90 ? v.age+"s ago"
                : (v.age<5400 ? Math.round(v.age/60)+"m ago"
@@ -137,7 +138,8 @@ function renderVoipms(v){
     ${v.did_description?`<div class="vm-sub">DID: ${esc(v.did_description)}${
        v.did_sms_enabled?" &middot; SMS enabled":""}${v.did_e911?" &middot; E911":""}</div>`:""}
     ${v.error?`<div class="cs-amb">Last poll error: ${esc(v.error)}</div>`:""}
-    ${prov("source","voip.ms API, polled every 300s in the background")}`;
+    ${prov("source",STATIC?"voip.ms API, as recorded; a static copy polls nothing"
+                        :"voip.ms API, polled every 300s in the background")}`;
 }
 async function loadVoipms(){
   try{ renderVoipms(await (await fetch(api("/api/voipms"))).json()); }
@@ -159,7 +161,7 @@ function tileTrunk(t){
     <div class="big">${t.status?(reg?st("ok","registered"):st("bad",t.status)):st("warn","no registration row")}</div>
     ${t.name?`<div class="kv"><span>trunk</span><span>${esc(t.name)}</span></div>`:""}
     ${t.uri?`<div class="kv"><span>server</span><span>${esc(t.uri)}</span></div>`:""}
-    ${t.expires?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s${STATIC?" after it was recorded":""}</span></div>`:""}
+    ${t.expires&&!STATIC?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s</span></div>`:""}
     ${prov("source",t.src,t.raw)}</div>`;
 }
 function tileCalls(c){

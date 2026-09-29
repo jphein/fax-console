@@ -14,7 +14,8 @@ import pytest
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOLING_TESTS = {os.path.join(TESTS_DIR, f) for f in ("test_sandbox_guard.py", "test_scrub_history.py",
                                                        "test_scrub_rules.py", "test_bob_usage.py",
-                                                       "test_bob_run.py", "test_bob_lock_check.py")}
+                                                       "test_bob_run.py", "test_bob_lock_check.py",
+                                                       "test_static_page_render.py")}   # runs app.js in node
 
 
 _IP_FAMILIES = (socket.AF_INET, socket.AF_INET6)
