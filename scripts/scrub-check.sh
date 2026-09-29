@@ -212,6 +212,7 @@ HEX = frozenset("0123456789abcdef")
 # Full hex ids: 32 = Bob Shell's task_id (every docs/bob-runs transcript carries one) and MD5,
 # 40 = a SHA-1 git object id, 64 = a SHA-256 one.
 ID_LENGTHS = (32, 40, 64)
+AGENT_ID_LEN = 17          # this team's agent ids: "a" and 16 lowercase hex
 
 
 def in_object_id(m):
@@ -238,10 +239,30 @@ def in_object_id(m):
             and not (lo > 0 and word(s[lo - 1])) and not (hi < len(s) and word(s[hi])))
 
 
+def in_agent_id(m):
+    """True if the match is digits inside one of this team's agent ids: exactly "a" and 16 lowercase hex
+    characters, with no letter, digit or underscore on either side. Reviews cite them, and a PR squash
+    message tripped the phone rule on a 10-digit run inside one (#17, 2026-09-29). Only that exact shape
+    is exempt, so in_object_id's findings all stand: an abbreviated id, a run glued to a word, and any
+    other length or first letter. The private deny-list still catches a real number in any context."""
+    s, a, b = m.string, m.start(), m.end()
+    if not all(c in HEX for c in s[a:b]):
+        return False
+    lo, hi = a, b
+    while lo > 0 and s[lo - 1] in HEX and b - lo <= AGENT_ID_LEN:   # bounded: stop one past an id
+        lo -= 1
+    while hi < len(s) and s[hi] in HEX and hi - lo <= AGENT_ID_LEN:
+        hi += 1
+    def word(c):
+        return c.isalnum() or c == "_"
+    return (hi - lo == AGENT_ID_LEN and s[lo] == "a"
+            and not (lo > 0 and word(s[lo - 1])) and not (hi < len(s) and word(s[hi])))
+
+
 def allowed(rule, m, kind=""):
     s = m.group(0)
-    if rule in ("phone-number", "imsi-imei-shape") and in_object_id(m):
-        return True                                    # digits inside a commit or blob id
+    if rule in ("phone-number", "imsi-imei-shape") and (in_object_id(m) or in_agent_id(m)):
+        return True                                    # digits inside a commit or blob id, or an agent id
     if rule == "phone-number":
         raw = re.sub(r"\D", "", s)
         digits = raw if len(raw) == 11 else "1" + raw
