@@ -57,6 +57,12 @@ probe fail "replace the ledger by a rename"      "cp docs/bob-usage.md x.tmp && 
 probe fail "forge a run record"                  "echo x > docs/bob-runs/probe.jsonl"
 probe fail "replace docs/ by a rename"           "mv docs docs.old && { mv docs.old docs; exit 0; }"
 probe fail "write outside the repo"              "echo x > /home/bob/../probe; echo x > /usr/probe"
+# paths the host later executes or sends are read-only too (PR #8 S2)
+for d in docs/deck docs/video demo scratch; do
+  if [ -d "$d" ]; then probe fail "write into $d/ (the host runs or sends it)" "echo x > $d/probe"
+  else echo "skip   must fail  write into $d/ (not present here)"; fi
+done
+probe work "write a new file in docs/"           "echo x > docs/probe.tmp && rm docs/probe.tmp"
 probe work "write a new file in the repo"        "echo x > sandbox-probe.tmp && rm sandbox-probe.tmp"
 probe work "append to the guard log"             "printf '' >> .bob/guard.log"
 probe work "run the test tools"                  ".venv/bin/python -m pytest --version && .venv/bin/ruff --version"
