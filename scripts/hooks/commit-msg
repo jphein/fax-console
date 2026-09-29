@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# fax-console commit-msg: commit messages are published too.
+exec "$(git rev-parse --show-toplevel)/scripts/scrub-check.sh" --message "$1" --require-deny

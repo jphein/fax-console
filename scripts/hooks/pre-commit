@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# fax-console pre-commit: nothing identifying may be committed (see scripts/scrub-check.sh).
+exec "$(git rev-parse --show-toplevel)/scripts/scrub-check.sh" --staged --require-deny

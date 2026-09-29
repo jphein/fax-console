@@ -1,0 +1,18 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  scrub:
+    name: scrub gate + frozen baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the baseline tag must be present
+      - name: Nothing identifying is published (generic rules; the private deny-list stays local)
+        run: scripts/scrub-check.sh
+      - name: legacy/ is unchanged since the pre-hackathon baseline
+        run: git diff --exit-code baseline-2026-09-28 -- legacy/
