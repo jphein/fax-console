@@ -1,0 +1,63 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "4813 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[ ] Implement faxconsole/ package structure\\n[ ] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./docs/console-slice.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./docs/analysis.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./faxcli\", \"recursive\": true}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/__init__.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/models.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/numbers.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"349-455\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"1009-1136\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2004-2095\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2880-2980\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"2640-2720\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./legacy/console/telephony-console.py\", \"range\": \"507-520\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./pyproject.toml\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\", \"recursive\": false}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/conftest.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests/fixtures\", \"recursive\": true}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/asterisk/pjsip_show_registrations.txt\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/asterisk/core_show_channels.txt\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/asterisk/pjsip_show_endpoints.txt\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/golden/status.json\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/fixtures/golden/log.json\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[-] Implement faxconsole/ package structure\\n[ ] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/asterisk.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cdr.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[x] Implement faxconsole/ package structure\\n[-] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./faxconsole/__init__.py\", \"content\": \"# faxconsole \\u2014 Fax panel back end and PBX status service\\n\", \"line_count\": 1}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./faxconsole/pbx.py\", \"line_count\": 102, \"content\": \"\\\"\\\"\\\"faxconsole.pbx \\u2014 PBX status readers.\\n\\nPort of read_trunk (legacy e:1009\\u20131021), read_calls ("}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[x] Implement faxconsole/ package structure\\n[x] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxconsole.routes \\u2014 pure request handler.\\n\\n``handle(method, path, headers, body, transport, config)`` is a pure\\nfunction: it receives a request and returns a Response.  No s"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxconsole.version \\u2014 realm-sigil /api/version contract.\\n\\nPort of generate_name, version_dict and the word lists (legacy e:350\\u2013455).\\nThe realm for this service is ``fax."}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxconsole.server \\u2014 fixed-size worker pool + http.server adapter.\\n\\nThe HTTP handler is a thin wrapper around the pure ``handle()`` function\\nfrom faxconsole.routes.  A fixed-"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"faxconsole.__main__ \\u2014 entry point for ``python3 -m faxconsole``.\\n\\nModes:\\n  --replay DIR   serve recorded fixtures via ReplayTransport\\n  --local        serve via LocalTransp"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./pyproject.toml\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:16\\n-------\\n[tool.setuptools.packages.find]\\nwhere = [\\\".\\\"]\\ninclude = [\\\"faxcli*\\\"]\\n=======\\n[tool.set"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[x] Implement faxconsole/ package structure\\n[x] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "path refused: outside the repository"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_faxconsole_routes.py \\u2014 route-level tests through handle().\\n\\nEvery route is exercised against a ReplayTransport backed by the existing\\nfixtures.  No TCP port is op"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_faxconsole_pbx.py \\u2014 characterization tests for faxconsole.pbx.\\n\\nEach test feeds the same fixture text to both the frozen legacy functions\\n(imported read-only via "}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "write refused: the content carries identifying data (masked): <write>:189: [phone-number] 91*******0"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "write refused: the content carries identifying data (masked): <write>:183: [phone-number] 14********0"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_faxconsole_send.py \\u2014 POST /api/fax/send gate tests and replay dry run.\\n\\nTests cover:\\n  - No token configured \\u2192 401\\n  - Wrong token \\u2192 401\\n  - confirm m"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_faxconsole_adapter.py \\u2014 http.server adapter over socketpair.\\n\\nTests the _Handler and FaxServer without opening a TCP port.\\nUses socket.socketpair(AF_UNIX) to feed"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Read foundational documents: AGENTS.md, docs/console-slice.md, docs/analysis.md \\u00a79, faxcli/ package\\n[x] Implement faxconsole/ package structure\\n[x] Implement faxconsole/pbx.py "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_faxconsole_routes.py tests/test_faxconsole_pbx.py tests/test_faxconsole_send.py tests/test_faxconsole_adapter.py -x -q 2>&1 | head -80\", \"timeout_sec"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:26\\n-------\\nimport json\\nimport os\\nimport platform\\nimport re\\nimport socket\\nimport sys\\nimport time\\nfrom dataclasses import dataclass\\nfrom typing import Any"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"[335, 380]\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"[310, 345]\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"[415, 445]\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:331\\n-------\\n        buf = io.StringIO()\\n        ret = cli_mod.cmd_send(a, config.transport, buf)\\n        try:\\n=======\\n        buf = io.StringIO()\\n        c"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:21\\n-------\\nimport http.server\\nimport json\\nimport sys\\nfrom typing import Any\\n=======\\nimport http.server\\nimport json\\nfrom typing import Any\\n>>>>>>> REPLAC"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:89\\n-------\\n        \\\"runtime\\\": \\\"python%d.%d.%d\\\" % sys.version_info[:3],\\n=======\\n        \\\"runtime\\\": f\\\"python{sys.version_info[0]}.{sys.version_info[1]}.{"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:9\\n-------\\nimport io\\nimport json\\nimport socket\\nimport threading\\nimport time\\nfrom pathlib import Path\\n\\nimport pytest\\n\\nfrom faxcli.transport import Replay"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:14\\n-------\\nimport importlib\\nimport importlib.util\\nimport json\\nimport subprocess\\nimport sys\\nimport types\\nfrom pathlib import Path\\nfrom unittest.mock impor"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:10\\n-------\\nfrom pathlib import Path\\n\\nimport pytest\\n\\nfrom faxcli.transport import ReplayTransport\\n=======\\nfrom pathlib import Path\\n\\nfrom faxcli.transport"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:19\\n-------\\nfrom pathlib import Path\\n\\nimport pytest\\n\\nfrom faxcli.transport import ReplayTransport\\n=======\\nfrom pathlib import Path\\n\\nfrom faxcli.transport"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/ruff check . 2>&1\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q 2>&1\", \"timeout_seconds\": 120}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_faxconsole_*.py -v --tb=no -q 2>&1 | tail -5\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest tests/test_faxconsole_*.py --collect-only -q 2>&1 | tail -3\"}"}
