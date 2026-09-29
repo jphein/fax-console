@@ -39,7 +39,7 @@ from urllib.parse import parse_qs, urlparse
 from faxcli import cli as cli_mod
 from faxcli.api import SendError
 from faxcli.api import send as api_send
-from faxcli.numbers import InvalidNumber
+from faxcli.phone_numbers import InvalidNumber
 from faxcli.transport import Transport
 from faxconsole.pbx import read_calls, read_sip_endpoints, read_trunk
 from faxconsole.version import version_dict
@@ -90,7 +90,11 @@ class Response:
 
 
 def _json_response(status: int, obj: Any) -> Response:
-    return Response(status=status, body=json.dumps(obj).encode())
+    return Response(
+        status=status,
+        body=json.dumps(obj).encode(),
+        extra_headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 def _ok(obj: Any) -> Response:
@@ -264,14 +268,16 @@ def _route_fax_state(config: Config) -> Response:
     except Exception as e:
         lg = {"ok": False, "why": f"unparseable log: {e}", "rows": []}
 
+    spool = "replay:spool" if config.replay else config.spool
+    inbox = "replay:inbox" if config.replay else config.inbox
     result = {
         "ok": bool(st.get("ok")) and bool(lg.get("ok")),
         "status": st,
         "log": lg.get("rows", []),
         "why": st.get("why") or lg.get("why"),
         "src": "faxcli --local --json status | log --limit 25",
-        "spool": config.spool,
-        "inbox": config.inbox,
+        "spool": spool,
+        "inbox": inbox,
     }
     return _ok(result)
 
@@ -330,7 +336,7 @@ def _route_send(headers: dict[str, str], body: bytes, config: Config) -> Respons
 
 def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
     """Port of legacy fax_send (e:2058–2090), calling faxcli.api.send directly."""
-    from faxcli.numbers import normalize  # noqa: PLC0415
+    from faxcli.phone_numbers import normalize  # noqa: PLC0415
 
     # Validate number (legacy e:2060–2066)
     raw_number = fields.get("number", "")
@@ -388,6 +394,12 @@ def _fax_send(fields: dict, files: dict, config: Config) -> dict[str, Any]:
     if config.replay:
         r["replay"] = True
         r["detail"] = "replay: nothing is dialled"
+        # Mask runtime paths: replace temp-dir prefix with a neutral token
+        import os as _os  # noqa: PLC0415
+        _td = _os.path.commonpath([config.inbox, config.spool]) if config.spool else config.inbox
+        for _k in ("pdf", "tif"):
+            if _k in r and isinstance(r[_k], str) and r[_k].startswith(_td):
+                r[_k] = "replay:" + r[_k][len(_td):]
     else:
         r["detail"] = (
             f"dialing {number} with {r.get('pages', '?')} page(s); the outcome appears in "
@@ -422,7 +434,7 @@ def _route_static(filename: str) -> Response:
         content_type=content_type,
         extra_headers={
             "Content-Security-Policy": _CSP,
-            "X-Content-Type-Options": "nosniff",
+            "X-Content-Type-Options": "nosniff",  # already present; _json_response adds it for APIs
         },
     )
 

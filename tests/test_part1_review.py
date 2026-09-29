@@ -182,7 +182,7 @@ class TestApiSend:
 
     def test_invalid_number_raises(self, tmp_path):
         from faxcli.api import send
-        from faxcli.numbers import InvalidNumber
+        from faxcli.phone_numbers import InvalidNumber
         with pytest.raises(InvalidNumber):
             send(self._pdf(tmp_path), "not-a-number",
                  dry_run=True, transport=self._transport(tmp_path), local=True)

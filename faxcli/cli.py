@@ -15,10 +15,9 @@ from typing import IO, Any
 from faxcli import asterisk as ast_mod
 from faxcli import cdr as cdr_mod
 from faxcli.models import DryRunResult, LogResult, LogRow, StatusResult
-from faxcli.numbers import InvalidNumber
+from faxcli.phone_numbers import InvalidNumber
 from faxcli.transport import LocalTransport, Reading, SshTransport, Transport, exchange_host
 
-TRUNK = "voipms-fax"
 TEST_NUMBER = "19725329272"  # Faxbeep, public test receiver
 
 # Default test page (legacy/fax/fax/cli.py:257 used docs/test-page.pdf; we use demo/)

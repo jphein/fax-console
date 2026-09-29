@@ -160,10 +160,18 @@ class FaxServer:
                     _send_503(request)
                     self.shutdown_request(request)
                     return
-                outer_pool.submit(self._run, request, client_address)
+                try:
+                    outer_pool.submit(self._run, request, client_address)
+                except RuntimeError:
+                    # Pool was shut down between the acquire and the submit.
+                    sem.release()
+                    self.shutdown_request(request)
+
+            _HANDLER_TIMEOUT = 30  # seconds; a client that sends nothing gives up here
 
             def _run(self, request: Any, client_address: Any) -> None:
                 try:
+                    request.settimeout(self._HANDLER_TIMEOUT)
                     self.finish_request(request, client_address)
                 except Exception:
                     self.handle_error(request, client_address)

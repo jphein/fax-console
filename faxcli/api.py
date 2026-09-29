@@ -19,7 +19,7 @@ from faxcli import asterisk as ast_mod
 from faxcli import cdr as cdr_mod
 from faxcli import outcome as outcome_mod
 from faxcli.models import DryRunResult, SendResult
-from faxcli.numbers import normalize
+from faxcli.phone_numbers import normalize
 from faxcli.transport import Transport
 
 TRUNK = "voipms-fax"

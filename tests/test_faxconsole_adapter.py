@@ -126,6 +126,7 @@ def _call_handler(config: Config, method: str, path: str,
     req_lines += ["", ""]
     request = "\r\n".join(req_lines).encode() + body
     client_sock.sendall(request)
+    client_sock.shutdown(socket.SHUT_WR)  # signal EOF to handler's rfile
 
     class _FakeServer:
         server_address = ("127.0.0.1", 0)
@@ -148,14 +149,14 @@ def _call_handler(config: Config, method: str, path: str,
         except Exception:
             pass
         finally:
+            server_sock.close()  # close handler's end so client sees EOF
             done.set()
 
     t = threading.Thread(target=_serve, daemon=True)
     t.start()
     done.wait(timeout=5)
 
-    # Read response from server_sock's peer (client_sock)
-    client_sock.settimeout(2)
+    # Read response to EOF (no timeout needed: server_sock is closed above)
     chunks = []
     try:
         while True:
@@ -163,11 +164,10 @@ def _call_handler(config: Config, method: str, path: str,
             if not chunk:
                 break
             chunks.append(chunk)
-    except (TimeoutError, OSError):
+    except OSError:
         pass
     finally:
         client_sock.close()
-        server_sock.close()
 
     raw = b"".join(chunks)
     return _parse_response(raw)

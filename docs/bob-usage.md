@@ -123,8 +123,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | 10 | 9/29 01:26 | [The inbound dialplan](bob-runs/10-inbound.prompt.md) | `faxcli/inbound.py` (`render_dialplan`, `render_hook`), `fax inbound --render`; 56 tests; a work log ([worklog](bob-runs/10-inbound.worklog.md)) | 42 | 3.362 | Kept. Bob found the legacy design's caller-ID injection (into `System()` and a file path) unaided and wrapped it in `FILTER()`. Review: the filter admitted `-` (argument injection into the notify program), the log line used the raw value, the hook's spool check passed `..`, and the hostile tests could not fail on the real risk. All fixed |
 | – | 9/29 01:35 | Gateway-pin controls | Tiny sandboxed runs testing whether `--gateway-url` beats a redirect: an outside env var is dropped by the sandbox (both answered "ok"); a planted `settings.gatewayUrl` breaks the run, with the flag or without | 3 answered, 2 failed | 0.065 | The flag was not proven; the fix is PR 5's environment pin |
 | – | 9/29 09:00 | PR 6 policy control | In a throwaway clone of the PR 6 branch: (i) the policy, nothing planted: "ok"; (ii-b) a planted `settings.gatewayUrl`, no policy: "Request Failed"; (ii-a) the plant and the policy: "ok". The planted address could not be reached from the sandbox | 3 | 0.044 | The discriminating pair that PR 6's merge rests on |
+| 11 | 9/29 09:26 | [Review fixes](bob-runs/11-review-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.10).) | 56 | 6.100 | review pending |
 
-**Running total: 45.73 Bobcoins** (after run 10 and the controls for PRs 5 and 6).
+**Running total: 51.83 Bobcoins** (after run 11).
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step

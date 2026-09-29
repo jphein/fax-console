@@ -1,7 +1,10 @@
-"""faxcli.numbers — phone-number normalisation.
+"""faxcli.phone_numbers — phone-number normalisation.
 
 Pure function; never exits the process. Callers (e.g. cli.py main()) catch
 InvalidNumber and call sys.exit.
+
+Renamed from numbers.py to avoid shadowing the stdlib ``numbers`` module when
+any file in faxcli/ is run as a script.
 """
 import re
 

@@ -25,8 +25,10 @@ from faxconsole.server import FaxServer
 from faxconsole.voipms import VoipMsPoller, fixture_http
 
 
-def build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:
-    """Parse *argv*, wire up transports and pollers, and return ``(config, cleanup)``.
+def build(
+    argv: list[str] | None = None,
+) -> tuple[Config, Callable[[], None], argparse.Namespace]:
+    """Parse *argv*, wire up transports and pollers, and return ``(config, cleanup, args)``.
 
     ``cleanup()`` stops any background threads and removes any temp directories.
     In live modes it is a no-op.  ``main()`` calls it on shutdown, including on
@@ -60,6 +62,8 @@ def build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:
         # Replay mode: use a single temp dir for both spool and inbox so no
         # real paths are touched.  Removed on cleanup.
         tmpdir = tempfile.mkdtemp(prefix="faxconsole-replay-")
+        spool_dir = os.path.join(tmpdir, "spool")
+        os.makedirs(spool_dir, exist_ok=True)
 
         # VoIP.ms poller backed by fixture JSON; creds not needed in replay mode.
         voipms_poller = VoipMsPoller(
@@ -73,12 +77,12 @@ def build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:
         transport = ReplayTransport(
             fixture_dir=replay_dir / "asterisk",
             cdr_path=replay_dir / "cdr" / "Master.csv",
-            spool_dir=tmpdir,
+            spool_dir=spool_dir,
         )
         config = Config(
             transport=transport,
             inbox=os.path.join(tmpdir, "inbox"),
-            spool=os.path.join(tmpdir, "spool"),
+            spool=spool_dir,
             replay=True,
             voipms=voipms_poller,
         )
@@ -100,27 +104,13 @@ def build(argv: list[str] | None = None) -> tuple[Config, Callable[[], None]]:
         for fn in cleanup_fns:
             fn()
 
-    return config, cleanup
+    return config, cleanup, a
 
 
 def main(argv: list[str] | None = None) -> int:
-    config, cleanup = build(argv)
-
-    # Parse argv again to get host/port — build() already parsed it but we need
-    # them here for serve_forever.  Re-use the parser from a minimal parse.
-    p = argparse.ArgumentParser(add_help=False)
-    p.add_argument("--port", type=int, default=8093)
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--replay", default=None)
-    p.add_argument("--local", action="store_true", default=False)
-    p.add_argument("--ssh", nargs="?", default=None)
-    p.add_argument("--inbox", default=None)
-    a, _ = p.parse_known_args(argv)
+    config, cleanup, a = build(argv)
 
     replay = a.replay is not None
-    server = FaxServer(config, host=a.host, port=a.port)
-    print(f"faxconsole listening on {a.host}:{a.port} "
-          f"({'replay' if replay else 'live'})", file=sys.stderr, flush=True)
 
     # SIGTERM → clean SystemExit so `finally` runs (systemd sends SIGTERM on stop).
     def _sigterm(_sig: int, _frame: object) -> None:
@@ -129,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _sigterm)
 
     try:
+        server = FaxServer(config, host=a.host, port=a.port)
+        print(f"faxconsole listening on {a.host}:{a.port} "
+              f"({'replay' if replay else 'live'})", file=sys.stderr, flush=True)
         server.serve_forever()
     finally:
         cleanup()

@@ -13,7 +13,7 @@ from faxcli.asterisk import (
     trunk_registered,
 )
 from faxcli.cdr import fax_rows, parse_cdr, utc_to_local
-from faxcli.numbers import InvalidNumber, normalize
+from faxcli.phone_numbers import InvalidNumber, normalize
 from faxcli.outcome import judge
 from faxcli.tiff import count_pages
 
