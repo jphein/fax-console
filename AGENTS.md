@@ -40,7 +40,7 @@ Bob runs inside `scripts/bob-sandbox.sh`, an OS sandbox, and that is the securit
 - a filesystem view of this repo only, with `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`,
   `.venv/`, this file and the run evidence (`docs/bob-usage.md`, `docs/bob-runs/`) read-only, and so are
   the paths the host later runs or sends (`docs/deck/`, `docs/video/`, `demo/`). `scratch/` is an
-  empty read-only directory. The sandbox refuses to start if any of these paths is a symlink;
+  empty read-only tmpfs. The sandbox refuses to start if any of these paths is a symlink;
 - no network path to the LAN or loopback;
 - a home directory made fresh for every run, with Bob's gateway pinned.
 

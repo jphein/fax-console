@@ -64,9 +64,9 @@ no_link() {
     [ ! -L "$q" ] || { echo "refusing: $q is a symlink; a sandbox bind path must be a real file or directory" >&2; exit 2; }
   done
 }
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs docs/bob-usage.md docs/bob-runs \
-         docs/deck docs/video demo scratch; do
-  no_link "$p"
+for p in legacy .git .bob .bob/guard.log .bob/tmp scripts .github .venv AGENTS.md BASELINE.md LICENSE docs \
+         docs/bob-usage.md docs/bob-runs docs/deck docs/video demo scratch; do
+  no_link "$p"   # .bob/guard.log and .bob/tmp are WRITABLE binds: a link there would let Bob write a host file
 done
 
 mkdir -p "$root/.bob/tmp"
@@ -115,7 +115,7 @@ ro=()
 #   build would run it (the Oracle, PR #9).
 # - scratch/ is gitignored, so a scratch/ that Bob filled would not even show in `git status` (the
 #   Oracle's delta on PR #8). An empty, ignored scratch/ is the price.
-# - scratch/ is not bound from the host at all: an empty read-only directory stands in for it (below).
+# - scratch/ is not bound from the host at all: an empty read-only tmpfs stands in for it (below).
 for p in docs/deck docs/video demo scratch; do mkdir -p "$root/$p"; done
 for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs \
          docs/deck docs/video demo; do
@@ -126,9 +126,8 @@ done
 docs_bind=()
 [ -d "$root/docs" ] && docs_bind=(--bind "$root/docs" "$root/docs")
 printf '{"GatewayUrl": "%s"}\n' "$BOB_GATEWAY" > "$rt/policy.json"; chmod 644 "$rt/policy.json"
-# scratch/ inside the sandbox is this empty, read-only directory, never the host's scratch/. So there is no
-# host source to follow, and Bob cannot read an orchestrator's notes (the Oracle, PR #10).
-mkdir "$rt/empty"
+# scratch/ inside the sandbox is an empty tmpfs, remounted read-only (the bwrap call below), never the host's
+# scratch/. There is no host source to follow, and Bob cannot read an orchestrator's notes (the Oracle, PR #10).
 # The lock is only a lock if Bob can read it: refuse to start unless it parses to exactly that one key.
 python3 -I -c 'import json, sys; p = json.load(open(sys.argv[1])); sys.exit(0 if p == {"GatewayUrl": sys.argv[2]} else 1)' \
   "$rt/policy.json" "$BOB_GATEWAY" || { echo "refusing: the gateway policy does not parse to its one key" >&2; exit 2; }
@@ -154,7 +153,7 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --bind "$bob_home" /home/bob \
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
     --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
-    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" --ro-bind "$rt/empty" "$root/scratch" \
+    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" --tmpfs "$root/scratch" --remount-ro "$root/scratch" \
     --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
     /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"

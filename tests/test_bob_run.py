@@ -327,8 +327,10 @@ def test_the_real_sandbox_refuses_a_bad_log_directory_before_touching_anything(t
     assert sorted(p.name for p in logs.iterdir()) == ["taken"]
 
 
-@pytest.mark.parametrize("rel,target", [("scratch", ".."), ("docs/deck", "../.."), ("docs", ".."),
-                                        (".venv", "..")])
+@pytest.mark.parametrize("rel,target", [
+    ("scratch", ".."), ("docs/deck", "../.."), ("docs", ".."), (".venv", ".."),
+    (".bob/guard.log", "../../x"), (".bob/tmp", "../.."),
+])
 def test_the_real_sandbox_refuses_a_symlinked_bind_path(tmp_path, rel, target):
     """bubblewrap follows a symlink at a bind path: `scratch -> ..` showed Bob the directory above the repo
     (the Oracle, PR #10). The real scripts/bob-sandbox.sh must refuse such a tree before making anything."""
@@ -343,4 +345,34 @@ def test_the_real_sandbox_refuses_a_symlinked_bind_path(tmp_path, rel, target):
     r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
                        text=True, timeout=60, check=False)
     assert r.returncode == 2 and "is a symlink" in r.stderr, r.stderr
-    assert not (repo / ".bob").exists()                                 # refused before anything was made
+    assert not (repo / ".bob" / "tmp").is_dir() or rel == ".bob/tmp"    # refused before anything was made
+    assert not (tmp_path / "x").exists()                                # nothing touched through the link
+
+
+def test_the_sandbox_mounts_scratch_as_an_empty_tmpfs_and_binds_no_symlink(tmp_path):
+    """The real scripts/bob-sandbox.sh, with a fake sudo first on PATH that records the bwrap argv (the
+    Oracle's CI recipe). scratch/ must be an empty read-only tmpfs, never a bind of the host's scratch/, and
+    no --bind/--ro-bind source under the repo may be a symlink."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(ROOT / "scripts" / "bob-sandbox.sh", repo / "scripts" / "bob-sandbox.sh")
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    argv = tmp_path / "argv"
+    (fake / "sudo").write_text(f"#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > {argv}\n",
+                               encoding="utf-8")
+    (fake / "sudo").chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("BOB_")}
+    env.update(XDG_STATE_HOME=str(tmp_path / "state"), HOME=str(tmp_path), PATH=f"{fake}:{env['PATH']}")
+    r = subprocess.run(["bash", "scripts/bob-sandbox.sh", "true"], cwd=repo, env=env, capture_output=True,
+                       text=True, timeout=60, check=False)
+    assert r.returncode == 0 and argv.exists(), r.stderr
+    a = argv.read_text(encoding="utf-8").splitlines()
+    root = str(repo.resolve())
+    at = [j for j, x in enumerate(a) if x == "--tmpfs" and a[j + 1] == f"{root}/scratch"]
+    assert len(at) == 1 and a[at[0] + 2:at[0] + 4] == ["--remount-ro", f"{root}/scratch"], a
+    binds = [a[j + 1] for j, x in enumerate(a) if x in ("--bind", "--ro-bind")]
+    assert f"{root}/scratch" not in binds                              # never the host's scratch/
+    assert all(not Path(s).is_symlink() for s in binds if s.startswith(root)), binds
+    assert (repo / "scratch").is_dir() and not any((repo / "scratch").iterdir())
