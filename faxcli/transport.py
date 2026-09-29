@@ -220,21 +220,26 @@ class SshTransport:
             return Reading.failure(str(exc))
 
     def spool(self, localtif: str, name: str, spooled: str) -> Reading:
+        remote_tmp = f"/tmp/{name}"
         try:
             subprocess.run(
-                ["scp", "-q", "-o", "BatchMode=yes", localtif, f"{self.host}:/tmp/{name}"],
+                ["scp", "-q", "-o", "BatchMode=yes", localtif, f"{self.host}:{remote_tmp}"],
                 check=True, timeout=60,
             )
-            self._ssh(SUDO + ["install", "-o", "asterisk", "-g", "asterisk", "-m", "644",
-                               f"/tmp/{name}", spooled])
-            self._ssh(["rm", "-f", f"/tmp/{name}"])
-            return Reading.success(spooled)
         except subprocess.TimeoutExpired:
             return Reading.failure("scp timed out")
         except subprocess.CalledProcessError as exc:
             return Reading.failure(f"scp failed: {exc}")
         except Exception as exc:
             return Reading.failure(str(exc))
+        # Legacy ran the install with check=True (legacy/fax/fax/cli.py:115): a failed install
+        # aborts the send, so a TIFF that never reached the spool is never dialled.
+        installed = self._ssh(SUDO + ["install", "-o", "asterisk", "-g", "asterisk", "-m", "644",
+                                      remote_tmp, spooled])
+        self._ssh(["rm", "-f", remote_tmp])  # best effort, as legacy (check=False)
+        if not installed.ok:
+            return Reading.failure(f"install into the spool failed: {installed.why}")
+        return Reading.success(spooled)
 
     def cleanup(self, localtif: str) -> None:
         with contextlib.suppress(OSError):

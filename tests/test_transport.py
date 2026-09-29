@@ -20,6 +20,7 @@ import pytest
 from faxcli.transport import (
     EXCHANGE,
     LocalTransport,
+    Reading,
     ReplayTransport,
     SshTransport,
 )
@@ -306,3 +307,47 @@ class TestSendDryRunReplay:
         assert Path(obj["tif"]).parent == tmp_path, (
             f"tif should be in {tmp_path}, got {obj['tif']!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Review follow-up (independent review of PR #4): a failed install must fail the spool
+# ---------------------------------------------------------------------------
+
+class TestSpoolInstallFailure:
+    @pytest.mark.allow_subprocesses
+    def test_failed_install_fails_the_spool(self, monkeypatch, tmp_path):
+        calls = []
+
+        def _fake_run(argv, **_kw):
+            calls.append(argv)
+            if argv[0] == "ssh" and "install" in argv[-1]:
+                return subprocess.CompletedProcess(argv, returncode=1, stdout="",
+                                                   stderr="sudo: a password is required")
+            return subprocess.CompletedProcess(argv, returncode=0, stdout="")
+
+        monkeypatch.setattr(subprocess, "run", _fake_run)
+        tif = tmp_path / "x.tif"
+        tif.write_bytes(b"II*\x00")
+        r = SshTransport(host="pbx.example.com").spool(str(tif), "x.tif", "/var/spool/asterisk/fax/x.tif")
+        assert not r.ok and "install" in r.why
+        assert any(a[0] == "ssh" and a[-1].startswith("rm ") for a in calls), "remote temp not cleaned"
+
+    def test_failed_spool_never_originates(self, tmp_path):
+        """cli send: when spooling fails, exit 1 and dial nothing (legacy aborted before the originate)."""
+        from faxcli.cli import main
+
+        class NoSpool(ReplayTransport):
+            asterisk_calls: list = []
+
+            def spool(self, localtif, name, spooled):
+                return Reading.failure("install into the spool failed: refused")
+
+            def asterisk(self, cmd):
+                NoSpool.asterisk_calls.append(cmd)
+                return super().asterisk(cmd)
+
+        pdf = tmp_path / "doc.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n%fixture\n")
+        rc = main(["--json", "send", str(pdf), "2025550142"], transport=NoSpool(spool_dir=tmp_path))
+        assert rc == 1
+        assert not any(c.startswith("channel originate") for c in NoSpool.asterisk_calls)
