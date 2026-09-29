@@ -50,7 +50,8 @@ before publishing:
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    45 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    50 probes as of 623b50d (the script counts them at run time, and a skip lowers the total).
+    One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
