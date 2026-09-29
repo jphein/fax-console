@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Fax Console Pitch Deck</title>
+<meta name="description" content="Fax Console: a house PBX's legacy fax tools, modernized with IBM Bob. IBM Bob Hackathon 2026, Modernize What Matters.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cstyle%3E.b%7Bfill:%231d5fd1%7D.p%7Bfill:%23fff%7D.l%7Bstroke:%231d5fd1;stroke-width:1.8;stroke-linecap:round%7D@media(prefers-color-scheme:dark)%7B.b%7Bfill:%237ea6ff%7D.p%7Bfill:%230f1520%7D.l%7Bstroke:%237ea6ff%7D%7D%3C/style%3E%3Crect class='b' width='32' height='32' rx='7'/%3E%3Cpath class='p' d='M9 6h10l5 5v15H9z'/%3E%3Cpath class='l' d='M12 14h8M12 18h8M12 22h5'/%3E%3C/svg%3E">
+<script>
+  // ?theme=dark|light pins a theme (used for the PDF renders); otherwise the OS preference decides.
+  (function () { try { var t = new URLSearchParams(location.search).get("theme");
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t); } catch (e) {} })();
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #eef1f5;
+    --slide: #ffffff;
+    --ink: #0f172a;
+    --muted: #475569;
+    --faint: #5b6778;
+    --rule: #dbe2ea;
+    --panel: #f5f7fa;
+    --accent: #1d5fd1;
+    --accent-soft: #e7effc;
+    --ok: #17784a;
+    --slot-ink: #7c4a03;
+    --slot-bg: #fff6e0;
+    --slot-line: #c98a1b;
+    --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 12px 32px rgb(15 23 42 / 0.08);
+    --sans: "Noto Sans", "Source Sans 3", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Liberation Sans", sans-serif;
+    --mono: "Noto Sans Mono", "DejaVu Sans Mono", "Liberation Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    /* One design pixel: slides are drawn at 1280 x 720 and scale with their own width. */
+    --u: calc(100cqw / 1280);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #070a10;
+      --slide: #0f1520;
+      --ink: #e6ebf3;
+      --muted: #a7b2c3;
+      --faint: #93a0b3;
+      --rule: #243042;
+      --panel: #151d2a;
+      --accent: #7ea6ff;
+      --accent-soft: #17243c;
+      --ok: #49c087;
+      --slot-ink: #f3c36b;
+      --slot-bg: #2a2212;
+      --slot-line: #a77a2a;
+      --shadow: 0 0 0 1px #1a2331;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #070a10;
+    --slide: #0f1520;
+    --ink: #e6ebf3;
+    --muted: #a7b2c3;
+    --faint: #93a0b3;
+    --rule: #243042;
+    --panel: #151d2a;
+    --accent: #7ea6ff;
+    --accent-soft: #17243c;
+    --ok: #49c087;
+    --slot-ink: #f3c36b;
+    --slot-bg: #2a2212;
+    --slot-line: #a77a2a;
+    --shadow: 0 0 0 1px #1a2331;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .deck { padding: 24px 16px 8px; }
+
+  .slide {
+    container-type: inline-size;
+    position: relative;
+    width: 100%;
+    max-width: 1280px;
+    aspect-ratio: 16 / 9;
+    margin: 0 auto 24px;
+    background: var(--slide);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .in { position: absolute; inset: 0; padding: calc(50 * var(--u)) calc(72 * var(--u)) calc(70 * var(--u)); display: flex; flex-direction: column; }
+
+  .tag {
+    display: flex; align-items: center; gap: calc(9 * var(--u));
+    margin: 0; color: var(--accent);
+    font: 700 calc(13 * var(--u))/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .tag::before { content: ""; width: calc(9 * var(--u)); height: calc(9 * var(--u)); border-radius: 2px; background: var(--accent); }
+  h1, h2, h3 { margin: 0; letter-spacing: -0.01em; }
+  h2 { font: 700 calc(40 * var(--u))/1.15 var(--sans); margin: calc(12 * var(--u)) 0 calc(24 * var(--u)); }
+  h3 { font: 700 calc(20 * var(--u))/1.25 var(--sans); margin: 0 0 calc(10 * var(--u)); }
+  p { margin: 0; font-size: calc(19 * var(--u)); line-height: 1.45; }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  a { color: var(--accent); text-underline-offset: 0.15em; text-decoration-thickness: 1px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  .muted { color: var(--muted); }
+
+  .foot {
+    position: absolute; left: calc(72 * var(--u)); right: calc(72 * var(--u)); bottom: calc(24 * var(--u));
+    display: flex; justify-content: space-between; gap: 1em;
+    padding-top: calc(10 * var(--u)); border-top: 1px solid var(--rule);
+    font-size: calc(12.5 * var(--u)); color: var(--faint);
+  }
+
+  .grid { display: grid; gap: calc(20 * var(--u)); }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  .card { background: var(--panel); border: 1px solid var(--rule); border-radius: calc(12 * var(--u)); padding: calc(20 * var(--u)) calc(22 * var(--u)); }
+  .card p { font-size: calc(17 * var(--u)); color: var(--muted); }
+  .card h3 code { font-size: 0.92em; }
+
+  ul.pts { list-style: none; margin: 0; padding: 0; }
+  ul.pts li { position: relative; padding-left: calc(20 * var(--u)); margin: calc(8 * var(--u)) 0 0; font-size: calc(17 * var(--u)); line-height: 1.4; color: var(--muted); }
+  ul.pts li:first-child { margin-top: 0; }
+  ul.pts li::before { content: ""; position: absolute; left: 0; top: 0.55em; width: calc(7 * var(--u)); height: calc(7 * var(--u)); border-radius: 1.5px; background: var(--accent); }
+  ul.pts li strong { color: var(--ink); }
+
+  .callout { margin-top: auto; padding: calc(16 * var(--u)) calc(22 * var(--u)); border-left: calc(4 * var(--u)) solid var(--accent); background: var(--accent-soft); border-radius: 0 calc(10 * var(--u)) calc(10 * var(--u)) 0; }
+  .callout p { font-size: calc(19 * var(--u)); }
+
+  /* Placeholders: numbers and links that arrive later. fill.py swaps them for values. */
+  .slot {
+    display: inline-block; vertical-align: baseline;
+    font: 600 0.72em/1.35 var(--mono); letter-spacing: 0;
+    color: var(--slot-ink); background: var(--slot-bg);
+    border: 1px dashed var(--slot-line); border-radius: 4px; padding: 0 0.4em;
+  }
+
+  /* Legacy slide: fewer words, so larger type */
+  .legacy .card { padding: calc(26 * var(--u)) calc(28 * var(--u)); }
+  .legacy .card h3 { font-size: calc(23 * var(--u)); margin-bottom: calc(16 * var(--u)); }
+  .legacy ul.pts li { font-size: calc(20.5 * var(--u)); margin-top: calc(12 * var(--u)); }
+  .legacy ul.pts li:first-child { margin-top: 0; }
+  .legacy ul.pts li::before { width: calc(8 * var(--u)); height: calc(8 * var(--u)); }
+  .legacy .callout p { font-size: calc(21 * var(--u)); }
+
+  /* Title slide */
+  .title .in { justify-content: center; padding-bottom: calc(90 * var(--u)); }
+  .title h1 { font: 700 calc(88 * var(--u))/1.02 var(--sans); letter-spacing: -0.02em; margin: calc(18 * var(--u)) 0 calc(18 * var(--u)); }
+  .title .sub { font-size: calc(28 * var(--u)); line-height: 1.35; color: var(--muted); max-width: calc(940 * var(--u)); }
+  .chips { display: flex; flex-wrap: wrap; gap: calc(10 * var(--u)); margin-top: calc(34 * var(--u)); }
+  .chip { font-size: calc(16 * var(--u)); padding: calc(6 * var(--u)) calc(14 * var(--u)); border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); }
+  .chip strong { color: var(--accent); font-weight: 700; }
+  .links { display: grid; grid-template-columns: auto 1fr; gap: calc(6 * var(--u)) calc(18 * var(--u)); margin-top: calc(30 * var(--u)); font-size: calc(18 * var(--u)); }
+  .links dt { color: var(--faint); }
+  .links dd { margin: 0; font-family: var(--mono); font-size: 0.92em; }
+
+  /* Bob workflow */
+  .step { display: flex; flex-direction: column; gap: calc(8 * var(--u)); }
+  .step .n { width: calc(30 * var(--u)); height: calc(30 * var(--u)); border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--slide); font: 700 calc(15 * var(--u))/1 var(--sans); }
+  .step h3 { margin: calc(4 * var(--u)) 0 0; }
+  .step p { font-size: calc(15.5 * var(--u)); line-height: 1.42; }
+  .step .out { margin-top: auto; padding-top: calc(10 * var(--u)); border-top: 1px solid var(--rule); font: 600 calc(14 * var(--u))/1.35 var(--mono); color: var(--ink); }
+
+  /* KPI tiles (stat-tile contract: sentence-case label, sans semibold value, one hero per view) */
+  .kpi { background: var(--panel); border: 1px solid var(--rule); border-radius: calc(12 * var(--u)); padding: calc(18 * var(--u)) calc(20 * var(--u)); display: flex; flex-direction: column; gap: calc(6 * var(--u)); }
+  .kpi .l { font-size: calc(15 * var(--u)); color: var(--muted); }
+  .kpi .v { font: 600 calc(40 * var(--u))/1.1 var(--sans); color: var(--ink); }
+  .kpi .d { font-size: calc(14 * var(--u)); color: var(--muted); line-height: 1.35; }
+  .kpi.hero { grid-row: span 2; justify-content: center; background: var(--accent-soft); border-color: transparent; }
+  .kpi.hero .v { font-size: calc(72 * var(--u)); }
+  .kpi .v .slot { font-size: 0.42em; }
+  .kpi.hero .v .slot { font-size: 0.32em; }
+  .ok-badge { display: inline-flex; align-items: center; gap: 0.35em; color: var(--ok); font-weight: 700; }
+  .ok-badge::before { content: "✓"; }
+
+  .pair { margin-top: auto; }
+  .pair .callout { margin-top: 0; }
+  .pair .callout p { font-size: calc(17 * var(--u)); }
+  .kpi .t { font-size: calc(16 * var(--u)); line-height: 1.42; color: var(--ink); }
+  table.who { width: 100%; border-collapse: collapse; font-size: calc(16 * var(--u)); }
+  table.who th { text-align: left; font: 700 calc(12 * var(--u))/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding: 0 0 calc(8 * var(--u)); }
+  table.who th:last-child, table.who td:last-child { text-align: right; padding-left: 1em; white-space: nowrap; }
+  table.who td { padding: calc(8 * var(--u)) 0; border-top: 1px solid var(--rule); color: var(--muted); line-height: 1.35; }
+  table.who td:last-child { font-weight: 700; color: var(--ink); }
+  table.who td.bob { color: var(--accent); }
+
+  .rq { margin: calc(6 * var(--u)) 0 0; font-size: calc(14 * var(--u)); font-style: italic; color: var(--muted); }
+  .try { margin-top: calc(16 * var(--u)); padding: calc(12 * var(--u)) calc(16 * var(--u)); font-size: calc(13.5 * var(--u)); }
+  .stepc .step p { font-size: calc(14.5 * var(--u)); }
+  .stepc .step .out { font-size: calc(13 * var(--u)); }
+  .kpis2 { margin-top: calc(16 * var(--u)); }
+  .kpis2 .kpi .v { font-size: calc(34 * var(--u)); }
+  .strip { display: grid; grid-template-columns: repeat(21, 1fr); gap: calc(4 * var(--u)); }
+  .strip .d { height: calc(26 * var(--u)); border-radius: calc(5 * var(--u)); border: 1px solid var(--rule); background: var(--panel);
+              display: grid; place-items: center; font: 700 calc(12 * var(--u))/1 var(--sans); color: var(--slide); }
+  .strip .d.on { background: var(--accent); border-color: var(--accent); }
+  .strip-l { display: flex; justify-content: space-between; margin: calc(6 * var(--u)) 0 calc(16 * var(--u)); font-size: calc(13 * var(--u)); color: var(--muted); }
+  table.tl { width: 100%; border-collapse: collapse; font-size: calc(15.5 * var(--u)); }
+  table.tl th, table.tl td { text-align: left; padding: calc(8 * var(--u)) calc(10 * var(--u)) calc(8 * var(--u)) 0; border-top: 1px solid var(--rule); vertical-align: top; }
+  table.tl thead th { font: 700 calc(12 * var(--u))/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border-top: 0; }
+  table.tl tbody th { white-space: nowrap; color: var(--ink); }
+  table.tl td { color: var(--muted); }
+  table.tl td.runs { white-space: nowrap; color: var(--ink); }
+  table.tl td.coins, table.tl th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-right: 0; }
+  table.tl tr.total th, table.tl tr.total td { color: var(--ink); font-weight: 700; }
+  .minis { display: grid; gap: calc(12 * var(--u)); }
+  .card.mini { padding: calc(14 * var(--u)) calc(18 * var(--u)); }
+  .card.mini h3 { margin-bottom: calc(6 * var(--u)); font-size: calc(17 * var(--u)); }
+  .card.mini p { font-size: calc(15 * var(--u)); }
+  .func figure.dg svg { max-height: calc(318 * var(--u)); }
+  .func figure.dg figcaption { margin-top: calc(8 * var(--u)); font-size: calc(14.5 * var(--u)); }
+  .kstrip { margin-top: calc(12 * var(--u)); }
+  .kstrip .kpi { padding: calc(10 * var(--u)) calc(16 * var(--u)); }
+  .kstrip .kpi .v { font-size: calc(26 * var(--u)); }
+  .term.judge { font-size: calc(14 * var(--u)); line-height: 1.55; }
+  /* Terminal-style panel */
+  .term { background: var(--panel); border: 1px solid var(--rule); border-radius: calc(12 * var(--u)); padding: calc(18 * var(--u)) calc(20 * var(--u)); font: calc(15 * var(--u))/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .term .p { color: var(--accent); font-weight: 700; }
+
+  /* Architecture diagram */
+  figure.dg { margin: 0; }
+  figure.dg svg { display: block; width: 100%; height: auto; max-height: calc(392 * var(--u)); color: var(--ink); }
+  figure.dg figcaption { margin-top: calc(14 * var(--u)); font-size: calc(16.5 * var(--u)); line-height: 1.45; color: var(--muted); }
+  .dg text { fill: currentColor; font-family: var(--sans); font-size: 15px; }
+  .dg .t-h { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; fill: var(--muted); }
+  .dg .t-b { font-weight: 700; }
+  .dg .t-m { font-family: var(--mono); }
+  .dg .t-s { font-size: 13px; fill: var(--muted); }
+  .dg .box { fill: var(--slide); stroke: currentColor; stroke-width: 1.5; }
+  .dg .row { fill: var(--panel); stroke: var(--rule); stroke-width: 1; }
+  .dg .row.private { fill: none; stroke: var(--muted); stroke-dasharray: 5 4; }
+  .dg .seam { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+  .dg .ln { stroke: currentColor; stroke-width: 1.5; fill: none; }
+  .dg .ln.thin { stroke-width: 1.2; opacity: 0.75; }
+  .dg .ln.dash { stroke-dasharray: 6 5; }
+  .dg .ln.acc { stroke: var(--accent); stroke-width: 2.5; }
+  .dg .mask { fill: var(--slide); }
+  .dg .divider { stroke: var(--rule); stroke-width: 1.5; }
+  .dg #ah path { fill: currentColor; }
+  .dg #ah-acc path { fill: var(--accent); }
+
+  /* Demo */
+  .shot { display: grid; place-items: center; height: calc(150 * var(--u)); margin-top: calc(14 * var(--u)); border-radius: calc(8 * var(--u)); font-size: calc(18 * var(--u)); }
+  img.shot { width: 100%; height: calc(150 * var(--u)); object-fit: cover; object-position: top; border: 1px solid var(--rule); }
+  .api { display: flex; flex-wrap: wrap; gap: calc(10 * var(--u)); margin-top: calc(20 * var(--u)); }
+  .api code { font-size: calc(15 * var(--u)); padding: calc(6 * var(--u)) calc(12 * var(--u)); border: 1px solid var(--rule); border-radius: calc(8 * var(--u)); background: var(--panel); }
+
+  .col-h { font: 700 calc(14 * var(--u))/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0 0 calc(14 * var(--u)); padding-bottom: calc(10 * var(--u)); border-bottom: 1px solid var(--rule); }
+  .next-idea { margin-top: calc(10 * var(--u)); padding: calc(12 * var(--u)) calc(14 * var(--u)); border: 1px solid var(--accent); border-radius: calc(10 * var(--u)); background: var(--accent-soft); }
+  .next-idea p { font-size: calc(16 * var(--u)); color: var(--ink); line-height: 1.42; }
+  .next-idea .k { display: block; font: 700 calc(12 * var(--u))/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: calc(6 * var(--u)); }
+
+  @page { size: 1280px 720px; margin: 0; }
+  @media print {
+    html, body { background: var(--slide); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .deck { padding: 0; }
+    .slide { width: 1280px; height: 720px; max-width: none; aspect-ratio: auto; margin: 0; border-radius: 0; box-shadow: none; break-after: page; }
+    .slide:last-child { break-after: auto; }
+  }
+</style>
+</head>
+<body>
+<main class="deck">
+
+<!-- 1 · Team and project ------------------------------------------------------------ -->
+<section class="slide title" aria-labelledby="s1-h">
+  <div class="in">
+    <p class="tag">Team and project</p>
+    <h1 id="s1-h">Fax Console</h1>
+    <p class="sub">A house PBX's legacy fax tools, modernized with IBM Bob while the phone line kept working.</p>
+    <div class="chips">
+      <span class="chip"><strong>Track</strong> Modernize What Matters</span>
+      <span class="chip"><strong>Team</strong> Jeffrey Hein, solo</span>
+      <span class="chip"><strong>Built with</strong> IBM Bob</span>
+    </div>
+    <dl class="links">
+      <dt>Repository</dt><dd><a href="https://github.com/jphein/fax-console">github.com/jphein/fax-console</a></dd>
+      <dt>Live demo</dt><dd><a href="https://fax.realm.watch">fax.realm.watch</a> <span class="muted" style="font-family:var(--sans)">(replay mode, fixtures only)</span></dd>
+      <dt>Video</dt><dd><span class="slot" data-slot="video.url">video.url</span></dd>
+    </dl>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>1 / 7</span></div>
+</section>
+
+<!-- 2 · Tool Usage and Depth of Adoption --------------------------------------------- -->
+<section class="slide" aria-labelledby="s2-h">
+  <div class="in">
+    <p class="tag">Tool Usage &amp; Depth of Adoption · 30%</p>
+    <p class="rq">The rubric asks: “Did the team actually build with IBM Bob as a core part of their workflow, not just bolt it on at the end?”</p>
+    <h2 id="s2-h">Bob did the modernization, and every run is on record</h2>
+    <div class="grid g5 stepc">
+      <div class="card step"><span class="n">1</span><h3>Analyze</h3><p>Module map, every shell-out, fragile patterns, a migration order.</p><span class="out">docs/analysis.md</span></div>
+      <div class="card step"><span class="n">2</span><h3>Package</h3><p>The CLI as a typed package: pure logic split from I/O.</p><span class="out">faxcli/</span></div>
+      <div class="card step"><span class="n">3</span><h3>Test</h3><p>Unit, golden and characterization tests on scrubbed fixtures.</p><span class="out">tests/</span></div>
+      <div class="card step"><span class="n">4</span><h3>Extract</h3><p>The Fax panel out of the monolith, as a typed API.</p><span class="out">faxconsole/</span></div>
+      <div class="card step"><span class="n">5</span><h3>Isolate</h3><p>One Asterisk adapter, with replay mode on fixtures.</p><span class="out">adapter + replay</span></div>
+    </div>
+    <div class="grid g4 kpis2">
+      <div class="kpi"><span class="l">Bob factor</span><span class="v"><span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span></span><span class="d">of committed lines written by Bob</span></div>
+      <div class="kpi"><span class="l">Bob-assisted commits</span><span class="v"><span class="slot" data-slot="bob.commits">bob.commits</span></span><span class="d">of <span class="slot" data-slot="commits.in_window">commits.in_window</span>, each marked <code>Assisted-by: IBM Bob</code></span></div>
+      <div class="kpi"><span class="l">Bob runs on record</span><span class="v"><span class="slot" data-slot="bob.runs">bob.runs</span></span><span class="d">prompt, transcript and guard log for each</span></div>
+      <div class="kpi"><span class="l">Rejected in review</span><span class="t"><span class="slot" data-slot="bob.reject_example">bob.reject_example</span></span></div>
+    </div>
+    <div class="callout"><p><strong>How Bob runs.</strong> Bob Shell, headless, inside an OS sandbox. Claude (Anthropic) drives it and checks every claim against the code; Jeffrey approves at two checkpoints.</p></div>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>2 / 7</span></div>
+</section>
+
+<!-- 3 · Tool Usage: Bob from day one ------------------------------------------------- -->
+<section class="slide" aria-labelledby="s3-h">
+  <div class="in">
+    <p class="tag">Tool Usage &amp; Depth of Adoption · 30% · Bob from day one</p>
+    <p class="rq">The rubric asks: “Did the team actually build with IBM Bob as a core part of their workflow, not just bolt it on at the end?”</p>
+    <h2 id="s3-h">Bob from day one: every run, by day</h2>
+    <div class="strip" aria-label="Days of the hackathon window, Sep 28 to Oct 18, filled on days Bob ran"><!-- strip:start --><span class="d on" title="Sep 28: 6 runs">6</span><span class="d" title="Sep 29: 0 runs"></span><span class="d" title="Sep 30: 0 runs"></span><span class="d" title="Oct 1: 0 runs"></span><span class="d" title="Oct 2: 0 runs"></span><span class="d" title="Oct 3: 0 runs"></span><span class="d" title="Oct 4: 0 runs"></span><span class="d" title="Oct 5: 0 runs"></span><span class="d" title="Oct 6: 0 runs"></span><span class="d" title="Oct 7: 0 runs"></span><span class="d" title="Oct 8: 0 runs"></span><span class="d" title="Oct 9: 0 runs"></span><span class="d" title="Oct 10: 0 runs"></span><span class="d" title="Oct 11: 0 runs"></span><span class="d" title="Oct 12: 0 runs"></span><span class="d" title="Oct 13: 0 runs"></span><span class="d" title="Oct 14: 0 runs"></span><span class="d" title="Oct 15: 0 runs"></span><span class="d" title="Oct 16: 0 runs"></span><span class="d" title="Oct 17: 0 runs"></span><span class="d" title="Oct 18: 0 runs"></span><!-- strip:end --></div>
+    <div class="strip-l"><span>Sep 28, hacking begins</span><span>Oct 18, deadline</span></div>
+    <table class="tl">
+      <thead><tr><th scope="col">Day</th><th scope="col">Runs</th><th scope="col">What Bob did</th><th scope="col">Bobcoins</th></tr></thead>
+      <tbody>
+<!-- timeline:start -->
+<tr><th scope="row">Sep 28</th><td class="runs">runs 0 to 5</td><td>Sandbox smoke test · Modernization analysis · Isolation check · Sandbox check · The faxcli package · The review fixes</td><td class="coins">14.40</td></tr>
+<tr class="total"><th scope="row">So far</th><td class="runs">6 runs</td><td>on 1 of the 21 days</td><td class="coins">14.40</td></tr>
+<!-- timeline:end -->
+      </tbody>
+    </table>
+    <p class="muted" style="margin-top:calc(16 * var(--u));font-size:calc(14 * var(--u))">Rebuilt from the ledger in <code>docs/bob-usage.md</code> by <code>docs/deck/timeline.py</code>. Each run's prompt, transcript and guard log are in <code>docs/bob-runs/</code>. In run 5 the sandbox refused Bob's <code>git stash</code>.</p>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>3 / 7</span></div>
+</section>
+
+<!-- 4 · Innovation and Use Case Relevance ----------------------------------------------- -->
+<section class="slide" aria-labelledby="s4-h">
+  <div class="in">
+    <p class="tag">Innovation &amp; Use Case Relevance · 30%</p>
+    <p class="rq">The rubric asks: “Is the use case a credible, realistic application of IBM Bob (vs. a generic project that happens to touch it)?”</p>
+    <h2 id="s4-h">A realistic job for Bob: legacy code that runs a real phone line</h2>
+    <div class="grid" style="grid-template-columns: 1fr 1.2fr;">
+      <div class="card">
+        <h3>The legacy system</h3>
+        <ul class="pts">
+          <li><code>telephony-console.py</code>: <strong>11,858</strong> lines in one file, with hand-rolled routing</li>
+          <li>It shells out for every read: 11 call sites (analysis §4)</li>
+          <li><code>fax/cli.py</code>: <strong>288</strong> lines around Asterisk <code>SendFax</code>, no tests</li>
+          <li>In production on the house PBX: status, the fax log and sending must keep working</li>
+        </ul>
+      </div>
+      <div class="minis">
+        <div class="card mini"><h3>Real legacy, real stakes</h3><p>Framework-free production code. The track's own list is the work: structure, tests, an API, modernization docs.</p></div>
+        <div class="card mini"><h3>Safe by construction</h3><p>Bob works in an OS sandbox with no network. In run 5 it tried <code>git stash</code>; the read-only <code>.git</code> refused it.</p></div>
+        <div class="card mini"><h3>No private data reached an AI tool</h3><p>Every prompt passes the scrub gate first. Fixtures use 555-01xx numbers and example.com hosts.</p></div>
+      </div>
+    </div>
+    <div class="callout"><p>The pattern carries over to any single-file admin tool: put one seam in front of the live system, record fixtures behind it, and the tool becomes testable and safe to demo.</p></div>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>4 / 7</span></div>
+</section>
+
+<!-- 5 · Functionality and Technical Execution ------------------------------------------- -->
+<section class="slide func" aria-labelledby="s5-h">
+  <div class="in">
+    <p class="tag">Functionality &amp; Technical Execution · 30%</p>
+    <p class="rq">The rubric asks: “Does the project work as demoed? Is it technically sound given the 3-week timeframe?”</p>
+    <h2 id="s5-h">Before and after, and the proof it works</h2>
+    <figure class="dg">
+      <svg viewBox="0 0 1136 436" role="img" aria-label="Before: every reader in the 11,858-line console shells out on its own, to asterisk -rx and to the 288-line fax CLI, which shells out again to Asterisk and ghostscript; 11 call sites in all. After: the browser talks to a typed faxconsole API, which uses the faxcli package; one Asterisk adapter is the only way to the PBX, and replay mode points it at recorded fixtures, which is also what the tests run against.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+          <marker id="ah-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
+        </defs>
+
+        <!-- BEFORE -->
+        <text x="0" y="16" class="t-h">Before</text>
+        <rect class="box" x="0" y="44" width="120" height="44" rx="8"/>
+        <text x="60" y="71" text-anchor="middle">Browser</text>
+        <line class="ln" x1="120" y1="66" x2="168" y2="66" marker-end="url(#ah)"/>
+        <text x="144" y="58" text-anchor="middle" class="t-s">HTTP</text>
+
+        <rect class="box" x="172" y="34" width="368" height="252" rx="10"/>
+        <text x="190" y="61" class="t-b t-m">telephony-console.py</text>
+        <text x="190" y="81" class="t-s">11,858 lines in one file</text>
+        <rect class="row" x="190" y="94" width="332" height="30" rx="6"/><text x="204" y="114">hand-rolled routing</text>
+        <rect class="row" x="190" y="130" width="332" height="30" rx="6"/><text x="204" y="150">Fax panel</text>
+        <rect class="row" x="190" y="166" width="332" height="30" rx="6"/><text x="204" y="186">PBX and VoIP status</text>
+        <rect class="row" x="190" y="202" width="332" height="30" rx="6"/><text x="204" y="222">threads, per-panel caches</text>
+        <rect class="row private" x="190" y="238" width="332" height="30" rx="6"/><text x="204" y="258" class="t-s">cellular panels (private, not in the repo)</text>
+
+        <rect class="box" x="0" y="160" width="130" height="58" rx="8"/>
+        <text x="65" y="184" text-anchor="middle" class="t-b">fax CLI</text>
+        <text x="65" y="204" text-anchor="middle" class="t-s">288 lines, no tests</text>
+        <line class="ln" x1="172" y1="189" x2="134" y2="189" marker-end="url(#ah)"/>
+        <text x="152" y="181" text-anchor="middle" class="t-s">calls</text>
+        <polyline class="ln" points="65,218 65,397 168,397" marker-end="url(#ah)"/>
+        <text x="74" y="306" class="t-s">asterisk -rx · gs</text>
+
+        <line class="ln thin" x1="236" y1="288" x2="236" y2="368" marker-end="url(#ah)"/>
+        <line class="ln thin" x1="296" y1="288" x2="296" y2="368" marker-end="url(#ah)"/>
+        <line class="ln thin" x1="356" y1="288" x2="356" y2="368" marker-end="url(#ah)"/>
+        <line class="ln thin" x1="416" y1="288" x2="416" y2="368" marker-end="url(#ah)"/>
+        <line class="ln thin" x1="476" y1="288" x2="476" y2="368" marker-end="url(#ah)"/>
+        <rect class="mask" x="258" y="311" width="196" height="40" rx="6"/>
+        <text x="356" y="328" text-anchor="middle" class="t-b">11 shell-out call sites</text>
+        <text x="356" y="345" text-anchor="middle" class="t-s">asterisk -rx · fax CLI · git</text>
+
+        <rect class="box" x="172" y="372" width="368" height="52" rx="8"/>
+        <text x="356" y="394" text-anchor="middle" class="t-b">Asterisk PBX</text>
+        <text x="356" y="413" text-anchor="middle" class="t-s">the house phone line</text>
+
+        <line class="divider" x1="568" y1="0" x2="568" y2="436"/>
+
+        <!-- AFTER -->
+        <text x="596" y="16" class="t-h">After</text>
+        <rect class="box" x="596" y="44" width="120" height="44" rx="8"/>
+        <text x="656" y="71" text-anchor="middle">Browser</text>
+        <line class="ln" x1="716" y1="66" x2="764" y2="66" marker-end="url(#ah)"/>
+        <text x="740" y="58" text-anchor="middle" class="t-s">HTTP</text>
+
+        <rect class="box" x="768" y="34" width="368" height="96" rx="10"/>
+        <text x="786" y="61" class="t-b t-m">faxconsole</text>
+        <text x="786" y="86" class="t-m t-s">GET /api/fax/status · log · version</text>
+        <text x="786" y="109" class="t-m t-s">POST /api/fax/send (test, dry-run)</text>
+
+        <rect class="box" x="596" y="164" width="130" height="52" rx="8"/>
+        <text x="661" y="195" text-anchor="middle" class="t-b">fax CLI</text>
+        <line class="ln" x1="726" y1="190" x2="764" y2="190" marker-end="url(#ah)"/>
+        <text x="745" y="182" text-anchor="middle" class="t-s">uses</text>
+
+        <line class="ln" x1="952" y1="130" x2="952" y2="160" marker-end="url(#ah)"/>
+        <text x="960" y="150" class="t-s">uses</text>
+        <rect class="box" x="768" y="164" width="368" height="52" rx="8"/>
+        <text x="786" y="187" class="t-b t-m">faxcli</text>
+        <text x="786" y="206" class="t-s">pure functions · typed JSON shapes</text>
+
+        <line class="ln" x1="952" y1="216" x2="952" y2="244" marker-end="url(#ah)"/>
+        <text x="960" y="235" class="t-s">calls</text>
+        <rect class="box" x="596" y="248" width="130" height="52" rx="8"/>
+        <text x="661" y="279" text-anchor="middle" class="t-b">pytest + CI</text>
+        <line class="ln" x1="726" y1="274" x2="764" y2="274" marker-end="url(#ah)"/>
+        <text x="745" y="266" text-anchor="middle" class="t-s">runs</text>
+
+        <rect class="seam" x="768" y="248" width="368" height="52" rx="8"/>
+        <text x="786" y="271" class="t-b">Asterisk adapter</text>
+        <text x="786" y="290" class="t-s">the one seam to the PBX</text>
+
+        <line class="ln dash" x1="853" y1="300" x2="853" y2="368" marker-end="url(#ah)"/>
+        <text x="861" y="340" class="t-s">live</text>
+        <line class="ln acc" x1="1051" y1="300" x2="1051" y2="368" marker-end="url(#ah-acc)"/>
+        <text x="1059" y="333" class="t-s">replay</text>
+        <text x="1059" y="350" class="t-s">demo, tests</text>
+
+        <rect class="box" x="768" y="372" width="170" height="52" rx="8"/>
+        <text x="853" y="394" text-anchor="middle" class="t-b">Asterisk PBX</text>
+        <text x="853" y="413" text-anchor="middle" class="t-s">live, house only</text>
+        <rect class="box" x="966" y="372" width="170" height="52" rx="8"/>
+        <text x="1051" y="394" text-anchor="middle" class="t-b">fixtures</text>
+        <text x="1051" y="413" text-anchor="middle" class="t-s">recorded, scrubbed</text>
+      </svg>
+      <figcaption>Before: each reader shells out on its own (11 call sites, analysis §4), and nothing runs without the live line. After: one adapter is the only way in, and replay mode points it at recorded fixtures.</figcaption>
+    </figure>
+    <div class="grid g4 kstrip">
+      <div class="kpi"><span class="l">Tests</span><span class="v"><span class="slot" data-slot="tests.count">tests.count</span></span><span class="d">on scrubbed fixtures</span></div>
+      <div class="kpi"><span class="l">Line coverage</span><span class="v"><span class="slot" data-slot="tests.coverage_pct">tests.coverage_pct</span></span><span class="d"><code>faxcli</code>, <code>faxconsole</code></span></div>
+      <div class="kpi"><span class="l">CI on every push</span><span class="v"><span class="slot" data-slot="ci.status">ci.status</span></span><span class="d">GitHub Actions, scrub gate</span></div>
+      <div class="kpi"><span class="l">Live demo</span><span class="v" style="font-size:calc(19 * var(--u))">fax.realm.watch</span><span class="d">replay mode, read-only</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>5 / 7</span></div>
+</section>
+
+<!-- 6 · Presentation and Clarity ----------------------------------------------------- -->
+<section class="slide" aria-labelledby="s6-h">
+  <div class="in">
+    <p class="tag">Presentation &amp; Clarity · 10%</p>
+    <p class="rq">The rubric asks: “Can the team clearly explain what they built and how Bob was used in a few minutes?”</p>
+    <h2 id="s6-h">In one minute, and how to check it yourself</h2>
+    <div class="grid" style="grid-template-columns: 1fr 1.05fr;">
+      <div class="card">
+        <h3>What we built</h3>
+        <p>A house PBX's legacy fax tools, modernized without taking the phone line down: a typed, tested <code>faxcli</code> package, and the Fax panel as a small typed API (<code>faxconsole</code>) behind one Asterisk adapter, with a replay mode.</p>
+        <h3 style="margin-top:calc(12 * var(--u))">How Bob was used</h3>
+        <p>Bob wrote the analysis, the package and its tests, and fixed most of what review found (Bob factor <span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span>), headless, inside an OS sandbox, with every run recorded.</p>
+        <h3 style="margin-top:calc(12 * var(--u))">Improvements made in the window</h3>
+        <p>Commit #1 is the pre-hackathon baseline, scrubbed and otherwise unchanged, rebuilt once on day one. Everything after it is new. Bob wrote most of the code and tests. Claude wrote the scrub gate, CI, the sandbox and the ledger, plus a few small review fixes, each in its own commit with a test.</p>
+      </div>
+      <div class="term judge"><span class="p"># View it</span>
+Live demo (replay mode, read-only):  https://fax.realm.watch
+Demo video (under 3 minutes):        <span class="slot" data-slot="video.url">video.url</span>
+The Bob ledger:                      docs/bob-usage.md
+Each Bob run, prompt to guard log:   docs/bob-runs/
+
+<span class="p"># Run it (no PBX needed)</span>
+$ git clone https://github.com/jphein/fax-console
+$ cd fax-console
+$ <span class="slot" data-slot="cmd.replay">cmd.replay</span>
+  then open http://127.0.0.1:<span class="slot" data-slot="port">port</span>
+$ <span class="slot" data-slot="cmd.test">cmd.test</span>
+
+<span class="p"># See which commits Bob helped write</span>
+$ git log --oneline --grep 'Assisted-by: IBM Bob'</div>
+    </div>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>6 / 7</span></div>
+</section>
+
+<!-- 7 · Roadmap -------------------------------------------------------------------- -->
+<section class="slide" aria-labelledby="s10-h">
+  <div class="in">
+    <p class="tag">Future roadmap · key learnings and next steps</p>
+    <h2 id="s10-h">What we learned, and what's next</h2>
+    <div class="grid g3" style="gap:calc(32 * var(--u))">
+      <div>
+        <p class="col-h">Learned</p>
+        <ul class="pts">
+          <li><strong>Scrub before the first prompt.</strong> The baseline was cleaned of numbers, names and hosts before any AI tool saw it, and a pre-commit check keeps it that way.</li>
+          <li><strong>Review Bob against the code.</strong> The analysis's most important finding, a PBX that cannot be read reported as <code>ok: true</code>, came from review, not from Bob.</li>
+          <li><span class="slot" data-slot="learn.3">learn.3</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="col-h">Room to improve</p>
+        <ul class="pts">
+          <li><span class="slot" data-slot="improve.1">improve.1</span></li>
+          <li><span class="slot" data-slot="improve.2">improve.2</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="col-h">Next</p>
+        <ul class="pts">
+          <li>Deploy the inbound-fax path on a test line that cannot disturb the house number.</li>
+          <li>Bring the rest of the console behind the same seam.</li>
+        </ul>
+        <div class="next-idea">
+          <span class="k">Next: LTE on CBRS</span>
+          <p>A Magma core on CBRS Band 48 shared spectrum, linked over the SGs interface to a circuit-switched core, so LTE phones can send SMS and fall back to voice calls through the same PBX. Idea stage, not built.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>7 / 7</span></div>
+</section>
+
+</main>
+</body>
+</html>

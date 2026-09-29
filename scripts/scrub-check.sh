@@ -55,6 +55,11 @@ INT_LIMITS = {"4294967295", "4294967296", "2147483647", "2147483648"}
 # review. (drift-gems, 2026-09-28; keyed by blob after the independent review of 23:11.)
 REVIEWED_BINARIES = {
     # "<40-hex blob id>": "docs/evidence/kpis.png, checked by eye 10/03 by <who>: no names or numbers",
+    "537bc885df3b1b3de8fd4448ab8dda1e09724a84": "docs/deck.pdf, checked by eye 2026-09-29 by luna-consulting: "
+        "7 slides, dark; no numbers, names, hosts or IPs; unfilled slots show as labels only; "
+        "text layer scrub-clean (30 rules)",
+    "3c879396e4a1beeeb2c06e3dc7085881c3df91e3": "demo/test-page.pdf, checked by eye 2026-09-29 by luna-consulting: "
+        "1 page, neutral text, digits and line pairs; no personal information; text layer scrub-clean (30 rules)",
 }
 DOC_NETS = (re.compile(r"^192\.0\.2\."), re.compile(r"^198\.51\.100\."), re.compile(r"^203\.0\.113\."))
 CANONICAL_BLOCKS = {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"}
