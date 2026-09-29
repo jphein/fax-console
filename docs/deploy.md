@@ -1,6 +1,18 @@
 # Deploying the replay demo
 
-The public demo is `faxconsole` in **replay mode**: it serves the recorded fixtures, a send is always a dry run, and nothing reaches a PBX or the network. This page records how it is meant to run. The last section says why each setting is there.
+The public demo is a **static replay on GitHub Pages**, at https://jphein.github.io/fax-console/. It shows the replay views as recorded from the fictional fixtures, and sending is off. `faxconsole` in **replay mode**, run locally or behind a proxy, is the full demo: it serves the recorded fixtures, a send is always a dry run, and nothing reaches a PBX or the network. This page records how each is meant to run. The last section says why each setting of the server is there.
+
+## The static demo (GitHub Pages)
+
+- `scripts/export-static.sh OUT_DIR` builds it from a clean commit:
+  - `faxconsole.export` renders every GET route in replay mode inside the OS sandbox, and hands the files over as a tar stream on stdout, so they never land in a directory Bob can write.
+  - `scripts/untar-site.py` extracts regular files only, with plain names, into a new directory.
+  - The scrub gate then checks every file against the private deny-list.
+- The page reads `api/<route>.json` relative to itself, because Pages serves it under `/fax-console/`. The send form is disabled, with a note to run it locally.
+- Pages sends no headers, so the page carries its Content-Security-Policy in a meta tag. A meta tag cannot carry `frame-ancestors`, so that one directive is left out.
+- The version drops the fields that only a running server has (`started`, `uptime`, `runtime`, `os`, `host`, `pid`), per realm-sigil's static contract.
+- `scripts/publish-pages.sh SHA` publishes it, pinned to the commit a review named. It exports afresh, commits the files to the `gh-pages` branch with git plumbing (the checkout never changes), scrubs that history against the private deny-list, and pushes. CI ignores `gh-pages`. Pages serves the branch's root, and a `.nojekyll` file keeps the files as they are.
+- There is no custom domain. realm.watch names are LAN-only by design, so the demo stays on the default Pages URL.
 
 ## Run
 
