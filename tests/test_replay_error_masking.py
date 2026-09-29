@@ -86,3 +86,18 @@ def test_a_dir_name_with_spaces_leaves_no_fragment(replay):
     config, _fx = replay
     for route in ("/api/fax/log", "/api/fax", "/api/voipms"):
         assert MARK not in handle("GET", route, {}, b"", config).body.decode(), route
+
+
+def test_a_relative_fixture_dir_is_masked_too(tmp_path, monkeypatch):
+    """A relative --replay reached error text as given, and the masker only knew the absolute form."""
+    rel = f"{MARK} fixture dir"
+    shutil.copytree(FIX / "asterisk", tmp_path / rel / "asterisk")    # before chdir: FIX is relative
+    monkeypatch.chdir(tmp_path)
+    config, cleanup, _args = build(["--replay", rel])
+    try:
+        config.voipms._refresh_once()
+        for route in ("/api/fax/log", "/api/fax", "/api/voipms"):
+            body = handle("GET", route, {}, b"", config).body.decode()
+            assert MARK not in body, (route, body[:200])
+    finally:
+        cleanup()
