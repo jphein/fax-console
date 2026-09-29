@@ -1,5 +1,6 @@
 /* realm-tokens:begin — synced from web/realm-tokens.css by scripts/sync-tokens.sh */
 :root{
+  color-scheme:light;    /* native form controls follow the theme              */
   /* --- ground & paper ---------------------------------------------------- */
   --bg:#f4efe4;          /* page ground — warm paper                          */
   --bg2:#fbf8f1;         /* raised ground, gradients, code wells              */
@@ -77,6 +78,7 @@
 
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
+    color-scheme:dark;
     --bg:#101317; --bg2:#151920; --panel:#181d24;
     --ink:#e8e2d4; --ink2:#9aa0a6;
     --line:#2a313a; --line2:#3a434e;
@@ -96,6 +98,7 @@
 /* An explicit choice wins in both directions. Every colour is defined on bare
    :root first, so nothing has its ONLY definition inside a media query. */
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#101317; --bg2:#151920; --panel:#181d24;
   --ink:#e8e2d4; --ink2:#9aa0a6;
   --line:#2a313a; --line2:#3a434e;

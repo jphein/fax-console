@@ -261,7 +261,7 @@ async function load(){
       +"open how this was read on any tile. Where a state could not be read "
       +"it says not probed rather than guessing, because a wrong green dot is "
       +"believed and an honest gap is not."
-      +(v&&v.version?" \u00b7 v"+v.version:"");
+      +(v&&v.version?" \u00b7 "+v.version:"");
   }).catch(()=>{});
 }
 

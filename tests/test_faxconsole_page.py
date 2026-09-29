@@ -344,3 +344,47 @@ def test_version_keeps_host_when_live(monkeypatch, tmp_path):
     cfg = Config(transport=ReplayTransport(fixture_dir=fx / "asterisk", cdr_path=fx / "cdr" / "Master.csv",
                                            spool_dir=str(tmp_path)), inbox=str(tmp_path / "inbox"))
     assert json.loads(_get("/api/version", cfg).body)["host"] == "pbx7.example.net"
+
+
+# ---------------------------------------------------------------------------
+# 14. Review of run 9: what the tests above could not see
+# ---------------------------------------------------------------------------
+
+def test_html_has_no_inline_script_or_handlers(html_body):
+    """Under script-src 'self' an inline script or on*= handler is silently blocked by the browser,
+    and the page breaks with no error in any test. So the markup must carry none."""
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html_body), "inline <script> without src"
+    assert not re.search(r"\son[a-z]+\s*=", html_body, re.IGNORECASE), "inline event handler"
+
+
+def test_csp_script_src_is_exactly_self(replay_config):
+    """A substring check passes "script-src 'self' 'unsafe-inline'" too: parse the directive."""
+    csp = _get("/", replay_config).extra_headers["Content-Security-Policy"]
+    directives = {d.split()[0]: d.split()[1:] for d in csp.split(";") if d.strip()}
+    assert directives["script-src"] == ["'self'"]
+    assert directives["default-src"] == ["'self'"]
+
+
+def test_js_get_routes_answer_200(js_api_routes, replay_config):
+    """Non-404 would pass a 500 or a 503: every GET the page makes must succeed in replay mode."""
+    for route in js_api_routes:
+        path = route.split("?")[0]
+        if path in _POST_ONLY:
+            continue
+        assert _get(path, replay_config).status == 200, path
+
+
+def test_favicon_dark_rule_follows_defaults(replay_config):
+    """At equal specificity the later rule wins, so the dark override must come after the defaults."""
+    svg = _get("/favicon.svg", replay_config).body.decode()
+    style = svg[svg.index("<style>"):svg.index("</style>")]
+    assert style.index(".body") < style.index("@media (prefers-color-scheme: dark)")
+
+
+def test_css_declares_color_scheme_in_both_themes(css_body):
+    """Without color-scheme, native inputs and the file button stay light on the dark theme."""
+    compact = re.sub(r"\s+", "", css_body)
+    # declarations only: "prefers-color-scheme:dark" in the media query itself must not count
+    decl = lambda v: len(re.findall(r"(?<!prefers-)color-scheme:" + v, compact))  # noqa: E731
+    assert decl("light") >= 1
+    assert decl("dark") >= 2    # in the media query's block and in the explicit data-theme block

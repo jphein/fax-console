@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
   <!-- fax glyph: a page feeding into a machine — readable at 16px in light and dark themes -->
   <style>
+    .body { fill: #8a6222; }
+    .feed { fill: #f4efe4; }
+    /* after the defaults: at equal specificity the later rule wins */
     @media (prefers-color-scheme: dark) {
       .body { fill: #d9ad5c; }
       .feed { fill: #181d24; }
     }
-    .body { fill: #8a6222; }
-    .feed { fill: #f4efe4; }
   </style>
   <!-- machine body -->
   <rect class="body" x="1" y="5" width="14" height="9" rx="2"/>
