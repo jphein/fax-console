@@ -65,13 +65,13 @@ CODE_RECEIVERS = {"self", "cls", "args", "opts", "options", "cfg", "config", "co
 # Home directories that name no person: CI runners, package managers, the sandbox, placeholders.
 PUBLIC_HOMES = {"bob", "runner", "linuxbrew", "user", "username", "you", "me", "name", "ubuntu",
                 "vscode", "codespace", "example", "shared", "someone"}
-SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "token", "credential",
+SECRET_WORDS = {"pass", "password", "passwd", "passphrase", "pwd", "secret", "token", "tokens", "credential",
                 "credentials"}
 SECRET_JOINED = ("apikey", "accesskey", "privatekey", "secretkey")
 PLACEHOLDER = re.compile(
     r"^(?:<.*>|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|%\(?\w*\)?s|\{\w*\}|x{3,}|\*{3,}|\.{3}|…|changeme"
-    r"|change[_-]me|example[\w-]*|dummy[\w-]*|fake[\w-]*|test[\w-]*|wrong[\w-]*|bogus[\w-]*|invalid[\w-]*"
-    r"|none|null|nil|redacted|placeholder|your[\w-]*"
+    r"|change[_-]me|(?:example|dummy|fake|test|wrong|bogus|invalid|your)(?:[-_.][\w.-]*)?"
+    r"|none|null|nil|redacted|placeholder"
     r"|false|true|secret|password|token)$", re.IGNORECASE)
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$")
 # A key that ends in one of these describes a secret without holding one: token_type, secret_name.
@@ -184,9 +184,11 @@ def secret_value(m, kind=""):
         return False                                   # compass=, bypass=, max_tokens=
     if parts and parts[-1] in DESCRIPTORS:
         return False                                   # token_type = "bearer": about a secret, not one
-    if (len(v) < 6 or v.isdigit() or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
+    if v.isdigit() and "tokens" in parts and not (SECRET_WORDS - {"tokens"}).intersection(parts):
+        return False                                   # max_tokens, input_tokens: counts, not secrets
+    if (len(v) < 6 or PLACEHOLDER.match(v) or re.match(r"[a-z][a-z0-9+.-]*://", v)
             or v.startswith(("/", "~/", "./", "../"))):
-        return False                                   # a flag, a TTL, a placeholder, a URL, a path
+        return False                                   # a flag, a placeholder, a URL, a path
     if quoted:
         return True                                    # a quoted literal is a value, whatever it says
     if m.string[m.end():m.end() + 1] in ("(", "["):
@@ -320,8 +322,9 @@ def json_strings(obj):
     if isinstance(obj, (_Pairs, dict)):
         for k, v in (obj if isinstance(obj, _Pairs) else obj.items()):
             yield str(k)
-            if isinstance(v, (str, int, float, bool)):
-                yield f'{k}: "{v}"'
+            for item in (v if isinstance(v, list) else [v]):
+                if isinstance(item, (str, int, float, bool)):
+                    yield f'{k}: "{item}"'
             yield from json_strings(v)
     elif isinstance(obj, list):
         for v in obj:
@@ -489,6 +492,7 @@ def history(rules, rev="HEAD"):
                 rem_old = int(h.group(1)) if h.group(1) is not None else 1
                 rem_new = int(h.group(3)) if h.group(3) is not None else 1
                 lineno = int(h.group(2)) - 1
+    added_at = {(c[:7], pth) for c, pth in added}     # where step 1 saw lines; a quoted name is not here
     for (c, pth), lines in added.items():
         if pth.lower().endswith(".json"):
             continue                                        # fragments of JSON: see step 2
@@ -506,7 +510,8 @@ def history(rules, rev="HEAD"):
             meta, p = t.decode().split(), toks[i + 1].decode("utf-8", "replace")
             names.add(p)
             if len(meta) >= 5 and not meta[4].startswith("D") and meta[1] != "160000":
-                blobs.setdefault(meta[3], (f"{c}:{p}", p, (c, p) in as_binary))   # not deleted, not a submodule
+                unseen = (c, p) in as_binary or (c, p) not in added_at
+                blobs.setdefault(meta[3], (f"{c}:{p}", p, unseen))   # not deleted, not a submodule
             i += 2
             continue
         if t:

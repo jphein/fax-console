@@ -140,6 +140,15 @@ def test_gitattributes_cannot_hide_text_from_history(repo, attr):
     assert r.returncode == 1 and "notes.txt:1: [phone-number]" in r.stdout
 
 
+@pytest.mark.parametrize("name", ['we"ird.txt', "tab\there.txt"])
+def test_a_quoted_name_under_binary_is_still_read(repo, name):
+    commit(repo, ".gitattributes", "*.txt binary\n", "attributes")
+    commit(repo, name, "call " + PHONE + "\n", "a number")
+    commit(repo, name, "nothing\n", "gone again")
+    r = scrub(repo, "--history")
+    assert r.returncode == 1 and "[phone-number]" in r.stdout
+
+
 def test_history_of_a_named_ref(repo):
     git(repo, "switch", "-q", "-c", "side")
     commit(repo, "s.env", j("BOB_API_KEY", "=", "abcdef123456\n"), "side secret")
@@ -352,6 +361,8 @@ def test_jsonl_is_scanned_as_decoded_strings(repo):
 
 @pytest.mark.parametrize("name,text", [
     ("cfg.json", '{"db": {"password": "' + j("hunter2", "hunter2") + '"}}\n'),
+    ("cfg.json", '{"tokens": ["' + j("q7Rf9L", "mZ2xKp") + '"]}\n'),                  # an array under the key
+    ("cfg.json", '{"password": ' + j("8675", "30912") + '}\n'),                       # a number
     ("run.jsonl", '{"api_key": "' + j("q7Rf9L", "mZ2xKp") + '"}\n'),
     ("run.jsonl", '{"BOB_API_KEY": "' + j("abcdef", "1234567") + '"}\n'),
 ])
