@@ -32,6 +32,18 @@ code. Read `BASELINE.md` before touching anything.
    Only the `fax show stats` counter deltas are. `SendFax` needs the `f` option, because
    VoIP.ms refuses T.38. Asterisk CLI `originate` separates the app and its args with a space.
 
+## Where Bob runs
+Bob runs inside `scripts/bob-sandbox.sh`, an OS sandbox, and that is the security boundary:
+- a filesystem view of this repo only, with `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`,
+  `.venv/` and this file read-only;
+- no network path to the LAN or loopback;
+- a clean home directory.
+
+The hooks in `.bob/` are an audit and early-warning layer inside it. **Bob's skills
+directories stay empty:** Bob lists every skill it can find in its prompt, so none from outside
+this project may be visible to it. Code you write here (tests, `conftest.py`) runs in the
+sandbox or in CI.
+
 ## Conventions
 - Python ≥ 3.10, stdlib only at runtime (the PBX host has no pip). Dev tools: pytest, ruff.
 - Pure functions (parsing, normalising, judging outcomes) stay separate from I/O

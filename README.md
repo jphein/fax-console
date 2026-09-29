@@ -25,6 +25,9 @@ for the *Building with IBM Bob* hackathon, track **Modernize What Matters**.
   that, every commit and commit message passes through `scripts/scrub-check.sh`, and CI runs
   it again.
 - **`legacy/` never changes.** CI fails if it drifts from the `baseline-2026-09-28` tag.
+- **Bob works inside an OS sandbox** ([`scripts/bob-sandbox.sh`](scripts/bob-sandbox.sh)). It
+  sees only this repository, has no route to the LAN, and has a clean home directory.
+  [`scripts/sandbox-probe.sh`](scripts/sandbox-probe.sh) checks the containment with 31 probes.
 
 ## License
 

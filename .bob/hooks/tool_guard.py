@@ -24,6 +24,11 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Inside scripts/bob-sandbox.sh the private deny-list is deliberately invisible, so these hooks use the
+# generic rules there; the private list is applied outside, to every prompt before it is sent and to
+# every commit. Outside the sandbox a missing list is a refusal, as before.
+SANDBOXED = os.environ.get("FAX_CONSOLE_SANDBOX") == "1"
+REQUIRE = [] if SANDBOXED else ["--require-deny"]
 LOG = os.environ.get("FAX_CONSOLE_GUARD_LOG") or os.path.join(ROOT, ".bob", "guard.log")
 
 DENY_TOOLS = re.compile(r"web_fetch|web_search|browser|mcp|use_skill", re.IGNORECASE)
@@ -156,7 +161,7 @@ def main():
             body = "\n".join(strings(args, CONTENT_KEYS))
             if body:
                 r = subprocess.run([os.path.join(ROOT, "scripts", "scrub-check.sh"), "--stdin", "write",
-                                    "--require-deny"], input=body.encode("utf-8"), capture_output=True, timeout=15,
+                                    *REQUIRE], input=body.encode("utf-8"), capture_output=True, timeout=15,
                                    check=False)
                 if r.returncode != 0:
                     deny(tool, "write refused: the content carries identifying data (masked): "

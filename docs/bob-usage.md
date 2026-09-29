@@ -3,7 +3,9 @@
 This file records every Bob run on this project: the prompt, what Bob produced, what was
 kept, what was changed or rejected and why, and what it cost. It is the evidence for "Bob as
 a core part of the workflow". Each run's raw record is kept under
-[`docs/bob-runs/`](bob-runs/):
+[`docs/bob-runs/`](bob-runs/). The records are verbatim except for two mechanical rewrites
+made before publishing: the absolute repo path became `.`, and two cellular endpoint names
+match the rebuilt baseline.
 
 | File | Contents |
 |---|---|
@@ -18,17 +20,37 @@ a core part of the workflow". Each run's raw record is kept under
   can watch; [`scripts/bob-watch.py`](../scripts/bob-watch.py) renders the stream readably.
 - **Bob follows the repo's own rules.** [`AGENTS.md`](../AGENTS.md) holds them: the frozen
   baseline, no network or PBX access, fictional data only, and stable JSON contracts.
-- **Bob is sandboxed by its own hook system** ([`.bob/settings.json`](../.bob/settings.json)):
-  - [`prompt_gate.py`](../.bob/hooks/prompt_gate.py) runs every prompt through the scrub gate
-    before Bob sees it (rules §8.6: no personal data to AI tools).
-  - [`tool_guard.py`](../.bob/hooks/tool_guard.py) refuses network, remote, privileged and PBX
-    commands; paths outside the repo; writes to the frozen baseline or to the guard itself; and
-    any write whose content carries identifying data.
-  - Both hooks fail closed.
-  - [`tests/test_sandbox_guard.py`](../tests/test_sandbox_guard.py) has 50 cases, and every rule
-    has one case that must pass and one that must be refused.
+- **The security boundary is an OS sandbox**, [`scripts/bob-sandbox.sh`](../scripts/bob-sandbox.sh).
+  Bob's whole process tree runs inside it, including any tests Bob writes and runs:
+  - **Filesystem (bubblewrap):** Bob sees this repo and nothing else of the workstation.
+    `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`, `.venv/` and `AGENTS.md` are
+    read-only. Bob gets a clean home directory and a minimal `/etc`, with no hosts file and no
+    ssh config.
+  - **Network (a systemd scope with BPF address filters):** the LAN, loopback, link-local and
+    CGNAT ranges are denied, so the PBX and every house service are unreachable. The public
+    internet stays open for Bob's own API.
+  - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
+  - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
+    31 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    sandbox and fails inside it, under every trick tried.
+- **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
+  `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
+  prompt, names and descriptions included, even with the `skill` tool group disabled. On a
+  workstation, those skills belong to other projects. Run 3 confirms that only Bob's six
+  built-in skills are listed now.
+- **The workspace hooks are audit and early warning, not the boundary**
+  ([`.bob/settings.json`](../.bob/settings.json)):
+  - [`prompt_gate.py`](../.bob/hooks/prompt_gate.py) scrub-checks every prompt (rules §8.6).
+    The wrapper also checks each prompt with the private deny-list before sending it.
+  - [`tool_guard.py`](../.bob/hooks/tool_guard.py) refuses risky commands and writes early,
+    so Bob hears a clear reason, and it logs every decision.
+  - An independent review showed that a regex over a shell command can be evaded (quoting,
+    absolute paths, `python -c`). That is why the OS sandbox exists.
+  - [`tests/test_sandbox_guard.py`](../tests/test_sandbox_guard.py) has 56 cases.
 - **The orchestrating agent (Claude) reviews everything Bob writes.** It checks claims against
   the code and records corrections here. Nothing Bob writes is committed unread.
+- **Commits whose content Bob wrote carry an `Assisted-by: IBM Bob` trailer**, so
+  `git log --grep "Assisted-by: IBM Bob"` lists them.
 
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 50 for the month.
@@ -38,8 +60,14 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 | – | 9/28 21:30 | Setup check ("reply ok") | one word | 0 | 0.027 | — |
 | 0 | 9/28 22:13 | [Sandbox smoke test](bob-runs/0-sandbox-smoke.prompt.md) | one file written; `curl` refused; an outside path refused | 3 | 0.083 | Proved the hooks fire in headless mode and that Bob reports refusals accurately |
 | 1 | 9/28 22:15 | [Modernization analysis](bob-runs/1-analysis.prompt.md) | [`docs/analysis.md`](analysis.md) §1–§8, 451 lines | 26 | 3.078 | Kept verbatim; 7 corrections and 6 added findings in §9 |
+| 2 | 9/28 22:34 | [Isolation check](bob-runs/2-isolation-check.prompt.md) | none: the prompt gate refused the prompt, failing closed, because the private deny-list was not reachable from the clean home | 0 | 0 | Showed the gate fails closed; led to the sandbox's split between generic rules inside and the private list outside |
+| 3 | 9/28 22:44 | [Sandbox check](bob-runs/3-sandbox-check.prompt.md) | "ok", from inside the OS sandbox | 0 | 0.021 | Proved Bob works sandboxed; its prompt now lists only Bob's own six skills |
 
-**Running total: 3.19 Bobcoins** (after run 1).
+**Running total: 3.21 Bobcoins** (after run 3).
+
+**Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
+report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
+measurably needs more, and any raise is recorded in this ledger with its reason.
 
 ## Run notes
 
@@ -72,4 +100,5 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 |---|---|
 | The owner, before the hackathon | Everything in `legacy/`: the pre-hackathon baseline ([BASELINE.md](../BASELINE.md)). |
 | **Bob** | `docs/analysis.md` §1–§8. |
-| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. |
+| Claude (orchestrating agent) | The baseline scrub and its tooling (`scripts/scrub-check.sh`, hooks, CI), the Bob sandbox (`scripts/bob-sandbox.sh`, `scripts/sandbox-probe.sh`, `.bob/`, `AGENTS.md`, `scripts/bob-*.{sh,py}`, `tests/test_sandbox_guard.py`), review notes (`docs/analysis.md` §9), and this file. |
+| Oracle (an independent, read-only reviewer agent) | The security review that moved the boundary from hooks to the OS sandbox. |

@@ -36,6 +36,7 @@ ALLOW_NUMBERS = {
     "18884732963",   # HP's public fax test line (named in the legacy route notes)
 }
 DOC_NETS = (re.compile(r"^192\.0\.2\."), re.compile(r"^198\.51\.100\."), re.compile(r"^203\.0\.113\."))
+CANONICAL_BLOCKS = {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"}
 
 GENERIC = [
     ("private-ipv4", re.compile(
@@ -66,6 +67,11 @@ def allowed(rule, m):
         return dom in ("example.com", "example.org", "example.net", "anthropic.com", "github.com",
                        "users.noreply.github.com") or dom.endswith(".example")
     if rule == "private-ipv4":
+        # A whole private range in canonical CIDR form (a firewall rule, a sandbox deny list)
+        # names no host, so it cannot leak one: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10.
+        pfx = re.match(r"/(\d{1,2})(?![\d\w])", m.string[m.end():])
+        if pfx and f"{s}/{pfx.group(1)}" in CANONICAL_BLOCKS:
+            return True
         return any(n.match(s) for n in DOC_NETS)
     return False
 

@@ -136,3 +136,31 @@ def test_scrub_check_stdin(text, expect, env):
                        check=False)
     assert r.returncode == expect, r.stdout.decode()
     assert b"555-1234" not in r.stdout and b"hunter22" not in r.stdout   # matches are masked in output
+
+
+def test_prompt_gate_inside_sandbox_uses_generic_rules(tmp_path):
+    """Inside bob-sandbox.sh the private deny-list is invisible by design: the gate still runs
+    the generic rules (and the private list is applied outside, before the prompt is sent)."""
+    env = dict(os.environ, FAX_CONSOLE_SANDBOX="1", FAX_CONSOLE_SCRUB_DENY=str(tmp_path / "absent.txt"),
+               FAX_CONSOLE_GUARD_LOG=str(tmp_path / "g.log"), CI="1")
+    assert hook(GATE, {"prompt": "write tests for faxcli with 202-555-0142"}, env) == 0
+    assert hook(GATE, {"prompt": "the line is " + BAD_PHONE}, env) == 2
+
+
+def test_prompt_gate_outside_sandbox_fails_closed_without_deny_list(tmp_path):
+    env = dict(os.environ, FAX_CONSOLE_SCRUB_DENY=str(tmp_path / "absent.txt"),
+               FAX_CONSOLE_GUARD_LOG=str(tmp_path / "g.log"), CI="1")
+    env.pop("FAX_CONSOLE_SANDBOX", None)
+    assert hook(GATE, {"prompt": "a perfectly clean prompt"}, env) == 2
+
+
+@pytest.mark.parametrize("text,expect", [
+    (j("deny=", "10.", "0.0.0/8 ", "172.", "16.0.0/12 ", "192.", "168.0.0/16 ", "100.", "64.0.0/10"), 0),
+    (j("a /24 is a network, not the canonical block: ", "10.", "0.0.0/24"), 1),
+    (j("glued suffix ", "10.", "0.0.0/8x"), 1),
+    (j("a host with a slash ", "10.", "1.0.0/8"), 1),
+])
+def test_scrub_check_canonical_blocks(text, expect, env):
+    r = subprocess.run([SCRUB, "--stdin", "t"], input=text.encode(), capture_output=True, env=env, timeout=30,
+                       check=False)
+    assert r.returncode == expect, r.stdout.decode()

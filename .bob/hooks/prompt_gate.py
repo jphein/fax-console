@@ -15,6 +15,11 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Inside scripts/bob-sandbox.sh the private deny-list is deliberately invisible, so these hooks use the
+# generic rules there; the private list is applied outside, to every prompt before it is sent and to
+# every commit. Outside the sandbox a missing list is a refusal, as before.
+SANDBOXED = os.environ.get("FAX_CONSOLE_SANDBOX") == "1"
+REQUIRE = [] if SANDBOXED else ["--require-deny"]
 LOG = os.environ.get("FAX_CONSOLE_GUARD_LOG") or os.path.join(ROOT, ".bob", "guard.log")
 
 
@@ -37,7 +42,7 @@ def main():
     try:
         event = json.load(sys.stdin)
         prompt = event.get("prompt") or ""
-        r = subprocess.run([os.path.join(ROOT, "scripts", "scrub-check.sh"), "--stdin", "prompt", "--require-deny"],
+        r = subprocess.run([os.path.join(ROOT, "scripts", "scrub-check.sh"), "--stdin", "prompt", *REQUIRE],
                            input=prompt.encode("utf-8"), capture_output=True, timeout=15, check=False)
     except Exception as e:  # noqa: BLE001 -- fail closed: Bob treats a crashed hook as "allow"
         block(f"prompt gate could not run ({type(e).__name__}); refusing the prompt")
