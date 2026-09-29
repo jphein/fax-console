@@ -496,7 +496,13 @@ def test_the_sandbox_env_keeps_python_bytecode_on_its_own_tmp(tmp_path):
     assert "export PYTHONPYCACHEPREFIX=/tmp/pycache" in kept.read_text(encoding="utf-8").splitlines()
     a = argv.read_text(encoding="utf-8").splitlines()
     assert "--clearenv" in a and any(x == "--tmpfs" and a[j + 1] == "/tmp" for j, x in enumerate(a[:-1])), a
-    # nothing from the host is bound or linked at /tmp or at the cache (this test's own repo lives under /tmp)
-    dests = [a[j + 2] for j, x in enumerate(a[:-2])
-             if x in ("--bind", "--ro-bind", "--bind-try", "--ro-bind-try", "--symlink")]
-    assert not [d for d in dests if d in ("/tmp", "/tmp/pycache") or d.startswith("/tmp/pycache/")], dests
+    # No bwrap op puts host content at /, /tmp or the cache: every bind, link, data-file and overlay form,
+    # with the offset of its destination (the Oracle's Low on #21). This test's own repo lives under /tmp,
+    # so only those paths are checked.
+    dest_at = {"--bind": 2, "--bind-try": 2, "--dev-bind": 2, "--dev-bind-try": 2, "--ro-bind": 2,
+               "--ro-bind-try": 2, "--symlink": 2, "--file": 2, "--bind-data": 2, "--ro-bind-data": 2,
+               "--overlay": 3, "--tmp-overlay": 1, "--ro-overlay": 1}
+    dests = [a[j + dest_at[x]] for j, x in enumerate(a) if x in dest_at and j + dest_at[x] < len(a)]
+    assert "/home/bob" in dests                                        # the table does read destinations
+    bad = ("/", "/tmp", "/tmp/pycache")
+    assert not [d for d in dests if d in bad or d.startswith("/tmp/pycache/")], dests
