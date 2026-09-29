@@ -1,6 +1,8 @@
 name: ci
 on:
   push:
+    # gh-pages holds the static replay demo and no code (scripts/publish-pages.sh)
+    branches-ignore: [gh-pages]
   pull_request:
 permissions:
   contents: read
