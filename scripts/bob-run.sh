@@ -6,7 +6,9 @@
 #   Ledger:  docs/bob-usage.md is updated automatically by scripts/bob_usage.py. The run is
 #            reserved at MAX_COST before it starts and replaced with Bob's measured cost when it
 #            ends, even when Bob fails. Inside the sandbox the ledger and docs/bob-runs/ are
-#            read-only: Bob's stream is recorded out here, by tee.
+#            read-only, and docs/ cannot be renamed. Bob's stream is recorded outside the repository
+#            while it runs, and copied into docs/bob-runs/ only after the sandbox exits, and only if
+#            docs/ is still the same directory (exit 3 otherwise; nothing is touched).
 # Bob runs inside scripts/bob-sandbox.sh (the OS sandbox); the .bob/ hooks audit inside it. Rules: AGENTS.md.
 #
 # Budget (see "Budget" in docs/bob-usage.md; the rules are in scripts/bob_usage.py):
@@ -35,14 +37,14 @@ ledger=docs/bob-usage.md
 if [ "${BOB_TMUX:-0}" = 1 ] && [ -z "${BOB_TMUX_INNER:-}" ]; then
   # tmux windows inherit the tmux server's environment, not ours, so pass what matters.
   sess=${BOB_TMUX_SESSION:-bob}; rcf="docs/bob-runs/.run-$n.rc"; rm -f "$rcf" "$rcf.tmp"
-  pass=(BOB_TMUX_INNER=1)
+  pass=(BOB_TMUX_INNER=1); drop=()
   for v in BOB_OVERRIDE BOB_ENV BOB_SOFT_CAP XDG_STATE_HOME FAX_CONSOLE_SCRUB_DENY; do
-    if [ -n "${!v:-}" ]; then pass+=("$v=${!v}"); fi
+    if [ -n "${!v:-}" ]; then pass+=("$v=${!v}"); else drop+=(-u "$v"); fi   # unset here: unset there
   done
   # The window keeps itself open when the run ends (set from inside, so no exit can race it),
   # and writes its exit code to a temp name first, so the caller never reads a half-written rc.
   cmd='tmux set-option -p -t "$TMUX_PANE" remain-on-exit on; '
-  cmd+="cd $(printf %q "$root") && env $(printf '%q ' "${pass[@]}")scripts/bob-run.sh"
+  cmd+="cd $(printf %q "$root") && env $(printf '%q ' "${drop[@]}" "${pass[@]}")scripts/bob-run.sh"
   cmd+=" $(printf '%q ' "$n" "$slug" "$cost"); echo \$? > $(printf %q "$rcf.tmp") && mv -f $(printf '%q ' "$rcf.tmp" "$rcf")"
   # "=name" matches the session exactly: a bare name would also match a longer one by prefix.
   tmux has-session -t "=$sess" 2>/dev/null || tmux new-session -d -s "$sess" -n home -c "$root"
@@ -68,12 +70,26 @@ python3 scripts/bob_usage.py reserve "$ledger" --n "$n" --slug "$slug" --max-cos
 source "${BOB_ENV:-$HOME/.config/bob-shell/env}"
 # Bob runs inside the OS sandbox (scripts/bob-sandbox.sh): the security boundary. The .bob/ hooks
 # inside it are an audit and early-warning layer.
+# Its stream goes to a private file outside the repository, which the sandbox cannot see; the ledger
+# is finalized from that file, and the published copy is made after the sandbox has exited.
+priv=${XDG_STATE_HOME:-$HOME/.local/state}/fax-console/runs
+mkdir -p "$priv"; chmod 700 "$priv"
+rec="$priv/$(date +%Y%m%dT%H%M%S)-$$-$n-$slug.jsonl"; install -m 600 /dev/null "$rec"
+sig() { stat -c '%d:%i' docs docs/bob-runs "$ledger" 2>/dev/null | tr '\n' ' '; }
+before=$(sig)
 : > .bob/guard.log
 set +e      # a failed run must still leave its guard log and its ledger row
 scripts/bob-sandbox.sh bob run --format stream-json --max-cost "$cost" --accept-license \
-    --disable-tool-groups skill,mcp,browser,mode "$(cat "$p")" | tee "$out" | python3 scripts/bob-watch.py
+    --disable-tool-groups skill,mcp,browser,mode "$(cat "$p")" | tee "$rec" | python3 scripts/bob-watch.py
 rc=${PIPESTATUS[0]}
 set -e
+if [ "$(sig)" != "$before" ]; then
+  echo "bob-run: run $n NOT recorded: docs/ was replaced while Bob ran ($before -> $(sig))." >&2
+  echo "bob-run: nothing was copied or finalized; the reservation keeps counting in the journal." >&2
+  echo "bob-run: Bob's stream is kept at $rec. Restore docs/ by hand before anything else." >&2
+  exit 3
+fi
+cp "$rec" "$out"
 cp .bob/guard.log "docs/bob-runs/$n-$slug.guard.jsonl"
 # The recording is published: relativize the repo path, then any other path in the account's
 # home (a refused write outside the repo names it), and make sure no API key can survive in it.
@@ -91,7 +107,8 @@ for f in files:
     open(f, "w", encoding="utf-8").write(t)
 PY
 fin=0
-python3 scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$out" --rc "$rc" >/dev/null || fin=$?
+python3 scripts/bob_usage.py finalize "$ledger" --n "$n" --file "$rec" --rc "$rc" >/dev/null || fin=$?
+rm -f "$rec"    # the published, redacted copy in docs/bob-runs/ is the record from here on
 scripts/scrub-check.sh --paths "$out" "docs/bob-runs/$n-$slug.guard.jsonl" --require-deny
 python3 - "$out" <<'PY'
 import json, sys

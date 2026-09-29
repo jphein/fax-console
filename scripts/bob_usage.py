@@ -120,16 +120,23 @@ def table_span(lines: list[str]) -> tuple[int, int]:
     raise BudgetError("no '| # | Date ...' ledger table in the usage file")
 
 
+NO_COST = {"", "—", "–", "-", "0"}
+
+
 def cost_of(cell: str) -> float:
-    """A Cost cell: a figure, or a reservation "(x)" counted at x. Words and dashes count 0; a
-    figure that is not a finite number >= 0 (nan, inf, -5) is refused, since it would lower the total."""
-    c = cell.strip()
+    """A Cost cell: a figure, or a reservation "(x)" counted at x; an empty cell or a dash counts 0.
+    Anything else that is not a finite number >= 0 is refused ("~3", "nan", "-5", a Unicode minus),
+    because counting it as 0 would lower the total."""
+    c = cell.strip().replace("\u2212", "-")
     if c.startswith("(") and c.endswith(")"):           # a reservation counts at its maximum
-        c = c[1:-1]
+        c = c[1:-1].strip()
+    if c in NO_COST:
+        return 0.0
     try:
         v = float(c)
     except ValueError:
-        return 0.0
+        raise BudgetError(f"a ledger Cost cell reads {cell.strip()[:20]!r}: "
+                          "write a number, or — for none") from None
     if not math.isfinite(v) or v < 0:
         raise BudgetError(f"a ledger Cost cell reads {cell.strip()[:20]!r}: not a finite number >= 0")
     return v
@@ -228,7 +235,7 @@ def cycle_total(lines: list[str], today: date, day: int = CYCLE_DAY, runs: dict 
 
 # ---------------------------------------------------------------- the run's figures
 def summarize(stream_lines) -> dict:
-    result, errors, n_asst, n_tool = None, [], 0, 0
+    result, errors, n_asst, n_tool, n_results = None, [], 0, 0, 0
     for raw in stream_lines:
         try:
             ev = json.loads(raw)
@@ -245,13 +252,17 @@ def summarize(stream_lines) -> dict:
             errors.append(str(ev.get("message") or ev.get("error") or "error")[:120])
         elif t == "result":
             result = ev
+            n_results += 1
     stats = (result or {}).get("stats") or {}
     raw_cost, cost, invalid = stats.get("session_costs"), None, False
-    if raw_cost is not None:
+    if raw_cost is not None or n_results > 1:
         try:
+            # Bob prints one result. A second one is a forged or corrupt stream, whichever is first.
+            if n_results > 1:
+                raise BudgetError("more than one result event")
             if isinstance(raw_cost, bool) or not isinstance(raw_cost, (int, float)):
                 raise BudgetError("session_costs must be a JSON number")
-            cost = finite(raw_cost, "session_costs")
+            cost = finite(raw_cost, "session_costs", hi=HARD_CAP)   # 1e308 would block every later run
         except BudgetError:
             invalid = True                       # never a credit: the reservation keeps counting
     tools = stats.get("tool_calls")

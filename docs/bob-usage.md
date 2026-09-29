@@ -26,15 +26,17 @@ match the rebuilt baseline.
   Bob's whole process tree runs inside it, including any tests Bob writes and runs:
   - **Filesystem (bubblewrap):** Bob sees this repo and nothing else of the workstation.
     `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`, `.venv/` and `AGENTS.md` are
-    read-only, and so is the evidence: this file and `docs/bob-runs/`. `bob-run.sh` records
-    Bob's stream and keeps the ledger from outside the sandbox. Bob gets a clean home directory
-    and a minimal `/etc`, with no hosts file and no ssh config.
+    read-only, and so is the evidence: this file and `docs/bob-runs/`, and `docs/` itself
+    cannot be renamed. `bob-run.sh` records Bob's stream outside the repository while Bob runs,
+    finalizes the ledger from that copy, and publishes it in `docs/bob-runs/` only after the
+    sandbox has exited and `docs/` is proven to be the same directory. Bob gets a clean home
+    directory and a minimal `/etc`, with no hosts file and no ssh config.
   - **Network (a systemd scope with BPF address filters):** the LAN, loopback, link-local and
     CGNAT ranges are denied, so the PBX and every house service are unreachable. The public
     internet stays open for Bob's own API.
   - **Processes:** Bob gets its own PID, IPC and UTS namespaces, and a new session.
   - [`scripts/sandbox-probe.sh`](../scripts/sandbox-probe.sh) proves the containment with
-    37 probes. One is a live positive control: ssh to the real PBX succeeds outside the
+    38 probes. One is a live positive control: ssh to the real PBX succeeds outside the
     sandbox and fails inside it, under every trick tried.
 - **The clean home directory is load-bearing.** Bob Shell lists every skill it finds under
   `~/.bob`, `~/.agents` and `~/.claude` (including their `plugins/*/skills`) in its system
@@ -83,9 +85,10 @@ enforces this.
 - It keeps this table itself: a row reserved at the run's maximum before Bob starts, and the
   measured cost after it ends. The review columns stay human-written. A cost Bob reports that is
   not a finite number of 0 or more is an error, and the reservation keeps counting.
-- It also keeps a journal of every reservation and cost outside the repository, per user, where
-  Bob's sandbox cannot see it. So two checkouts share one budget, a deleted or edited row gives
-  no Bobcoins back, and a row that goes missing is restored (the run then exits 3).
+- It also keeps a journal of every reservation and cost outside the repository, per user and
+  per machine, where Bob's sandbox cannot see it. So two checkouts share one budget, a deleted or
+  edited row gives no Bobcoins back, and a row that goes missing is restored (the run then exits
+  3). A Cost cell must hold a number, or — for none.
 
 **Cap raised for run 4 (the faxcli package): 6.** Run 1 reached 3.08 on reading alone: 26 tool
 calls, ~3,300 legacy lines. Run 4 has to read the analysis, the CLI and the fixtures, write about

@@ -196,10 +196,26 @@ def test_run_numbers_and_slugs_must_be_well_formed(ledger, n, slug):
     assert total(ledger) == pytest.approx(3.161)
 
 
-@pytest.mark.parametrize("cell", ["nan", "(nan)", "inf", "-150", "(-3)"])
+@pytest.mark.parametrize("cell", ["nan", "(nan)", "inf", "-150", "(-3)", "~3", "\u22125", "3 Bobcoins"])
 def test_a_ledger_cost_that_would_lower_the_total_is_refused(tmp_path, cell):
     p = make_ledger(tmp_path / "c", LEDGER.replace("| 3.078 |", f"| {cell} |"))
     assert reserve(p, 2, 1) == bu.EX_CONFIG
+
+
+@pytest.mark.parametrize("cell", ["—", "–", "-", ""])
+def test_a_dash_or_an_empty_cost_cell_counts_zero(tmp_path, cell):
+    p = make_ledger(tmp_path / "c", LEDGER.replace("| 3.078 |", f"| {cell} |"))
+    assert total(p) == pytest.approx(0.083)
+
+
+@pytest.mark.parametrize("stream", [
+    [{"type": "result", "stats": {"session_costs": 0.5}},
+     {"type": "result", "stats": {"session_costs": 0.001}}],
+    [{"type": "result", "stats": {"session_costs": 1e308}}],
+])
+def test_a_forged_or_absurd_result_is_invalid(stream):
+    s = bu.summarize([json.dumps(e) for e in stream])
+    assert s["cost"] is None and s["cost_invalid"]
 
 
 def test_a_run_number_cannot_be_reused(ledger):

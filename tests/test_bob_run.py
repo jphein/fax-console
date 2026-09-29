@@ -30,6 +30,10 @@ case "${STUB_MODE:-ok}" in
   tamper) cost=0.25; st=success; code=0      # as if the sandbox let Bob edit the ledger
           grep -v '^| [0-9]* | .*review pending' docs/bob-usage.md > docs/.t
           cat docs/.t > docs/bob-usage.md; rm docs/.t ;;
+  rename) cost=0.001; st=success; code=0     # as if Bob renamed docs/ and planted its own
+          mv docs docs.old && mkdir -p docs/bob-runs && printf 'forged\n' > docs/bob-usage.md ;;
+  twice)  cost=0.001; st=success; code=0     # a second, forged result line in the stream
+          printf '{"type":"result","status":"success","stats":{"session_costs":0.001}}\n' ;;
 esac
 printf '%s\n' '{"type":"message","role":"assistant","content":"working\n"}'
 printf '%s\n' '{"type":"tool_use","tool_name":"execute_command","parameters":{"command":"env"}}'
@@ -153,6 +157,28 @@ def test_a_nan_cost_is_an_error_not_a_credit(box):
     assert "| (3) |" in row(box, 5) and "invalid cost reported" in row(box, 5)
 
 
+def test_a_replaced_docs_dir_is_refused_and_nothing_is_touched(box):
+    r = run(box, "5", "demo", "3", STUB_MODE="rename")
+    assert r.returncode == 3 and "NOT recorded" in r.stderr
+    real = box[0] / "docs.old"
+    reserved = next(x for x in (real / "bob-usage.md").read_text().splitlines() if x.startswith("| 5 |"))
+    assert "| (3) |" in reserved
+    assert not (real / "bob-runs" / "5-demo.jsonl").exists()                 # nothing copied anywhere
+    assert (box[0] / "docs" / "bob-usage.md").read_text() == "forged\n"      # the fake is left as found
+    kept = list((box[2] / "state" / "fax-console" / "runs").glob("*-5-demo.jsonl"))
+    assert len(kept) == 1 and oct(kept[0].stat().st_mode & 0o777) == "0o600"   # the stream, kept private
+
+
+def test_a_second_result_line_is_an_error_not_a_credit(box):
+    r = run(box, "5", "demo", "3", STUB_MODE="twice")
+    assert r.returncode == 3 and "| (3) |" in row(box, 5) and "invalid cost reported" in row(box, 5)
+
+
+def test_the_private_recording_is_removed_once_published(box):
+    assert run(box, "5", "demo", "3").returncode == 0
+    assert not list((box[2] / "state" / "fax-console" / "runs").glob("*.jsonl"))
+
+
 def test_a_deleted_row_is_restored_and_the_run_exits_3(box):
     r = run(box, "5", "demo", "3", STUB_MODE="tamper")
     assert r.returncode == 3 and "had gone missing" in row(box, 5) and "| 0.250 |" in row(box, 5)
@@ -179,4 +205,26 @@ def test_tmux_mode_keeps_every_window_and_matches_the_session_exactly(box):
         assert not list((box[0] / "docs" / "bob-runs").glob(".run-*"))
     finally:
         subprocess.run([*tmux, "kill-server"], env=env, capture_output=True, check=False)
+        shutil.rmtree(sock, ignore_errors=True)
+
+
+@pytest.mark.skipif(shutil.which("tmux") is None, reason="needs tmux")
+def test_tmux_mode_does_not_inherit_the_servers_variables(box):
+    # The tmux server was started with a journal location the caller does not have: the run must
+    # use the caller's (here, the default under its HOME), not the server's.
+    sock = tempfile.mkdtemp(prefix="bt", dir="/tmp")
+    elsewhere = box[2] / "elsewhere"
+    env = {k: v for k, v in box[1].items() if k != "XDG_STATE_HOME"}
+    try:
+        subprocess.run(["tmux", "new-session", "-d", "-s", "bobtest"], check=True,
+                       env={**env, "TMUX_TMPDIR": sock, "XDG_STATE_HOME": str(elsewhere)})
+        r = subprocess.run(["bash", "scripts/bob-run.sh", "5", "demo", "3"], cwd=box[0], capture_output=True,
+                           text=True, timeout=180, check=False,
+                           env={**env, "TMUX_TMPDIR": sock, "BOB_TMUX": "1", "BOB_TMUX_SESSION": "bobtest"})
+        assert r.returncode == 0, r.stderr
+        assert (box[2] / "home" / ".local" / "state" / "fax-console" / "bob-journal.jsonl").exists()
+        assert not elsewhere.exists()
+    finally:
+        subprocess.run(["tmux", "kill-server"], env={**env, "TMUX_TMPDIR": sock}, capture_output=True,
+                       check=False)
         shutil.rmtree(sock, ignore_errors=True)
