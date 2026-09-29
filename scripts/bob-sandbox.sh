@@ -85,13 +85,15 @@ check_links
 # - find never follows a link, so a link's own target is never touched;
 # - every check runs before the first deletion, so a refusal deletes nothing;
 # - a listing that fails also stops the start: set -e cannot see into a process substitution, so its status
-#   is read with `wait` (the standing Oracle, on #21).
+#   is read with `wait` (the standing Oracle, on #21);
+# - so does a git that cannot read its index. An ignored ls-files failure looked like "nothing tracked", and a
+#   tracked file was purged (Aurora's Oracle, on #21).
 # The last path component is always __pycache__. So even a path that a concurrent run swapped mid-purge could
 # only remove a cache directory. Nothing enforces one sandbox per tree yet, so don't start another one (test.sh,
 # an export, the probe) in a tree where Bob is running. Not walked: .git, .venv (read-only to Bob) and scratch/
 # (never written).
 purge_pycache() {
-  local t parent root_p found=() targets=()
+  local t parent root_p out found=() targets=()
   root_p=$(cd -P -- "$root" && pwd)
   mapfile -d '' -t found < <(cd "$root" && find . \
     \( -path ./.git -o -path ./.venv -o -path ./scratch \) -prune -o -name __pycache__ \( -type d -o -type l \) \
@@ -101,8 +103,9 @@ purge_pycache() {
   for t in "${targets[@]}"; do
     parent=$(cd -P -- "$(dirname -- "$t")" && pwd) || { echo "refusing: cannot resolve $t" >&2; exit 2; }
     case "$parent/" in "$root_p"/*) ;; *) echo "refusing: $t is outside the repo" >&2; exit 2 ;; esac
-    [ -z "$(git -C "$root" --literal-pathspecs ls-files -- "$t")" ] \
-      || { echo "refusing: $t holds a tracked file; only cache artifacts are purged" >&2; exit 2; }
+    out=$(git -C "$root" --literal-pathspecs ls-files -- "$t") \
+      || { echo "refusing: cannot check $t against git's index; nothing was purged" >&2; exit 2; }
+    [ -z "$out" ] || { echo "refusing: $t holds a tracked file; only cache artifacts are purged" >&2; exit 2; }
   done
   for t in "${targets[@]}"; do rm -rf -- "$t"; done
 }

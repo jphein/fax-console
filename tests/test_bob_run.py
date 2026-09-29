@@ -578,3 +578,20 @@ def test_a_failed_pycache_listing_stops_the_start_and_nothing_is_purged(tmp_path
         locked.chmod(0o755)
     assert r.returncode == 2 and "could not all be listed" in r.stderr and not argv.exists(), r.stderr
     assert cache.exists()
+
+
+def test_an_unreadable_git_index_stops_the_start_and_nothing_is_purged(tmp_path):
+    """The tracked-file check fails closed too. When git cannot read its index, ls-files prints nothing and
+    fails; ignoring that failure read as "nothing tracked", and a tracked file was purged (Aurora's Oracle,
+    on #21). Now the start stops before bwrap, and nothing is deleted."""
+    repo, env, argv = sandbox_repo(tmp_path, "badindex")
+    tracked = repo / "pkg" / "__pycache__" / "notes.txt"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-f", str(tracked)], cwd=repo, check=True)
+    (repo / ".git" / "index").write_bytes(b"DIRC-short")                # a truncated index
+    control = subprocess.run(["git", "ls-files"], cwd=repo, capture_output=True, check=False)
+    assert control.returncode != 0, "git still reads the index: the test would prove nothing"
+    r = sandbox(repo, env)
+    assert r.returncode == 2 and "cannot check" in r.stderr and not argv.exists(), r.stderr
+    assert tracked.exists()
