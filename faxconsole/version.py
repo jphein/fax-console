@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 APP_NAME = "fax.realm.watch"
 APP_DESC = "Fax panel back end — send, receive, and status"
 APP_REALM = "signal"
-APP_REPO = ""
+APP_REPO = "https://github.com/jphein/fax-console"
 
 # Vendored from realm-sigil words/realms.json ("signal" realm)
 # (legacy e:374–387)

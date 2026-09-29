@@ -19,7 +19,13 @@ fi
 stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit)
 [ -z "$stray" ] || { echo "export-static.sh: refusing: stray bytecode or an extension module: $stray" >&2; exit 2; }
 scripts/scrub-check.sh --shadow >/dev/null 2>&1 || { echo "export-static.sh: refusing: the shadow check failed (see scripts/test.sh)" >&2; exit 2; }
-scripts/bob-sandbox.sh .venv/bin/python -m faxconsole.export tests/fixtures | python3 -I scripts/untar-site.py - "$out"
+# The version (realm-sigil) needs the commit's facts, and the sandbox has no git: read them here. "built" is
+# the commit's own time, so the same commit exports the same bytes.
+hash=$(git rev-parse --short HEAD)
+branch=$(git rev-parse --abbrev-ref HEAD)
+built=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ HEAD)
+scripts/bob-sandbox.sh .venv/bin/python -m faxconsole.export tests/fixtures "$hash" "$branch" "$built" \
+  | python3 -I scripts/untar-site.py - "$out"
 # The replay surface: nothing derived from this machine may be in the public demo (the lead's rule). The
 # scrub gate knows the house values. This scan knows the machine's own: temp and home paths, the repo's
 # location, the host and user names (as whole words), and replay's temp-dir prefix.
