@@ -11,8 +11,8 @@
 #     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a clean
 #     HOME that holds only Bob's own settings. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
-#   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges denied, except the
-#     local DNS stub; the public internet stays open so Bob can reach its API. The PBX and every
+#   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges and ALL of IPv6 denied,
+#     except the local DNS stub; the public IPv4 internet stays open so Bob can reach its API. The PBX and every
 #     house service are unreachable, and ssh has no keys, no agent and no config in any case.
 #   processes: own PID, IPC and UTS namespaces (hostname "bob-sandbox"), a new session, and the
 #     sandbox dies with its parent.
@@ -57,7 +57,9 @@ for p in /etc/ssl /etc/ca-certificates /etc/ld.so.cache /etc/ld.so.conf /etc/ld.
 done
 resolv=$(readlink -f /etc/resolv.conf)
 
-deny="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 127.0.0.0/8 ::1/128 fc00::/7 fe80::/10"
+# All of IPv6 is denied: a house LAN may be reachable on-link through global IPv6 addresses that no
+# private-range list covers, and Bob needs none (its API is reached over IPv4).
+deny="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 127.0.0.0/8 ::/0"
 sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" \
   -p "IPAddressDeny=$deny" -p "IPAddressAllow=127.0.0.53" -- \
   bwrap --die-with-parent --new-session --unshare-pid --unshare-ipc --unshare-uts --unshare-cgroup-try \

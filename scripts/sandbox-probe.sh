@@ -30,6 +30,8 @@ probe fail "TCP to a LAN router address"         "timeout 5 bash -c 'exec 3<>/de
 probe fail "TCP to a 192.168 address"            "timeout 5 bash -c 'exec 3<>/dev/tcp/$(ip 192 168 1 1)/80'"
 probe fail "TCP to a loopback service"           "timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/22'"
 probe fail "TCP to a CGNAT/tailnet address"      "timeout 5 bash -c 'exec 3<>/dev/tcp/$(ip 100 100 100 100)/53'"
+probe fail "TCP over IPv6 (loopback)"            "timeout 5 bash -c 'exec 3<>/dev/tcp/::1/22'"
+probe fail "TCP over IPv6 (a global address)"    "timeout 5 bash -c 'exec 3<>/dev/tcp/2606:4700:4700::1111/443'"
 probe work "DNS through the local stub"          "getent hosts example.com"
 probe work "HTTPS to the public internet"        "timeout 10 bash -c 'exec 3<>/dev/tcp/1.1.1.1/443'"
 # filesystem: nothing of the owner's home or host config is visible
