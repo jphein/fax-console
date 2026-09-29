@@ -19,7 +19,7 @@ from faxcli import cdr as cdr_mod
 from faxcli import outcome as outcome_mod
 from faxcli.models import DryRunResult, LogResult, LogRow, SendResult, StatusResult
 from faxcli.numbers import InvalidNumber, normalize
-from faxcli.transport import EXCHANGE, LocalTransport, Reading, SshTransport, Transport
+from faxcli.transport import LocalTransport, Reading, SshTransport, Transport, exchange_host
 
 TRUNK = "voipms-fax"
 TEST_NUMBER = "19725329272"  # Faxbeep, public test receiver
@@ -32,15 +32,15 @@ _DEFAULT_TEST_PAGE = os.path.join(
 
 
 def _on_exchange() -> bool:
-    # Compare the short hostname against EXCHANGE, which respects FAX_EXCHANGE_HOST
+    # Compare the short hostname against the PBX host, which respects FAX_EXCHANGE_HOST
     # (legacy/fax/fax/cli.py:36).
-    return socket.gethostname().split(".")[0] == EXCHANGE.split(".")[0]
+    return socket.gethostname().split(".")[0] == exchange_host().split(".")[0]
 
 
 def _make_transport(local: bool) -> Transport:
     if local or _on_exchange():
         return LocalTransport()
-    return SshTransport(host=EXCHANGE)
+    return SshTransport()
 
 
 # ---------------------------------------------------------------------------

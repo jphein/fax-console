@@ -20,8 +20,15 @@ SUDO = ["sudo", "-n"]
 ASTERISK_FIXTURE_DIR = Path("tests/fixtures/asterisk")
 CDR_FIXTURE_PATH = Path("tests/fixtures/cdr/Master.csv")
 
-# Default PBX hostname — overridden by FAX_EXCHANGE_HOST (legacy/fax/fax/cli.py:24)
-EXCHANGE = os.environ.get("FAX_EXCHANGE_HOST", "pbx")
+def exchange_host() -> str:
+    """The PBX host name: FAX_EXCHANGE_HOST, default "pbx" (legacy/fax/fax/cli.py:24).
+
+    Read when a transport is built, not at import, so a caller (or a test) that sets the
+    variable later still gets it."""
+    return os.environ.get("FAX_EXCHANGE_HOST", "pbx")
+
+
+EXCHANGE = exchange_host()  # the import-time value, kept for existing callers
 
 
 @dataclass(frozen=True)
@@ -166,8 +173,8 @@ class LocalTransport:
 class SshTransport:
     """Runs Asterisk CLI commands via SSH."""
 
-    def __init__(self, host: str = EXCHANGE) -> None:
-        self.host = host
+    def __init__(self, host: str | None = None) -> None:
+        self.host = host or exchange_host()
 
     def _ssh(self, argv: list[str]) -> Reading:
         # Quote every remote argument so the remote shell treats each as one

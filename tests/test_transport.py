@@ -20,7 +20,6 @@ import pytest
 from faxcli.transport import (
     EXCHANGE,
     LocalTransport,
-    Reading,
     ReplayTransport,
     SshTransport,
 )
@@ -153,8 +152,8 @@ class TestHostFromEnv:
 
     @pytest.mark.allow_subprocesses
     def test_ssh_transport_uses_exchange_host(self, monkeypatch):
-        """SshTransport must pass the EXCHANGE host to ssh."""
-        import os as _os  # noqa: PLC0415
+        """A default SshTransport takes its host from FAX_EXCHANGE_HOST (reviewer fix: this test
+        used to pass the host explicitly, so it could not see the environment path)."""
         monkeypatch.setenv("FAX_EXCHANGE_HOST", "pbx2.example.com")
 
         calls = []
@@ -165,8 +164,7 @@ class TestHostFromEnv:
 
         monkeypatch.setattr(subprocess, "run", _fake_run)
 
-        # Build the transport with the overridden host directly
-        t = SshTransport(host="pbx2.example.com")
+        t = SshTransport()          # no explicit host: the environment must decide
         t.asterisk("fax show stats")
 
         assert calls
@@ -174,6 +172,20 @@ class TestHostFromEnv:
         assert "pbx2.example.com" in full, (
             f"Expected 'pbx2.example.com' in ssh argv, got {full!r}"
         )
+
+    def test_cli_picks_ssh_to_the_env_host(self, monkeypatch):
+        """Off the PBX, the CLI's transport is ssh to FAX_EXCHANGE_HOST."""
+        import faxcli.cli as cli_mod  # noqa: PLC0415
+        monkeypatch.setenv("FAX_EXCHANGE_HOST", "pbx3.example.com")
+        monkeypatch.setattr(cli_mod.socket, "gethostname", lambda: "workstation")
+        t = cli_mod._make_transport(local=False)
+        assert isinstance(t, SshTransport) and t.host == "pbx3.example.com"
+
+    def test_cli_is_local_on_the_env_host(self, monkeypatch):
+        import faxcli.cli as cli_mod  # noqa: PLC0415
+        monkeypatch.setenv("FAX_EXCHANGE_HOST", "pbx3.example.com")
+        monkeypatch.setattr(cli_mod.socket, "gethostname", lambda: "pbx3")
+        assert isinstance(cli_mod._make_transport(local=False), LocalTransport)
 
     @pytest.mark.allow_subprocesses
     def test_spool_uses_exchange_host(self, monkeypatch, tmp_path):
