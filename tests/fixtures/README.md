@@ -3,7 +3,7 @@
 `asterisk/*.txt` are the exact outputs of `asterisk -rx '<command>'` on the house PBX
 (Asterisk 22.5.2). They were recorded on **2026-09-28 22:25 PDT** with read-only `show` commands
 only: nothing was sent, dialled or changed. The file name is the command, with spaces turned
-into underscores.
+into underscores. `capture.json` holds that capture time: the static export dates the replay by it, never by its own clock.
 
 `asterisk/which_gs.txt` is the one exception in that directory: the output of `which gs` on the PBX, from the same read-only capture (9/28 22:25), with nothing else kept. The replay transport serves it instead of inventing "/usr/bin/gs" (the review of PR 8).
 

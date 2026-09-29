@@ -151,7 +151,7 @@ def test_a_sibling_of_a_known_dir_fails_closed(replay):
 
 
 @pytest.mark.parametrize("text", [
-    "fetch failed: https://example.net/qv9",
+    "fetch failed: https://example.com/qv9",
     "cannot open /srv/qv9/x",
     "cannot open path:/srv/qv9/x",        # glued to other text: the old fallback kept it
     "cannot open file:/srv/qv9",

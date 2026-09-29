@@ -191,7 +191,7 @@ def test_html_id_fresh(html_body):
 # ---------------------------------------------------------------------------
 
 def test_html_favicon_link(html_body):
-    assert 'href="/favicon.svg"' in html_body
+    assert 'href="favicon.svg"' in html_body           # relative: Pages serves the page under /fax-console/
     assert 'type="image/svg+xml"' in html_body
 
 
@@ -255,7 +255,8 @@ def test_no_external_urls_in_favicon(replay_config):
 def js_api_routes(replay_config):
     """Extract every /api/… path from fetch() calls in app.js."""
     js = _get("/app.js", replay_config).body.decode("utf-8", "replace")
-    return re.findall(r'fetch\("(/api/[^"]+)"', js)
+    # A GET goes through api(), which maps it to the static export's file on Pages; a POST does not.
+    return re.findall(r'fetch\((?:api\()?"(/api/[^"]+)"', js)
 
 
 def test_js_api_routes_found(js_api_routes):

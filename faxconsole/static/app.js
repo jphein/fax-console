@@ -11,6 +11,14 @@ const prov = (label,cmd,raw) => !cmd ? "" :
   (raw?`<span class="src">${esc(raw)}</span>`:"")+`</details>`;
 const kb = n => n<1024?n+" B":n<1048576?(n/1024).toFixed(0)+" KB":(n/1048576).toFixed(1)+" MB";
 
+/* ---- the static replay (GitHub Pages) -------------------------------------
+   The static export (faxconsole/export.py) sets <html data-static="1">. Every GET then reads
+   api/<route>.json beside the page. The URL is relative, because Pages serves the site under
+   /fax-console/. Sends are off, since a static site cannot make even a dry run. When faxconsole
+   serves the page itself, nothing changes. */
+const STATIC = document.documentElement.dataset.static === "1";
+const api = p => STATIC ? "api" + p.slice(4) + ".json" : p;
+
 /* ---- replay mode ---------------------------------------------------------
    The page learns the mode from a field that handle() provides.
    In replay mode a send is a dry run and nothing is dialled. */
@@ -30,6 +38,17 @@ function ago(ms){
 function freshness(ok, why){
   const el = document.getElementById("fresh");
   if(!el) return;
+  /* A static copy measured nothing when it was drawn. Its data are the recorded fixtures, so its chip gives
+     the time they were recorded, committed with them, and never "live" (finding A; the Oracle, on PR 16). */
+  if(STATIC){
+    el.className = "rs-chip stale";
+    el.innerHTML = "<i class=\"rs-mark stale\" aria-hidden=\"true\"></i>";
+    const at = document.documentElement.dataset.recorded || "";
+    el.appendChild(document.createTextNode(at ? "PBX data recorded " + at : "static copy"));
+    el.title = "A static copy of replay data: the PBX values were recorded" + (at ? " " + at : "")
+             + "; the VoIP.ms values are sample data (illustrative, not a real account). Nothing on this page is live.";
+    return;
+  }
   if(ok){
     el.className = "rs-chip";
     el.innerHTML = "<i class=\"rs-mark ok\" aria-hidden=\"true\"></i>";
@@ -78,6 +97,11 @@ function renderVoipms(v){
      catastrophic, and the page cannot tell which — so it reports both and lets
      neither hide the other. */
   const low = v.balance_low === true;
+  /* The VoIP.ms fixtures are synthesized, never captured (tests/fixtures/voipms/README.md). In replay the
+     tile says so, and a static copy gives it no time at all: no age, and the billing date instead of a
+     countdown. "read 0s ago" or "in 32 days" on a page seen weeks later would claim a freshness nobody
+     measured (finding A; the Oracle, on PR 16). The trunk tile drops its "renews in" countdown likewise. */
+  const synth = STATIC || REPLAY_MODE;
   const age = v.age===null||v.age===undefined ? "never"
             : (v.age<90 ? v.age+"s ago"
                : (v.age<5400 ? Math.round(v.age/60)+"m ago"
@@ -86,7 +110,8 @@ function renderVoipms(v){
                ? "" : `<div class="vm-sub">about <b>${v.months_left}</b> months of line
                        rental at the current DID fee &mdash; call minutes are extra and
                        are noise beside it.</div>`;
-  const bill = (v.days_to_billing===null||v.days_to_billing===undefined)
+  const bill = STATIC ? (v.did_next_billing ? `<div class="vm-sub">next billing on <b>${esc(v.did_next_billing)}</b>.</div>` : "")
+             : (v.days_to_billing===null||v.days_to_billing===undefined)
              ? "" : `<div class="vm-sub">next billing in <b>${v.days_to_billing}</b>
                      days${v.did_next_billing?` (${esc(v.did_next_billing)})`:""}.</div>`;
   /* ⚠️ THREE-STATE, like SMS `bound`: null means the poller has not fetched the
@@ -103,7 +128,8 @@ function renderVoipms(v){
            trunk.</b> One of the two is stale or the registration is flapping;
            neither view alone can tell you which.</div>` : "");
   el.innerHTML = `<div class="cs-sum">${reg}
-      <span class="cs-win">balance read ${esc(age)}${v.stale?" &middot; STALE":""}</span></div>
+      <span class="cs-win">${STATIC ? "sample data (illustrative, not a real account)"
+        : "balance read "+esc(age)+(synth?" &middot; sample data (illustrative, not a real account)":"")}${v.stale?" &middot; STALE":""}</span></div>
     <div class="card">
       <div class="vm-bal${low?" vm-low":""}">$${bal.toFixed(2)}</div>
       <div class="vm-sub">VoIP.ms balance${low
@@ -114,10 +140,11 @@ function renderVoipms(v){
     ${v.did_description?`<div class="vm-sub">DID: ${esc(v.did_description)}${
        v.did_sms_enabled?" &middot; SMS enabled":""}${v.did_e911?" &middot; E911":""}</div>`:""}
     ${v.error?`<div class="cs-amb">Last poll error: ${esc(v.error)}</div>`:""}
-    ${prov("source","voip.ms API, polled every 300s in the background")}`;
+    ${prov("source",synth?"sample data: synthesized fixtures (tests/fixtures/voipms), not a real account"
+                        :"voip.ms API, polled every 300s in the background")}`;
 }
 async function loadVoipms(){
-  try{ renderVoipms(await (await fetch("/api/voipms")).json()); }
+  try{ renderVoipms(await (await fetch(api("/api/voipms"))).json()); }
   catch(e){
     const el=document.getElementById("voipms");
     if(el && !VOIPMS_SEEN)
@@ -136,7 +163,7 @@ function tileTrunk(t){
     <div class="big">${t.status?(reg?st("ok","registered"):st("bad",t.status)):st("warn","no registration row")}</div>
     ${t.name?`<div class="kv"><span>trunk</span><span>${esc(t.name)}</span></div>`:""}
     ${t.uri?`<div class="kv"><span>server</span><span>${esc(t.uri)}</span></div>`:""}
-    ${t.expires?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s</span></div>`:""}
+    ${t.expires&&!STATIC?`<div class="kv"><span>renews in</span><span>${esc(t.expires)}s</span></div>`:""}
     ${prov("source",t.src,t.raw)}</div>`;
 }
 function tileCalls(c){
@@ -153,7 +180,8 @@ function tileCalls(c){
     <div style="font-family:var(--serif);font-size:.85rem;color:var(--ink2);margin-top:8px">
       Asterisk counts every call; the MSC counts only the cellular ones, so the
       second number is a <em>subset</em> of the first and is normally lower.
-      ${c.impossible?"<b>Right now it is higher, which should not be possible.</b>":""}
+      ${c.impossible?(STATIC?"<b>In the recording it is higher, which should not be possible.</b>"
+                     :"<b>Right now it is higher, which should not be possible.</b>"):""}
     </div>
     ${insts.map(i=>prov(i.name,i.src,i.raw||i.why)).join("")}</div>`;
 }
@@ -198,7 +226,7 @@ function renderFax(d){
     what the counters above say, and <code>fax send --wait</code> reports it per send.</p>`;
 }
 async function loadFax(){
-  try{ renderFax(await (await fetch("/api/fax",{cache:"no-store"})).json()); }
+  try{ renderFax(await (await fetch(api("/api/fax"),{cache:"no-store"})).json()); }
   catch(e){ renderFax({ok:false,src:"/api/fax",why:String(e)}); }
 }
 
@@ -238,8 +266,8 @@ async function load(){
     /* load() reads /api/pbx/trunk and /api/pbx/calls for the Live-state tiles,
        instead of the legacy /api/state. */
     [trunk, calls] = await Promise.all([
-      fetch("/api/pbx/trunk",{cache:"no-store"}).then(r=>r.json()),
-      fetch("/api/pbx/calls",{cache:"no-store"}).then(r=>r.json()),
+      fetch(api("/api/pbx/trunk"),{cache:"no-store"}).then(r=>r.json()),
+      fetch(api("/api/pbx/calls"),{cache:"no-store"}).then(r=>r.json()),
     ]);
   }catch(e){
     /* Leave the previous snapshot on screen -- it is the best information
@@ -254,10 +282,13 @@ async function load(){
   Promise.allSettled([loadVoipms(), loadFax()]);
 
   /* Footer: version line */
-  fetch("/api/version").then(r=>r.json()).then(v=>{
+  fetch(api("/api/version")).then(r=>r.json()).then(v=>{
     const foot=document.getElementById("foot");
     if(foot) foot.textContent=
-      "Every live value on this page carries the command that produced it — "
+      (STATIC ? "This is a static copy: the PBX values were recorded "
+                +(document.documentElement.dataset.recorded || "")
+                +"; the VoIP.ms values are sample data (illustrative, not a real account). Each carries the command that produced it — "
+              : "Every live value on this page carries the command that produced it — ")
       +"open how this was read on any tile. Where a state could not be read "
       +"it says not probed rather than guessing, because a wrong green dot is "
       +"believed and an honest gap is not."
@@ -269,13 +300,20 @@ async function load(){
 (async () => {
   /* Check replay mode from the server */
   try{
-    const v = await fetch("/api/version").then(r=>r.json());
+    const v = await fetch(api("/api/version")).then(r=>r.json());
     if(v && v.replay){
       REPLAY_MODE = true;
       const banner=document.getElementById("replay-banner");
       if(banner) banner.style.display="block";
     }
   }catch(_){}
+  if(STATIC){
+    document.getElementById("faxsend").disabled=true;
+    const m=document.getElementById("faxmsg");
+    m.className="msg";
+    m.textContent="This is a static replay, so sending is off. For a dry-run send, run it locally: "
+      +"python3 -m faxconsole --replay tests/fixtures";
+  }
   load();
   setInterval(load, 20000);
 })();

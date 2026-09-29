@@ -1,0 +1,5 @@
+{
+  "captured_at": "2026-09-28T22:25:00-07:00",
+  "zone": "America/Los_Angeles",
+  "note": "When the asterisk/ and cdr/ fixtures were recorded (README.md). voipms/ is synthesized (voipms/README.md) and carries no capture time. The static export (faxconsole/export.py) dates the recorded PBX data by this, never by its own clock, and derives the label from captured_at and zone."
+}
