@@ -52,6 +52,23 @@ match the rebuilt baseline.
 - **Commits whose content Bob wrote carry an `Assisted-by: IBM Bob` trailer**, so
   `git log --grep "Assisted-by: IBM Bob"` lists them.
 
+## Timeline by day
+Judges asked to see Bob "in every process from day one". Each Bob task id below can be found in its
+recording under `docs/bob-runs/`, and each run is its own commit.
+
+**Mon 2026-09-28** (day 1; the window opened at 16:00 PDT)
+
+| Time (PDT) | Run | Bob task | What Bob did | Outcome | Bobcoins |
+|---|---|---|---|---|---|
+| 21:30 | setup | `69b2171c` | answered a one-word account check | — | 0.027 |
+| 22:13 | 0 | `f40a8f15` | the sandbox smoke test: one write allowed, `curl` and an outside read refused | proved the hooks fire headless | 0.083 |
+| 22:15 | 1 | `57dd9a07` | the modernization analysis (`docs/analysis.md` §1–§8) | kept verbatim; 7 corrections and 6 added findings in review | 3.078 |
+| 22:34 | 2 | — | nothing: the prompt gate refused the prompt (failed closed) | led to the OS sandbox's split rules | 0 |
+| 22:41 | 3 | `dffca676` | "ok", from inside the OS sandbox | proved the clean home: only Bob's own skills listed | 0.021 |
+| 23:02 | 4 | `7f24d791` | the `faxcli` package and 121 tests | architecture kept; 2 production regressions found in review | 6.027 |
+| 23:19 | 5 | `eded36dd` | the review fixes and transport tests | kept; `git stash` refused by the sandbox (23:24:32) | 5.165 |
+| 23:57 | 6 | `262e87a5` | the `faxconsole` core (week 2 begins) and 103 tests | kept; review items go to run 7 | 8.022 |
+
 ## Ledger
 Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 50 for the month.
 
@@ -61,11 +78,12 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure. The trial budget is 5
 | 0 | 9/28 22:13 | [Sandbox smoke test](bob-runs/0-sandbox-smoke.prompt.md) | one file written; `curl` refused; an outside path refused | 3 | 0.083 | Proved the hooks fire in headless mode and that Bob reports refusals accurately |
 | 1 | 9/28 22:15 | [Modernization analysis](bob-runs/1-analysis.prompt.md) | [`docs/analysis.md`](analysis.md) §1–§8, 451 lines | 26 | 3.078 | Kept verbatim; 7 corrections and 6 added findings in §9 |
 | 2 | 9/28 22:34 | [Isolation check](bob-runs/2-isolation-check.prompt.md) | none: the prompt gate refused the prompt, failing closed, because the private deny-list was not reachable from the clean home | 0 | 0 | Showed the gate fails closed; led to the sandbox's split between generic rules inside and the private list outside |
-| 3 | 9/28 22:44 | [Sandbox check](bob-runs/3-sandbox-check.prompt.md) | "ok", from inside the OS sandbox | 0 | 0.021 | Proved Bob works sandboxed; its prompt now lists only Bob's own six skills |
+| 3 | 9/28 22:41 | [Sandbox check](bob-runs/3-sandbox-check.prompt.md) | "ok", from inside the OS sandbox | 0 | 0.021 | Proved Bob works sandboxed; its prompt now lists only Bob's own six skills |
 | 4 | 9/28 23:02 | [The faxcli package](bob-runs/4-faxcli-package.prompt.md) | `faxcli/` (9 modules, ~905 lines), `pyproject.toml`, 121 tests (unit, golden, characterization) | 58 | 6.027 | Architecture kept. Review found 2 production regressions and 5 more defects (run 5) |
-| 5 | 9/28 23:26 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
+| 5 | 9/28 23:19 | [The review fixes](bob-runs/5-faxcli-fixes.prompt.md) | The fixes plus `tests/test_transport.py`: 189 of 189 tests pass | 50 | 5.165 | Kept. One test was vacuous; the reviewer fixed it and added 2 tests |
+| 6 | 9/28 23:57 | [The faxconsole core](bob-runs/6-faxconsole-core.prompt.md) | `faxconsole/` (888 lines): pure `handle()`, PBX readers, the write gate, a pooled server, sigil; 103 tests | 62 | 8.022 | Kept. Review: replay mode lacks a temp spool/inbox; send still parses CLI output; `--ssh` pins the host (run 7) |
 
-**Running total: 14.40 Bobcoins** (after run 5). Drift's 0.016 wrapper smoke test is recorded on its own branch.
+**Running total: 22.42 Bobcoins** (after run 6). Drift's 0.016 wrapper smoke test is recorded on its own branch.
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
