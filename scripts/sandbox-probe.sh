@@ -2,7 +2,8 @@
 # sandbox-probe.sh — prove scripts/bob-sandbox.sh contains what it claims to (positive controls).
 # Every "must fail" probe is something an agent inside the sandbox might try; every "must work"
 # probe is something legitimate work needs. Exit 0 only if all of them come out as expected.
-# Run on the workstation (needs bwrap + sudo systemd-run); it is not a CI test.
+# Run on the workstation (needs bwrap + sudo systemd-run) for the full proof. CI's "sandbox" job runs it too, against
+# a real bubblewrap; there a few probes are only vacuously true, since their targets do not exist on a runner.
 set -uo pipefail
 root=$(git rev-parse --show-toplevel); cd "$root"
 pass=0; fail=0
@@ -62,7 +63,17 @@ probe fail "rewrite the Bobcoin ledger"          "echo x >> docs/bob-usage.md"
 probe fail "replace the ledger by a rename"      "cp docs/bob-usage.md x.tmp && mv -f x.tmp docs/bob-usage.md; r=\$?; rm -f x.tmp; exit \$r"
 probe fail "forge a run record"                  "echo x > docs/bob-runs/probe.jsonl"
 probe fail "replace docs/ by a rename"           "mv docs docs.old && { mv docs.old docs; exit 0; }"
-probe fail "write outside the repo"              "echo x > /home/bob/../probe; echo x > /usr/probe"
+# Writes outside the repo must never reach the host. The old form took its result from `echo x > /usr/probe`, which
+# the invoking uid cannot write on the host either, so it could never fail (the Oracle, PR #17). Now the writes are
+# attempted inside, and the HOST is checked afterwards.
+out_name=".sandbox-probe-outside-$$"
+outside=("$root/../$out_name" "/home/$(id -un)/$out_name" "/tmp/$out_name")
+for f in "${outside[@]}"; do [ ! -e "$f" ] || { echo "sandbox-probe: $f exists before the probe" >&2; exit 2; }; done
+scripts/bob-sandbox.sh bash -c 'for f in "$@"; do echo x 2>/dev/null > "$f"; done; true' _ "${outside[@]}" >/dev/null 2>&1
+leaked=""
+for f in "${outside[@]}"; do [ ! -e "$f" ] || { leaked="$leaked $f"; rm -f "$f"; }; done
+if [ -z "$leaked" ]; then r=ok; pass=$((pass+1)); else r=WRONG; fail=$((fail+1)); fi
+printf '%-6s must fail  %s\n' "$r" "write outside the repo (checked on the host${leaked:+; leaked:$leaked})"
 # paths the host later executes or sends are read-only too (PR #8 S2)
 for d in docs/deck docs/video demo scratch; do
   if [ -d "$d" ]; then probe fail "write into $d/ (the host runs or sends it)" "echo x > $d/probe"
