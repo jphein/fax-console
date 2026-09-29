@@ -7,7 +7,10 @@
 # So the whole process tree is confined here instead:
 #
 #   filesystem (bubblewrap): the repo read-write, except legacy/ .git/ .bob/ scripts/ .github/
-#     .venv/ AGENTS.md BASELINE.md LICENSE (read-only); /usr read-only; a minimal /etc (CA
+#     .venv/ AGENTS.md BASELINE.md LICENSE and the evidence, docs/bob-usage.md and docs/bob-runs/
+#     (read-only: bob-run.sh records Bob's stream and keeps the ledger from outside), and docs/
+#     itself cannot be renamed (it is bound onto itself, a mount point); /usr
+#     read-only; a minimal /etc (CA
 #     certificates, resolver, locale; no /etc/hosts, no ssh config); a synthetic passwd; a clean
 #     HOME that holds only Bob's own settings; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
@@ -48,9 +51,13 @@ printf '%s:x:%s:\n' "$(id -gn)" "$(id -g)" > "$rt/group"
 } > "$envf"
 
 ro=()
-for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE; do
+for p in legacy .git .bob scripts .github .venv AGENTS.md BASELINE.md LICENSE docs/bob-usage.md docs/bob-runs; do
   [ -e "$root/$p" ] && ro+=(--ro-bind "$root/$p" "$root/$p")
 done
+# docs/ bound onto itself is a mount point, which cannot be renamed. Renaming it would carry the
+# read-only ledger and run records away and let a new docs/ stand in their place (Oracle, 9/29).
+docs_bind=()
+[ -d "$root/docs" ] && docs_bind=(--bind "$root/docs" "$root/docs")
 etc=()
 for p in /etc/ssl /etc/ca-certificates /etc/ld.so.cache /etc/ld.so.conf /etc/ld.so.conf.d /etc/nsswitch.conf \
          /etc/localtime /etc/alternatives /etc/gai.conf /etc/host.conf /etc/protocols /etc/services; do
@@ -73,7 +80,7 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --bind "$bob_home" /home/bob \
     --ro-bind "$HOME/.npm-global/lib/node_modules/bobshell" "$HOME/.npm-global/lib/node_modules/bobshell" \
     --dir "$HOME/.npm-global/bin" --symlink ../lib/node_modules/bobshell/dist/bob.js "$HOME/.npm-global/bin/bob" \
-    --bind "$root" "$root" "${ro[@]}" \
+    --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" \
     --bind "$root/.bob/guard.log" "$root/.bob/guard.log" --bind "$root/.bob/tmp" "$root/.bob/tmp" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
     /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"

@@ -35,7 +35,7 @@ code. Read `BASELINE.md` before touching anything.
 ## Where Bob runs
 Bob runs inside `scripts/bob-sandbox.sh`, an OS sandbox, and that is the security boundary:
 - a filesystem view of this repo only, with `legacy/`, `.git/`, `.bob/`, `scripts/`, `.github/`,
-  `.venv/` and this file read-only;
+  `.venv/`, this file and the run evidence (`docs/bob-usage.md`, `docs/bob-runs/`) read-only;
 - no network path to the LAN or loopback;
 - a clean home directory.
 
