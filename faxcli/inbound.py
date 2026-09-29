@@ -10,10 +10,12 @@ in two places in the generated output:
 
 1. The FAXFILE path — embedded in a filename under the spool directory.
    Risk: path traversal (``../``) and dialplan injection (newlines, quotes, commas).
-   Mitigation: wrap the value with Asterisk's FILTER() function, allowing only the
-   characters that appear in a legitimate NANP caller-ID: digits, ``+``, ``-``, ``(``,
-   ``)``, and space.  FILTER strips everything else *inside Asterisk*, before the value
-   is ever used in a path.
+   Mitigation: wrap the value with Asterisk's FILTER() function, allowing only digits and
+   ``+``: CALLERID(num) from a SIP trunk is a number, not its display form. FILTER strips
+   everything else *inside Asterisk*, before the value is ever used in a path.
+   (Review of run 10: an earlier set also allowed ``-``, ``(``, ``)`` and space. A hyphen
+   lets a caller send ``--flag``, which reaches the notify program as one quoted argument
+   that it may still parse as an option. Digits and ``+`` cannot start an option.)
 
 2. The System() call in the ``h`` extension — passed as a double-quoted shell argument.
    Risk: shell injection via ``"``, ``$(...)``, backtick, ``\n``, etc.
@@ -24,16 +26,17 @@ in two places in the generated output:
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass
 
 # Characters permitted in a normalised caller-ID passed to Asterisk FILTER().
-# Digits, plus sign, hyphen, parentheses, space — enough for any NANP or E.164 number.
+# Digits and the plus sign: any NANP or E.164 number as a trunk delivers it.
 # Everything else (quotes, semicolons, backticks, dollar signs, slashes, newlines, …) is stripped.
-_CALLERID_FILTER = "0-9+() -"
+_CALLERID_FILTER = "0-9+"
 
 # Regex that validates the same set on the hook-script side (defence in depth).
 # We compile it once at import time so tests can import it.
-SAFE_CALLERID_RE = re.compile(r"^[0-9+() -]{0,32}$")
+SAFE_CALLERID_RE = re.compile(r"^[0-9+]{0,32}$")
 
 
 @dataclass(frozen=True)
@@ -65,10 +68,11 @@ def render_dialplan(config: InboundConfig) -> str:
     file).  It is never written to disk and never loaded by this function.
 
     Security notes (see module docstring for the threat model):
-    - CALLERID(num) is wrapped with FILTER() in every use, restricting it to
-      digits, ``+``, ``-``, ``(``, ``)``, and space before it enters any path or
-      command.  Hostile values (quotes, semicolons, ``$(…)``, backtick, ``../``,
-      newlines) are silently dropped by Asterisk before the value is used.
+    - CALLERID(num) is wrapped with FILTER() in every use, including the NoOp() log
+      line (a newline there would forge log lines), restricting it to digits and ``+``
+      before it enters any path, command or log.  Hostile values (quotes, semicolons,
+      ``$(…)``, backtick, ``../``, newlines, a leading ``-``) are silently dropped by
+      Asterisk before the value is used.
     - The FAXFILE variable is set once from the filtered caller-ID, then reused via
       ``${FAXFILE}`` everywhere else — the filtered value is not re-expanded.
     """
@@ -93,7 +97,7 @@ def render_dialplan(config: InboundConfig) -> str:
         f"[{ctx}]",
         f"; Inbound fax — option A: dedicated DID {config.fax_did}.",
         f"; CALLERID(num) is filtered to [{cid_filter}] before any path or command use.",
-        "exten => _X.,1,NoOp(Inbound fax to ${EXTEN} from ${CALLERID(num)})",
+        f"exten => _X.,1,NoOp(Inbound fax to ${{EXTEN}} from {safe_cid})",
         " same => n,Set(FAXOPT(ecm)=yes)",
         f" same => n,Set(FAXFILE={faxfile})",
         " same => n,Answer()",
@@ -136,10 +140,12 @@ def render_hook(config: InboundConfig) -> str:
     notify_block = ""
     if config.notify_cmd:
         first_word = config.notify_cmd[0]
-        notify_var = f'\nNOTIFY="{first_word}"'
+        # Config words are the owner's input, not the caller's, but they are shell-quoted
+        # all the same: a word with a quote or a $ must stay one literal word.
+        notify_var = f"\nNOTIFY={shlex.quote(first_word)}"
         if len(config.notify_cmd) > 1:
             # Extra words from config are hard-coded literals; fax facts are separate args.
-            rest = " ".join(f'"{w}"' for w in config.notify_cmd[1:])
+            rest = " ".join(shlex.quote(w) for w in config.notify_cmd[1:])
             exec_line = f'    exec "$NOTIFY" {rest} "$FAXFILE_PDF" "$STATUS" "$PAGES" "$CALLERID_SAFE"'
         else:
             exec_line = '    exec "$NOTIFY" "$FAXFILE_PDF" "$STATUS" "$PAGES" "$CALLERID_SAFE"'
@@ -178,14 +184,21 @@ SPOOL_DIR="{spool}"
 INBOX_DIR="{inbox}"{notify_var}
 
 # --- Validate caller-ID (defence in depth; already filtered by Asterisk FILTER()) ---
-# Strip every character not in [0-9+() -].  If the result is empty, use "unknown".
-CALLERID_SAFE="$(printf '%s' "$CALLERID_RAW" | tr -cd '0-9+() -')"
+# Strip every character not in [0-9+].  If the result is empty, use "unknown".
+CALLERID_SAFE="$(printf '%s' "$CALLERID_RAW" | tr -cd '0-9+')"
 if [ -z "$CALLERID_SAFE" ]; then
     CALLERID_SAFE="unknown"
 fi
 
 # --- Validate FAXFILE is inside the spool directory ---
-# Resolve the path without following symlinks beyond the spool root.
+# In a case pattern * also matches "/", so a ".." segment would pass the prefix test below:
+# refuse any "." or ".." segment first.
+case "$FAXFILE" in
+    */../*|*/..|*/./*|*/.)
+        echo "fax-inbound-hook: FAXFILE has a dot segment: $FAXFILE" >&2
+        exit 1
+        ;;
+esac
 case "$FAXFILE" in
     "$SPOOL_DIR"/*)
         ;;  # OK

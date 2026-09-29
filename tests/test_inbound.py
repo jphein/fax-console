@@ -13,6 +13,7 @@ No subprocess is spawned; every function returns text only.
 from __future__ import annotations
 
 import io
+import re
 
 import pytest
 
@@ -32,17 +33,17 @@ _DEFAULT_CFG = InboundConfig()
 _GOLDEN_DIALPLAN = (
     "[from-fax-did]\n"
     "; Inbound fax \u2014 option A: dedicated DID 2025550177.\n"
-    "; CALLERID(num) is filtered to [0-9+() -] before any path or command use.\n"
-    "exten => _X.,1,NoOp(Inbound fax to ${EXTEN} from ${CALLERID(num)})\n"
+    "; CALLERID(num) is filtered to [0-9+] before any path or command use.\n"
+    "exten => _X.,1,NoOp(Inbound fax to ${EXTEN} from ${FILTER(0-9+,${CALLERID(num)})})\n"
     " same => n,Set(FAXOPT(ecm)=yes)\n"
     " same => n,Set(FAXFILE=/var/spool/asterisk/fax/"
-    "in-${STRFTIME(,,%Y%m%d-%H%M%S)}-${FILTER(0-9+() -,${CALLERID(num)})}.tif)\n"
+    "in-${STRFTIME(,,%Y%m%d-%H%M%S)}-${FILTER(0-9+,${CALLERID(num)})}.tif)\n"
     " same => n,Answer()\n"
     " same => n,ReceiveFax(${FAXFILE},f)        ; f = G.711 fallback; voip.ms refuses T.38\n"
     " same => n,Hangup()\n"
     'exten => h,1,System(/usr/local/bin/fax-inbound-hook "${FAXFILE}" '
     '"${FAXOPT(status)}" "${FAXOPT(pages)}" '
-    '"${FILTER(0-9+() -,${CALLERID(num)})}")\n'
+    '"${FILTER(0-9+,${CALLERID(num)})}")\n'
 )
 
 
@@ -174,51 +175,74 @@ _HOSTILE_CALLER_IDS = [
 ]
 
 
+def _asterisk_expand(line: str, callerid: str) -> str:
+    """A model of how Asterisk expands the two constructs the rendered text applies to caller
+    input: ${CALLERID(num)} becomes the caller's raw value, and ${FILTER(allowed,value)} keeps
+    only the allowed characters (ranges such as 0-9). The caller's value is marked first, so a
+    hostile value that contains "}" or ")" cannot confuse the model: a filtered use keeps only the
+    allowed characters, and an unfiltered use lets the raw value through, as Asterisk would.
+    """
+    mark = "\x00CID\x00"
+    line = line.replace("${CALLERID(num)}", mark)
+
+    def keep(allowed: str, value: str) -> str:
+        ok = set()
+        for a, dash, b in re.findall(r"(.)(-)?(?(2)(.)|)", allowed):
+            ok.update(chr(c) for c in range(ord(a), ord(b) + 1)) if dash else ok.add(a)
+        return "".join(ch for ch in value if ch in ok)
+
+    line = re.sub(r"\$\{FILTER\(([^,]*)," + re.escape(mark) + r"\)\}",
+                  lambda m: keep(m.group(1), callerid), line)
+    line = line.replace(mark, callerid)                              # any unfiltered use
+    line = line.replace("${STRFTIME(,,%Y%m%d-%H%M%S)}", "20260929-013000")
+    return line
+
+
+_HOSTILE_CALLER_IDS = [
+    '"; rm -rf / #', "$(id)", "`id`", "../../../etc/passwd", "1\nexten => h,1,System(sh)",
+    "--output=/etc/x", "-e", "a' b\" c", "+1${EXTEN}", "}) ; Hangup(",
+]
+
+
 class TestHostileCallerID:
-    """Verify that every hostile caller-ID character is behind FILTER() in the dialplan."""
+    """Every hostile caller ID, expanded through a model of Asterisk (review of run 10).
+
+    The earlier tests checked that the hostile strings did not appear in the rendered
+    text. They never can: the caller's value is substituted at run time, so those tests
+    passed with FILTER() deleted. These expand the dialplan as Asterisk would, then
+    check what a path, a shell and a log line actually receive.
+    """
 
     def setup_method(self):
-        self.text = render_dialplan(_DEFAULT_CFG)
-        # Extract lines where CALLERID(num) appears *outside* FILTER() — should be zero
-        # dangerous lines.  The only acceptable occurrence of raw CALLERID(num) is in a
-        # NoOp() or a comment, where it is never used to build a path or a command.
-        self.faxfile_line = next(
-            ln for ln in self.text.splitlines() if "FAXFILE=" in ln
-        )
-        self.h_line = next(
-            ln for ln in self.text.splitlines() if "exten => h," in ln
-        )
+        lines = render_dialplan(_DEFAULT_CFG).splitlines()
+        self.set_line = next(ln for ln in lines if "Set(FAXFILE=" in ln)
+        self.h_line = next(ln for ln in lines if "exten => h," in ln)
+        self.noop_line = next(ln for ln in lines if "NoOp(" in ln)
 
-    @pytest.mark.parametrize("hostile,desc", _HOSTILE_CALLER_IDS)
-    def test_hostile_not_in_faxfile_path_unfiltered(self, hostile, desc):
-        """Hostile char not reachable in FAXFILE path without FILTER()."""
-        # The FAXFILE line must contain FILTER() — confirmed by structure test.
-        # Additionally, the hostile string itself cannot appear literally in the
-        # rendered text (it is not substituted at render time; this checks that
-        # the renderer does not accidentally embed hostile literals).
-        assert hostile not in self.faxfile_line, (
-            f"Hostile input ({desc}) appears literally in FAXFILE line"
-        )
+    @pytest.mark.parametrize("hostile", _HOSTILE_CALLER_IDS)
+    def test_faxfile_stays_a_plain_name_in_the_spool(self, hostile):
+        value = _asterisk_expand(self.set_line, hostile).split("Set(FAXFILE=", 1)[1][:-1]
+        assert re.fullmatch(r"/var/spool/asterisk/fax/in-20260929-013000-[0-9+]*\.tif", value), value
 
-    @pytest.mark.parametrize("hostile,desc", _HOSTILE_CALLER_IDS)
-    def test_hostile_not_in_h_extension_unfiltered(self, hostile, desc):
-        """The raw ${CALLERID(num)} is never used directly in the System() argument list.
+    @pytest.mark.parametrize("hostile", _HOSTILE_CALLER_IDS)
+    def test_system_line_splits_into_the_five_words_it_means(self, hostile):
+        import shlex
+        cmd = _asterisk_expand(self.h_line, hostile).split("System(", 1)[1][:-1]
+        # sh expands $ and backticks inside double quotes: none may survive Asterisk's expansion
+        cmd_without_asterisk_vars = cmd.replace("${FAXFILE}", "F").replace("${FAXOPT(status)}", "S")
+        cmd_without_asterisk_vars = cmd_without_asterisk_vars.replace("${FAXOPT(pages)}", "P")
+        assert "$" not in cmd_without_asterisk_vars and "`" not in cmd_without_asterisk_vars, cmd
+        words = shlex.split(cmd_without_asterisk_vars)
+        assert len(words) == 5 and words[0] == "/usr/local/bin/fax-inbound-hook", words
+        assert re.fullmatch(r"[0-9+]*", words[4]) and not words[4].startswith("-"), words[4]
 
-        The h-extension line wraps every caller-supplied value in FILTER().  Any
-        literal ``"`` characters in the line are the shell-quoting delimiters we
-        write, not caller input — so we check the *structure* (FILTER wraps the
-        caller-ID) rather than the literal absence of ``"``.
-        """
-        # Confirm the line contains FILTER() — meaning the caller-ID is sanitised.
-        assert "FILTER(" in self.h_line, "h-extension must wrap CALLERID(num) with FILTER()"
-        # For characters that are NOT part of legitimate shell quoting (i.e. not the
-        # double-quote used as the argument delimiter), assert they are absent.
-        # The double-quote is the only legitimate structural character in the line;
-        # all others would only appear there through a renderer bug.
-        if hostile != '"':
-            assert hostile not in self.h_line, (
-                f"Hostile input ({desc}) appears literally in h-extension System() call"
-            )
+    @pytest.mark.parametrize("hostile", _HOSTILE_CALLER_IDS)
+    def test_log_line_stays_one_line(self, hostile):
+        assert "\n" not in _asterisk_expand(self.noop_line, hostile)
+
+    def test_the_model_sees_an_unfiltered_use(self):
+        """Positive control: the model must let a raw value through where FILTER is absent."""
+        assert _asterisk_expand("x=${CALLERID(num)}", "$(id)") == "x=$(id)"
 
     def test_safe_callerid_re_rejects_quote(self):
         assert SAFE_CALLERID_RE.match('"evil"') is None
@@ -238,8 +262,13 @@ class TestHostileCallerID:
     def test_safe_callerid_re_rejects_newline(self):
         assert SAFE_CALLERID_RE.match("evil\ninjected") is None
 
-    def test_safe_callerid_re_accepts_nanp(self):
-        assert SAFE_CALLERID_RE.match("+1 (202) 555-0177") is not None
+    def test_safe_callerid_re_accepts_e164(self):
+        assert SAFE_CALLERID_RE.match("+12025550177") is not None
+
+    def test_safe_callerid_re_rejects_display_formatting(self):
+        """A trunk delivers digits; "-" and spaces would let "--flag" through (review of run 10)."""
+        assert SAFE_CALLERID_RE.match("+1 (202) 555-0177") is None
+        assert SAFE_CALLERID_RE.match("--help") is None
 
     def test_safe_callerid_re_accepts_digits(self):
         assert SAFE_CALLERID_RE.match("12025550177") is not None
@@ -270,11 +299,16 @@ class TestRenderHookStructure:
 
     def test_callerid_validated_with_tr(self):
         """The hook re-validates caller-ID with tr as defence in depth."""
-        assert "tr -cd '0-9+() -'" in self.text
+        assert "tr -cd '0-9+'" in self.text
 
     def test_spool_dir_boundary_check(self):
         """The hook must verify FAXFILE is inside the spool dir."""
         assert '"$SPOOL_DIR"/*' in self.text or '"$SPOOL_DIR"/' in self.text
+
+    def test_refuses_dot_segments(self):
+        """A case pattern's * matches "/", so the spool-prefix test alone passes a ".." path."""
+        assert "*/../*|*/..|*/./*|*/.)" in self.text
+        assert self.text.index("*/../*") < self.text.index('"$SPOOL_DIR"/*)')
 
     def test_no_shell_injection_vector(self):
         """exec is used for notify, not eval or unquoted variable expansion."""
@@ -289,15 +323,15 @@ class TestRenderHookWithNotify:
     def test_notify_single_word(self):
         cfg = InboundConfig(notify_cmd=("/usr/local/bin/notify-fax",))
         text = render_hook(cfg)
-        assert 'NOTIFY="/usr/local/bin/notify-fax"' in text
+        assert "NOTIFY=/usr/local/bin/notify-fax" in text
         assert 'exec "$NOTIFY"' in text
 
     def test_notify_multi_word(self):
         cfg = InboundConfig(notify_cmd=("/usr/bin/slack-notify", "--channel", "#fax"))
         text = render_hook(cfg)
-        assert 'NOTIFY="/usr/bin/slack-notify"' in text
-        assert '"--channel"' in text
-        assert '"#fax"' in text
+        assert "NOTIFY=/usr/bin/slack-notify" in text
+        assert " --channel " in text
+        assert " '#fax' " in text          # shlex-quoted: "#" would start a comment
         # Fax facts are appended as separate arguments
         assert '"$FAXFILE_PDF"' in text
         assert '"$STATUS"' in text
