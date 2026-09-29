@@ -83,13 +83,24 @@ jobs:
           touch ../.sandbox-probe-sibling                                         # so ".." holds more than the repo
       - name: every isolation probe against the real sandbox
         run: |
+          set -o pipefail                         # run steps are `bash -e` without it: keep the probe script's own code
           eval "$(ssh-agent -s)" > /dev/null      # a real agent, so the "ssh agent is reachable" probe can leak one
-          SANDBOX_PROBE_CI=1 timeout 600 bash scripts/sandbox-probe.sh | tee probe.out
-          rc=${PIPESTATUS[0]}                     # run steps are `bash -e` without pipefail: keep the script's own code
+          rc=0
+          SANDBOX_PROBE_CI=1 timeout 600 bash scripts/sandbox-probe.sh | tee probe.out || rc=$?
           ok=$(grep -c '^ok ' probe.out || true)
           wrong=$(grep -c '^WRONG' probe.out || true)
           skips=$(grep '^skip' probe.out || true)
           echo "probes as expected: $ok (expected $EXPECT_OK); WRONG: $wrong; skips: ${skips:-none}"
+          {
+            echo "### Sandbox isolation (real bubblewrap): what this job proves"
+            echo "- $ok of $EXPECT_OK probes as expected against the real sandbox; 1 declared skip (the Bob CLI is never in CI)."
+            echo "- **Vacuous on a runner** (the target does not exist outside the sandbox either): the 4 ssh-to-PBX probes, and"
+            echo "  the network-deny probes for LAN (10/8, 192.168/16), CGNAT (100.64/10) and global IPv6. Loopback depends on the runner's sshd."
+            echo "- **This job does not prove IPAddressDeny, nor the PBX ssh block.** The workstation run of scripts/sandbox-probe.sh"
+            echo "  stays the authority for network isolation."
+            echo "- Made real by this job's fixtures: ~/.ssh, ~/.claude, ~/Projects/fax, @bitwarden, the deny-list, the ssh agent,"
+            echo "  the directory above the repo; and \"write outside the repo\" is checked on the host."
+          } >> "$GITHUB_STEP_SUMMARY"
           [ "$wrong" -eq 0 ] || { echo "::error::a sandbox probe came out WRONG"; exit 1; }
           [ "$ok" -eq "$EXPECT_OK" ] || { echo "::error::expected $EXPECT_OK probes as expected, got $ok"; exit 1; }
           [ "$(printf '%s\n' "$skips" | grep -c .)" -eq 1 ] && printf '%s' "$skips" | grep -q 'the bob CLI starts' \
