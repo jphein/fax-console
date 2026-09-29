@@ -475,6 +475,9 @@ def _mask_error(config: Config, text: str) -> str:
     - The Oracle's delta on PR 11: a replacement without a boundary turned "/opt/fx-zqx7" into
       "replay:-zqx7"; a repr()-escaped name escaped the exact replacement; and a token fallback kept
       paths glued to other text ("path:/srv/x"). Failing closed covers all three.
+    - It keys on "/", so text with no slash passes as it is: a host name, an address, a user name. No
+      replay code path emits such text: ReplayTransport and fixture_http do no network or user lookups,
+      and no user input reaches a masked field. So that gap is latent (the Oracle, on PR 15).
     """
     if not config.replay:
         return text

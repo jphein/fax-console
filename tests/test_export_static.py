@@ -72,6 +72,10 @@ def test_the_version_is_the_static_sigil(site):
     assert not SIGIL_SERVER_ONLY & set(v), SIGIL_SERVER_ONLY & set(v)
 
 
+def test_the_voipms_time_is_utc_not_the_hosts_zone(site):
+    assert json.loads(site["api/voipms.json"])["fetched_at"].endswith(" UTC")
+
+
 def test_nothing_from_the_machine(site):
     host = socket.gethostname()
     for name, data in site.items():

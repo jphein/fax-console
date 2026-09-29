@@ -24,7 +24,7 @@ def site():
 
 
 def _tar(members):
-    """A tar of (name, kind, data) members: kind is file, symlink, dir, hardlink or chardev."""
+    """A tar of (name, kind, data) members: kind is file, symlink, dir, hardlink, chardev or fifo."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         for name, kind, data in members:
@@ -34,7 +34,7 @@ def _tar(members):
                 tar.addfile(info, io.BytesIO(data))
             else:
                 info.type = {"symlink": tarfile.SYMTYPE, "dir": tarfile.DIRTYPE, "hardlink": tarfile.LNKTYPE,
-                             "chardev": tarfile.CHRTYPE}[kind]
+                             "chardev": tarfile.CHRTYPE, "fifo": tarfile.FIFOTYPE}[kind]
                 info.linkname = data.decode()
                 tar.addfile(info)
     return buf.getvalue()
@@ -65,6 +65,7 @@ def test_untar_extracts_a_good_export(tmp_path, site):
     [(".hidden", "file", b"x")],
     [("api", "hardlink", b"ok.json")],
     [("dev", "chardev", b"")],
+    [("pipe", "fifo", b"")],
     [("big.json", "file", b"x" * (untar.MAX_FILE + 1))],
     [(f"f{i}.json", "file", b"{}") for i in range(untar.MAX_FILES)],
 ])

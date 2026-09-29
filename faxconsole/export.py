@@ -8,13 +8,14 @@ This renders every GET route in replay mode, from the recorded and fictional fix
   since Pages sends no headers.
 - .nojekyll, so that Pages serves the files as they are.
 The version drops the fields that only a running server has (started, uptime, runtime, os, host, pid),
-as the realm-sigil static contract does.
+as the realm-sigil static contract does, and the VoIP.ms fetched_at is given in UTC, not the host's zone.
 
 It writes a tar stream to stdout. scripts/export-static.sh runs it inside the OS sandbox and extracts the
 stream on the host, so the files never land in a directory Bob can write.
 """
 from __future__ import annotations
 
+import datetime
 import io
 import json
 import sys
@@ -31,6 +32,13 @@ GET_API_ROUTES = ("/api/voipms", "/api/fax/status", "/api/fax/log", "/api/fax",
 PAGE_ASSETS = ("app.css", "app.js", "favicon.svg")
 # realm-sigil: "Static sites omit server-only fields".
 SERVER_ONLY = ("started", "uptime", "runtime", "os", "host", "pid")
+
+
+def utc(local: str) -> str:
+    """The poller writes fetched_at in the host's local time. A static site would freeze that zone onto a
+    public page, so the export gives the same instant in UTC."""
+    t = datetime.datetime.strptime(local, "%Y-%m-%d %H:%M:%S").astimezone(datetime.timezone.utc)
+    return t.strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
 def api_file(route: str) -> str:
@@ -63,6 +71,8 @@ def export(fixtures: str) -> dict[str, bytes]:
             body = json.loads(r.body)
             if route == "/api/version":
                 body = {k: v for k, v in body.items() if k not in SERVER_ONLY}
+            if route == "/api/voipms" and body.get("fetched_at"):
+                body["fetched_at"] = utc(body["fetched_at"])
             files[api_file(route)] = (json.dumps(body, indent=1, sort_keys=True) + "\n").encode("utf-8")
         page = handle("GET", "/", {}, b"", config)
         files["index.html"] = staticize(page.body)

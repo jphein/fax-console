@@ -37,7 +37,7 @@ python3 -m faxconsole --replay /opt/fax-console/fixtures --host 127.0.0.1 --port
 - A body cap a little above the app's 15 MB PDF limit. The app already answers 401 or 413 before reading any body (the review of PR 8, M1). The cap keeps an oversized upload from reaching the app at all.
 - HSTS on the public name. The app itself sends a CSP and `nosniff`.
 
-For Caddy, with `demo.example.org` standing in for the public name:
+For Caddy, with `demo.example.com` standing in for the public name:
 
 ```
 {
@@ -50,7 +50,7 @@ For Caddy, with `demo.example.org` standing in for the public name:
 	}
 }
 
-demo.example.org {
+demo.example.com {
 	request_body {
 		max_size 16MB
 	}
