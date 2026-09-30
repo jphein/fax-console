@@ -62,7 +62,7 @@ def test_a_tool_result_shows_its_summary_but_not_its_output(status, capsys):
     watch.render(json.dumps(e), "")
     shown = capsys.readouterr().out
     assert "tests: 1 failed, 2 passed in 0.3s" in shown
-    assert "secret line one" not in shown                    # for an error too, since #38
+    assert "secret line one" not in shown                    # for an error too, since #39
 
 
 def test_a_result_without_tests_shows_only_its_length(capsys):
