@@ -171,3 +171,35 @@ def test_the_meta_tag_escapes_markup_for_a_naive_reader():
     assert "</head>" not in meta and "<" not in meta[1:-1] and ">" not in meta[:-1], meta
     content = re.search(r"content='([^']*)'", meta).group(1)
     assert json.loads(html.unescape(content)) == {"branch": "x'y&z\"</head>"}
+
+
+GOOD_FACTS = ["abc1234", "main", "2026-09-29T21:54:35Z"]
+
+
+@pytest.mark.parametrize("where", ["unset", "inside the tree", "the tree itself"])
+def test_the_export_refuses_to_publish_without_a_cache_outside_the_tree(where, tmp_path, monkeypatch, capsys):
+    """With facts (the publish path), bytecode must come from a cache outside the exported tree, or a .pyc
+    planted in the tree's __pycache__ would run (the Oracle's runtime-guard low, on PR 20)."""
+    prefix = {"unset": None, "inside the tree": str(tmp_path / "pycache"),
+              "the tree itself": str(tmp_path)}[where]
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ex.sys, "pycache_prefix", prefix)
+    monkeypatch.setattr(ex, "export", lambda *a: pytest.fail("the export ran"))
+    assert ex.main(["fx", *GOOD_FACTS]) == 2
+    assert "refusing to publish" in capsys.readouterr().err
+
+
+def test_the_export_publishes_with_a_cache_outside_the_tree(tmp_path, monkeypatch):
+    """The control: the same call passes once the prefix is outside the tree, and without facts (the local
+    preview) no prefix is needed."""
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    monkeypatch.chdir(tree)
+    calls = []
+    monkeypatch.setattr(ex, "export", lambda fixtures, facts: calls.append(facts) or {})
+    monkeypatch.setattr(ex, "write_tar", lambda files, out: None)
+    monkeypatch.setattr(ex.sys, "pycache_prefix", str(tmp_path / "pycache"))
+    assert ex.main(["fx", *GOOD_FACTS]) == 0
+    monkeypatch.setattr(ex.sys, "pycache_prefix", None)
+    assert ex.main(["fx"]) == 0
+    assert calls == [dict(zip(("hash", "branch", "built"), GOOD_FACTS, strict=True)), None]

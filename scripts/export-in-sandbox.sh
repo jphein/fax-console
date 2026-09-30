@@ -26,5 +26,6 @@ got=$(find "$src" -type f | wc -l) || { echo "export-in-sandbox.sh: refusing: ca
 cd "$src"
 # -S: no site-packages on sys.path and no sitecustomize, so the imports are the extraction's and the
 # stdlib's by construction, not because the venv happens to hold nothing (the Oracle, on #29). -I is not
-# used, since it would drop PYTHONPYCACHEPREFIX.
+# used: it implies -E, which ignores PYTHONPYCACHEPREFIX, and -P, which drops the cwd (the extraction)
+# from sys.path, so faxconsole would not import. faxconsole.export refuses facts without the prefix.
 exec "$py" -S -m faxconsole.export tests/fixtures "$@"

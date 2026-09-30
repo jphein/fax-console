@@ -141,6 +141,14 @@ def write_tar(files: dict[str, bytes], out: BinaryIO) -> None:
             tar.addfile(info, io.BytesIO(files[name]))
 
 
+def _prefix_outside(tree: str) -> bool:
+    """True when Python's bytecode cache is set and lies outside tree."""
+    if not sys.pycache_prefix:
+        return False
+    prefix, root = os.path.realpath(sys.pycache_prefix), os.path.realpath(tree)
+    return os.path.commonpath([prefix, root]) != root
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     if len(args) not in (1, 4):
@@ -149,6 +157,14 @@ def main(argv: list[str] | None = None) -> int:
     facts = dict(zip(("hash", "branch", "built"), args[1:], strict=True)) if len(args) == 4 else None
     if facts and not all(FACT_SHAPES[k].fullmatch(v) for k, v in facts.items()):
         print(f"export: refusing facts that are not a commit's: {facts}", file=sys.stderr)
+        return 2
+    if facts and not _prefix_outside(os.getcwd()):
+        # With facts this is the publish path (scripts/export-in-sandbox.sh). Python must read its bytecode
+        # from a cache outside the exported tree, or a .pyc planted in a __pycache__ there would run instead
+        # of the source the archive holds (the Oracle's runtime-guard low, on PR 20). The runners set
+        # PYTHONPYCACHEPREFIX=/tmp/pycache; this refuses when they stop doing so.
+        print(f"export: refusing to publish: sys.pycache_prefix is {sys.pycache_prefix!r}, "
+              "not a directory outside the exported tree (set PYTHONPYCACHEPREFIX)", file=sys.stderr)
         return 2
     write_tar(export(args[0], facts), sys.stdout.buffer)
     sys.stdout.buffer.flush()
