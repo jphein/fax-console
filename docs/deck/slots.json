@@ -28,7 +28,7 @@
     "bob.miss_example": "A PBX that cannot be read was reported as ok: true with every check false. Review showed it on the frozen legacy code.",
     "bob.runs": "14",
     "changes.count": "8",
-    "demo.url": null
+    "demo.url": "https://jphein.github.io/fax-console/"
   },
   "sources": {
     "video.url": "YouTube unlisted link after upload (week 3)",
@@ -45,7 +45,7 @@
     "bob.bobcoins": "docs/bob-usage.md running total (63.12 after run 13, of the 180 allotment)",
     "bob.reject_example": "docs/bob-usage.md, run 12: 'Review reverted a replay transport that claimed successful originates'",
     "bob.source": "e.g. 'git trailers and docs/bob-usage.md, Oct 15'",
-    "tests.count": "python3 -m pytest -q --collect-only at d663397",
+    "tests.count": "scripts/test.sh --collect-only -q (inside the sandbox) at d663397",
     "tests.summary": "last line of the test run, e.g. '47 passed in 1.9s'",
     "ci.status": "GitHub Actions on d663397: the scrub gate and frozen baseline, and tests on Python 3.10, 3.12 and 3.14 (each runs ruff), all success",
     "lint.status": "'clean' once ruff reports no findings",
@@ -59,6 +59,6 @@
     "bob.miss_example": "docs/bob-usage.md, run 1: 'Missed, added in review'",
     "bob.runs": "numbered runs in the docs/bob-usage.md ledger at d663397: 0 to 13",
     "changes.count": "entries (## headings) in docs/changes.md at d663397, each with a Tests line",
-    "demo.url": "the hosted replay demo's URL once it is up (BUILD-PLAN step 14 planned https://fax.realm.watch; it does not resolve as of 2026-09-29). With no hosted demo, drop the Live demo rows instead"
+    "demo.url": "GitHub Pages static replay (Aurora #19/#20; export of main via git archive since #29). HTTP 200 checked 2026-09-30 before this render"
   }
 }
