@@ -644,25 +644,34 @@ def shadow_findings(paths):
 
 
 def disk_shadow_paths():
-    """What is on disk in the sys.path directories, ignored files too. Python imports what is there,
-    not what git tracks, so a json.pyc hidden by .gitignore must still be seen. Package directories
-    are listed through their __init__ file."""
-    out = []
+    """What is on disk in the sys.path directories, ignored files too, and the findings for what could
+    not be listed. Python imports what is there, not what git tracks, so a json.pyc hidden by .gitignore
+    must still be seen. Package directories are listed through their __init__ file.
+
+    A directory that cannot be listed is a finding, never skipped. Python imports json/__init__.py by
+    path through a directory it may not list (mode 0311), so skipping it read a planted package as clean
+    (Aurora's audit, after #21). Only an absent one is skipped: a repo without tests/ has none to import."""
+    out, unlistable = [], []
     for d in PATH_DIRS:
         try:
             entries = sorted(os.listdir(d or "."))
+        except FileNotFoundError:
+            continue
         except OSError:
+            unlistable.append(f"{d or '.'}/: [unlistable]")
             continue
         for e in entries:
             p = f"{d}/{e}" if d else e
             if os.path.isdir(p) and not os.path.islink(p):
                 try:
                     out += [f"{p}/{f}" for f in sorted(os.listdir(p)) if module_of(f) == "__init__"]
-                except OSError:
+                except FileNotFoundError:
                     pass
+                except OSError:
+                    unlistable.append(f"{p}/: [unlistable]")
             else:
                 out.append(p)
-    return out
+    return out, unlistable
 
 
 def masked(hit, rules):
@@ -693,7 +702,8 @@ def main(argv):
                  if p and os.path.isfile(p)]
         items = [(p, p, open(p, "rb").read()) for p in names]
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
-        hits += shadow_findings(sorted(set(names) | set(disk_shadow_paths())))
+        on_disk, unlistable = disk_shadow_paths()
+        hits += unlistable + shadow_findings(sorted(set(names) | set(on_disk)))
     elif argv[0] == "--staged":
         names = [p for p in git("diff", "--cached", "--name-only", "-z", "--diff-filter=ACMRT").decode().split("\0")
                  if p]
@@ -705,7 +715,8 @@ def main(argv):
         # scripts/ is imported instead of the real module, so one file could fake a green test run. Every
         # bypass of the Bob guard ends in such a file, and test.sh refuses to run while one is on disk
         # (the Oracle's delta on PR 11).
-        hits += shadow_findings(disk_shadow_paths())
+        on_disk, unlistable = disk_shadow_paths()
+        hits += unlistable + shadow_findings(on_disk)
     elif argv[0] == "--message" and len(argv) == 2:
         items = [("<commit message>", None, open(argv[1], "rb").read())]
     elif argv[0] == "--stdin" and len(argv) == 2:
@@ -719,14 +730,26 @@ def main(argv):
             return 2
         items, hits = history(rules, rev)
     elif argv[0] == "--paths" and len(argv) > 1:
+        # What the gate cannot read it cannot clear. os.walk skipped a directory it could not list, silently,
+        # and a file it could not open ended the scan with a traceback. Each is a finding now (Aurora's
+        # Oracle, after #21).
+        def unlistable(err):
+            hits.append(f"{err.filename}/: [unlistable]")
+
+        def add(path):
+            try:
+                items.append((path, path, open(path, "rb").read()))
+            except OSError:
+                hits.append(f"{path}: [unreadable]")
+
         for p in argv[1:]:
             if os.path.isdir(p):
-                for d, dirs, fs in os.walk(p):
+                for d, dirs, fs in os.walk(p, onerror=unlistable):
                     dirs[:] = [x for x in dirs if x not in (".git", "__pycache__", ".venv", "node_modules")]
-                    items += [(os.path.join(d, f), os.path.join(d, f), open(os.path.join(d, f), "rb").read())
-                              for f in fs]
+                    for f in fs:
+                        add(os.path.join(d, f))
             else:
-                items.append((p, p, open(p, "rb").read()))
+                add(p)
     else:
         print("usage: scrub-check.sh [--staged | --message FILE | --paths P... | --stdin LABEL | --history [REV]"
               " | --shadow]"

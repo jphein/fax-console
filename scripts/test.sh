@@ -14,8 +14,11 @@ cd "$root"
 # Sourceless bytecode outside __pycache__ (json.pyc in the root, say) would shadow a module for `python -m`,
 # and .gitignore hides it from git status and diff review (the review of PR 8). An extension module (json.so)
 # shadows the same way and runs native code at import, so a planted one could make the run report green.
-# Refuse to run while either exists.
-stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit)
+# Refuse to run while either exists, and when the tree cannot all be searched: a directory find cannot read might
+# hold one (Aurora's audit, after #21; this used to rely on set -e alone, and gave no reason). .git, .venv and every
+# __pycache__ are pruned, not walked, so a directory nobody needs searched cannot block the run (the standing Oracle).
+stray=$(find . \( -path ./.git -o -path ./.venv -o -name __pycache__ \) -prune -o \( -name '*.pyc' -o -name '*.so' \) -print -quit) \
+  || { echo "test.sh: refusing: the tree could not all be searched for sourceless bytecode (see find's error above)" >&2; exit 2; }
 [ -z "$stray" ] || { echo "test.sh: refusing: sourceless bytecode or an extension module outside __pycache__: $stray" >&2; exit 2; }
 # A stdlib-named module, package or symlink where Python looks first (json.py at the root, say) is imported
 # instead of the real module, and every bypass of the Bob guard ends in such a file (the Oracle's delta on
