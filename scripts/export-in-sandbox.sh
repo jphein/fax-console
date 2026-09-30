@@ -24,4 +24,7 @@ tar -x --no-same-owner --no-same-permissions --keep-old-files -C "$src" -f - \
 got=$(find "$src" -type f | wc -l) || { echo "export-in-sandbox.sh: refusing: cannot count the extracted files" >&2; exit 2; }
 [ "$got" -eq "$files" ] || { echo "export-in-sandbox.sh: refusing: extracted $got files, the commit has $files" >&2; exit 2; }
 cd "$src"
-exec "$py" -m faxconsole.export tests/fixtures "$@"
+# -S: no site-packages on sys.path and no sitecustomize, so the imports are the extraction's and the
+# stdlib's by construction, not because the venv happens to hold nothing (the Oracle, on #29). -I is not
+# used, since it would drop PYTHONPYCACHEPREFIX.
+exec "$py" -S -m faxconsole.export tests/fixtures "$@"

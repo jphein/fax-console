@@ -26,6 +26,8 @@ if ref=$(git symbolic-ref -q HEAD); then
   [ "$ref" = refs/heads/main ] \
     || { echo "publish-pages.sh: refusing: publish from main, not ${ref#refs/heads/}" >&2; exit 2; }
 else
+  rc=$?
+  [ "$rc" -eq 1 ] || { echo "publish-pages.sh: refusing: cannot read HEAD (git symbolic-ref exit $rc)" >&2; exit 2; }
   echo "publish-pages.sh: refusing: HEAD is detached; publish from main" >&2; exit 2
 fi
 # The work directory holds the site between the scrub and the push, so it must be outside the repository,
@@ -38,17 +40,25 @@ esac
 work=$(mktemp -d "$base/fax-pages.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 scripts/export-static.sh "$work/site"
-# The export reads HEAD again, as $full, so it must name the commit pinned above: a HEAD that moved in
-# between would otherwise publish another commit's export under this one's name (Lucid, on #29). The hash
-# must be one, since an empty prefix would match any HEAD.
-exported=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["hash"])' \
-  "$work/site/version.json") || { echo "publish-pages.sh: refusing: cannot read the export's version.json" >&2; exit 2; }
+# The export reads HEAD again, as $full, so it must name what was pinned above: the commit, and main. A HEAD
+# that moved in between would otherwise publish another commit's export under this one's name (Lucid, on
+# #29), and one that only changed branch would label the pinned content with another branch (the Oracle,
+# on #29). The hash must be one, since an empty prefix would match any HEAD.
+facts=$(python3 -I -c 'import json, sys
+v = json.load(open(sys.argv[1], encoding="utf-8"))
+print(v["hash"])
+print(v["branch"])' "$work/site/version.json") \
+  || { echo "publish-pages.sh: refusing: cannot read the export's version.json" >&2; exit 2; }
+exported=${facts%%$'\n'*}
+exported_branch=${facts#*$'\n'}
 [[ $exported =~ ^[0-9a-f]{7,40}$ ]] \
   || { echo "publish-pages.sh: refusing: the export's hash '$exported' is not a commit sha" >&2; exit 2; }
 case "$head" in
   "$exported"*) ;;
   *) echo "publish-pages.sh: refusing: the export is of $exported, not the pinned ${head:0:7}; HEAD moved" >&2; exit 2 ;;
 esac
+[ "$exported_branch" = main ] \
+  || { echo "publish-pages.sh: refusing: the export is labelled '$exported_branch', not main; HEAD moved" >&2; exit 2; }
 export GIT_INDEX_FILE="$work/index"
 python3 -I -c 'import os, sys
 top = sys.argv[1]

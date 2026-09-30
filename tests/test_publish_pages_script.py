@@ -8,8 +8,8 @@ The Oracle's residuals on #25:
 And its lows on #27:
 - The work directory (TMPDIR) must be outside the repository, where no sandbox can write.
 - Only the exact gh-pages ref counts, since ls-remote also matches the tail of other refs.
-And Lucid's on #29: the export reads HEAD again, so the commit its version.json names must be the one the
-go pinned.
+And Lucid's and the Oracle's on #29: the export reads HEAD again, so its version.json must name what the go
+pinned, both the commit and main.
 
 Each test runs the real script in a throwaway repo whose origin is a local bare repository. Stubs stand in
 for export-static.sh, which writes a one-file site, and for the scrub gate. Each stub records its call.
@@ -25,13 +25,17 @@ ROOT = Path(__file__).resolve().parents[1]
 RECORD = 'printf "%s %s\\n" "${0##*/}" "$*" >> "$PUBLISH_TEST_CALLS"\n'
 STUBS = {
     "scrub-check.sh": "#!/bin/sh\n" + RECORD,
-    # The export reads HEAD itself and names it in version.json. With PUBLISH_TEST_MOVE_HEAD set, HEAD moves
-    # first, after publish-pages.sh has pinned it; PUBLISH_TEST_HASH overrides the hash it writes.
+    # The export reads HEAD itself, and names its commit and branch in version.json. After publish-pages.sh
+    # has pinned HEAD, PUBLISH_TEST_MOVE_HEAD moves it to a new commit, and PUBLISH_TEST_SWITCH switches it
+    # (git switch $PUBLISH_TEST_SWITCH) at the same commit. PUBLISH_TEST_HASH overrides the hash it writes.
     "export-static.sh": ("#!/bin/sh\n" + RECORD
                          + '[ -z "${PUBLISH_TEST_MOVE_HEAD:-}" ] || git commit -q --allow-empty -m moved\n'
+                         + '[ -z "${PUBLISH_TEST_SWITCH:-}" ] || git switch -q $PUBLISH_TEST_SWITCH\n'
                          + 'h=${PUBLISH_TEST_HASH-$(git rev-parse --short HEAD)}\n'
+                         + 'b=$(git symbolic-ref -q --short HEAD || echo detached)\n'
                          + 'mkdir "$1" && printf "ok\\n" > "$1/index.html"'
-                         + ' && printf \'{"hash": "%s"}\\n\' "$h" > "$1/version.json"\n'),
+                         + ' && printf \'{"hash": "%s", "branch": "%s"}\\n\' "$h" "$b"'
+                         + ' > "$1/version.json"\n'),
 }
 IDENTITY = (("config", "user.name", "t"), ("config", "user.email", "t@example.com"))
 
@@ -201,3 +205,14 @@ def test_an_export_that_names_no_commit_is_refused(repo, bad):
     r, _calls = publish(repo, head(repo)[:7], PUBLISH_TEST_HASH=bad)
     assert r.returncode == 2 and "the export's hash" in r.stderr, (r.returncode, r.stderr)
     assert remote_pages(repo) == ""
+
+
+@pytest.mark.parametrize("switch", ["--detach", "-c other"])
+def test_a_head_that_changes_branch_during_the_export_is_refused(repo, switch):
+    """The same commit, detached or on another branch. The export would label the pinned content with the
+    wrong branch (the Oracle, on #29)."""
+    pinned = head(repo)
+    r, calls = publish(repo, pinned[:7], PUBLISH_TEST_SWITCH=switch)
+    assert head(repo) == pinned                                    # the control: the commit did not change
+    assert r.returncode == 2 and "not main; HEAD moved" in r.stderr, (r.returncode, r.stderr)
+    assert not any("--history" in c for c in calls) and remote_pages(repo) == "", calls
