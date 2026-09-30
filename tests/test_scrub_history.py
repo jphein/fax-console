@@ -554,3 +554,50 @@ def test_test_sh_refuses_a_tree_it_cannot_search_for_stray_bytecode(tmp_path):
     finally:
         locked.chmod(0o755)
     assert r.returncode == 2 and "could not all be searched" in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 directory anyway")
+def test_test_sh_prunes_git_venv_and_pycache_from_its_search(tmp_path):
+    """.git, .venv and every __pycache__ are pruned, not walked, so an unreadable directory there cannot block
+    the stray-bytecode search (the standing Oracle, on #26). The throwaway repo has no scrub-check.sh, so
+    test.sh stops at the next step; what matters is that the search itself passed."""
+    repo = tmp_path / "t"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy2(SCRIPT.parent / "test.sh", repo / "scripts" / "test.sh")
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    locked = [repo / ".git" / "locked", repo / ".venv" / "lib" / "locked",
+              repo / "pkg" / "__pycache__" / "locked"]
+    for d in locked:
+        d.mkdir(parents=True)
+        d.chmod(0)
+    try:
+        r = subprocess.run(["bash", "scripts/test.sh"], cwd=repo, capture_output=True, text=True, timeout=60,
+                           check=False)
+    finally:
+        for d in locked:
+            d.chmod(0o755)
+    assert "could not all be searched" not in r.stderr, r.stderr
+    assert "the shadow check itself failed" in r.stderr, r.stderr                # it got past the search
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 directory anyway")
+def test_paths_mode_flags_what_it_cannot_read(repo):
+    """--paths scans the files it is given and everything under a directory it is given. A subdirectory it
+    cannot list, or a file it cannot read, might hold anything, so each is a finding. os.walk skipped an
+    unlistable directory silently, and an unreadable file ended the scan with a traceback (Aurora's Oracle,
+    after #21). While readable, the number in each is found: the control."""
+    base = repo / "prompts"
+    (base / "sub").mkdir(parents=True)
+    (base / "sub" / "p.md").write_text("call " + PHONE + "\n", encoding="utf-8")
+    (base / "q.md").write_text("call " + PHONE + "\n", encoding="utf-8")
+    ok = scrub(repo, "--paths", str(base))
+    assert ok.returncode == 1 and ok.stdout.count("[phone-number]") == 2, ok.stdout
+    (base / "sub").chmod(0)
+    (base / "q.md").chmod(0)
+    try:
+        r = scrub(repo, "--paths", str(base))
+    finally:
+        (base / "sub").chmod(0o755)
+        (base / "q.md").chmod(0o644)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "sub/: [unlistable]" in r.stdout and "q.md: [unreadable]" in r.stdout, r.stdout + r.stderr
