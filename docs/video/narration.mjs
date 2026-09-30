@@ -16,9 +16,9 @@ export const L = {
   n6:  ["N", "Not everything Bob writes is kept. {{bob.reject_spoken}}."],
   n7:  ["N", "{{tests.count}} tests run on recorded fax output, with every number and name replaced. C I runs them on every push."],
   n8:  ["N", "Before, every panel reached the phone system on its own. Now one adapter is the only way in, and replay mode points it at recorded fixtures instead of the live P B X."],
-  n9:  ["N", "This is the demo, a static replay of recorded data. Status and the fax log are here, and the send form, run locally in test mode, answers without dialing. Nothing here can reach a phone line."],
+  n9:  ["N", "This is the demo, a static replay of recorded data: the phone system's status, the fax log and the account panel. Nothing on this page can reach a phone line."],
   n10: ["N", "Underneath is a small typed A P I."],
-  n11: ["N", "One real send, to Fax Beep's public test inbox, never to a person. The modernized tool reports it in the same JSON as before."],
+  n11: ["N", "Run locally in test mode, a send comes back as a dry run, and nothing is dialed. The one real test send, to Fax Beep's public test inbox and never to a person, took {{fax.call_seconds}} seconds."],
   n12: ["N", "The commit log shows Bob wrote {{bob.factor_pct}} of the committed lines, and the Bob usage log lists every run, its cost, and every suggestion we kept or rejected."],
   n13: ["N", "Fax Console. Open source under the A G P L. Built with I B M Bob."],
 };
@@ -31,7 +31,7 @@ export const SUB = {
   n7:  "{{tests.count}} tests run on recorded fax output, with every number and name replaced. CI runs them on every push.",
   n8:  "Before, every panel reached the phone system on its own. Now one adapter is the only way in, and replay mode points it at recorded fixtures instead of the live PBX.",
   n10: "Underneath is a small typed API.",
-  n11: "One real send, to Faxbeep's public test inbox, never to a person. The modernized tool reports it in the same JSON as before.",
+  n11: "Run locally in test mode, a send comes back as a dry run, and nothing is dialed. The one real test send, to Faxbeep's public test inbox and never to a person, took {{fax.call_seconds}} seconds.",
   n13: "Fax Console. Open source under the AGPL. Built with IBM Bob.",
 };
 
@@ -39,13 +39,13 @@ export const SUB = {
 export const SCENES = [
   { id: "title",    at: "0:00", lines: ["n1"],         shot: "deck slide 1, dark, 1920x1080" },
   { id: "legacy",   at: "0:09", lines: ["n2"],         shot: "editor on the baseline commit: telephony-console.py scroll, then fax/cli.py; overlay 'original 11,858 lines · 3,009 kept here, verbatim · 11 shell-out call sites', then '288 lines · no tests'" },
-  { id: "analysis", at: "0:25", lines: ["n3"],         shot: "Bob Shell in a terminal, its stream rendered by scripts/bob-watch.py: the prompt gate passing, then docs/analysis.md taking shape" },
-  { id: "module",   at: "0:37", lines: ["n4", "n5", "n5b"], shot: "Bob fixing {{module.name}}, replayed from run 5 through scripts/bob-watch.py (no live Bob needed): characterization tests red on the unreadable-PBX finding, the fix, green (pytest summaries 1 failed, 3 failed, 189 passed; needs PR #36); then line 835, git stash refused: a red ✗ line cut at \"Unable to create './.git…\", label \"read-only .git\"; 2x speed label" },
-  { id: "reject",   at: "1:11", lines: ["n6"],         shot: "docs/bob-runs/5-faxcli-fixes.prompt.md with item 1 highlighted (the unquoted ssh command); then git diff a64d1c2 7e172ab -- faxcli/transport.py, the one line where \" \".join(argv) becomes shlex.quote" },
-  { id: "tests",    at: "1:26", lines: ["n7"],         shot: "terminal: {{cmd.test}} summary; then the green GitHub Actions run" },
-  { id: "arch",     at: "1:37", lines: ["n8"],         shot: "deck slide 5, dark, with a highlight on the Asterisk adapter" },
-  { id: "console",  at: "1:51", lines: ["n9", "n10"],  shot: "browser at jphein.github.io/fax-console (static replay): status, fax log; then the local replay at 127.0.0.1:8093: send form in test mode and its reply, curl /api/fax/status and /api/version" },
-  { id: "faxtest",  at: "2:13", lines: ["n11"],        shot: "terminal: fax test --pdf demo/test-page.pdf; cut the call (overlay 'call took {{fax.call_seconds}} s, cut'); JSON result; Faxbeep inbox cropped to the page body" },
-  { id: "evidence", at: "2:27", lines: ["n12", "n13"], shot: "the docs/bob-usage.md ledger and the git trailer count (or the Bobalytics Bob factor tile, account and team hidden), then the end card" },
+  { id: "analysis", at: "0:21", lines: ["n3"],         shot: "docs/bob-runs/1-analysis.prompt.md (the analysis prompt), then docs/analysis.md scrolling: the module map, the shell-out table, the migration order (documents, not a Bob replay: only run 5 is replayed on camera)" },
+  { id: "module",   at: "0:32", lines: ["n4", "n5", "n5b"], shot: "run 5 replayed through scripts/bob-watch.py (no live Bob): pytest summaries 1 failed, 176 passed, 5 warnings -> 1 failed, 176 passed -> 3 failed, 186 passed -> 189 passed; then git stash refused: \"✗ exit code 1 · read-only file system (150 characters)\"; chip \"replay of run 5 · recorded, sped up\"" },
+  { id: "reject",   at: "0:57", lines: ["n6"],         shot: "docs/bob-runs/5-faxcli-fixes.prompt.md with item 1 highlighted (the unquoted ssh command); then git diff a64d1c2 7e172ab -- faxcli/transport.py, the one line where \" \".join(argv) becomes shlex.quote" },
+  { id: "tests",    at: "1:09", lines: ["n7"],         shot: "terminal: scripts/test.sh -q (the sandboxed test run) and its summary line; then the green GitHub Actions run, logged out" },
+  { id: "arch",     at: "1:19", lines: ["n8"],         shot: "deck slide 5, dark, with a highlight on the Asterisk adapter" },
+  { id: "console",  at: "1:32", lines: ["n9", "n10"],  shot: "the Pages demo at jphein.github.io/fax-console (a static replay): status, fax log, account panel; then curl on the Pages copy of api/version.json and the local replay\'s /api/fax/status (127.0.0.1:8093)" },
+  { id: "faxtest",  at: "1:47", lines: ["n11"],        shot: "the local replay at 127.0.0.1:8093: the send form in test mode (a 555 number, demo/test-page.pdf, a throwaway token, confirm), then its dry-run JSON reply: dry_run true, replay: nothing is dialled" },
+  { id: "evidence", at: "2:00", lines: ["n12", "n13"], shot: "the docs/bob-usage.md ledger and the git trailer count, then the end card" },
 ];
 export const TARGET_SECONDS = 175; // hard limit 180 (rules §6.3.5)
