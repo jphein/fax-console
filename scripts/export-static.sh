@@ -11,12 +11,25 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 out=${1:?usage: scripts/export-static.sh OUT_DIR (new or empty)}
 # An export is of a commit. An untracked file counts as a change here, because a planted json.py would
-# be imported by `python -m faxconsole.export` too.
-if [ -n "$(git status --porcelain)" ]; then
-  echo "export-static.sh: refusing: the checkout has changes or untracked files; export a commit" >&2
+# be imported by `python -m faxconsole.export` too. Each check refuses when it could not look, because an
+# instrument that failed must not read as clean (Drift, on this script):
+# - git status: when it fails, it prints nothing. When it cannot open a directory, it exits 0 with only a
+#   warning, yet Python imports a package through a directory that cannot be listed. So a failure refuses,
+#   and so does anything git says, warnings included. --untracked-files=normal overrides a
+#   status.showUntrackedFiles setting that would hide untracked files.
+# - find: it exits non-zero when it cannot search a directory, including one that git ignores.
+changes=$(git status --porcelain --untracked-files=normal 2>&1) || {
+  echo "export-static.sh: refusing: git status failed, so the checkout cannot be shown clean:" >&2
+  head -n 20 <<<"$changes" >&2
+  exit 2
+}
+if [ -n "$changes" ]; then
+  echo "export-static.sh: refusing: the checkout has changes or untracked files, or git could not look everywhere; export a commit:" >&2
+  head -n 20 <<<"$changes" >&2
   exit 2
 fi
-stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit)
+stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit) \
+  || { echo "export-static.sh: refusing: find could not search the whole tree" >&2; exit 2; }
 [ -z "$stray" ] || { echo "export-static.sh: refusing: stray bytecode or an extension module: $stray" >&2; exit 2; }
 scripts/scrub-check.sh --shadow >/dev/null 2>&1 || { echo "export-static.sh: refusing: the shadow check failed (see scripts/test.sh)" >&2; exit 2; }
 # The version (realm-sigil) needs the commit's facts, and the sandbox has no git: read them here. "built" is
@@ -50,4 +63,6 @@ if bad:
     sys.exit(2)
 PY
 scripts/scrub-check.sh --paths "$out" --require-deny
-echo "export-static.sh: $(find "$out" -type f | wc -l) files from $(git rev-parse --short HEAD), scrub-clean, in $out" >&2
+# The commit named is the one whose facts are in the export, even if HEAD has moved since.
+files=$(find "$out" -type f | wc -l)
+echo "export-static.sh: $files files from $hash, scrub-clean, in $out" >&2
