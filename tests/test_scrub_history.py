@@ -601,3 +601,21 @@ def test_paths_mode_flags_what_it_cannot_read(repo):
         (base / "q.md").chmod(0o644)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "sub/: [unlistable]" in r.stdout and "q.md: [unreadable]" in r.stdout, r.stdout + r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 file anyway")
+def test_the_default_scan_flags_a_file_it_cannot_read(repo):
+    """The default scan (everything git would publish) reads every file. One it cannot open is a finding
+    that says where, not a traceback (the standing Oracle, on #26). While readable, the number in it is
+    found: the control."""
+    f = repo / "notes.txt"
+    f.write_text("call " + PHONE + "\n", encoding="utf-8")
+    ok = scrub(repo)
+    assert ok.returncode == 1 and "notes.txt:1: [phone-number]" in ok.stdout, ok.stdout
+    f.chmod(0)
+    try:
+        r = scrub(repo)
+    finally:
+        f.chmod(0o644)
+    assert r.returncode == 1 and "notes.txt: [unreadable]" in r.stdout, r.stdout + r.stderr
+    assert "Traceback" not in r.stderr, r.stderr

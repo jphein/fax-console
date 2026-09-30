@@ -697,10 +697,20 @@ def main(argv):
     argv = [a for a in argv if a != "--require-deny"]
     rules = GENERIC + load_deny(require)
     items, hits = [], []
+
+    # What the gate cannot read it cannot clear. A file it cannot open is a finding, not a traceback (a traceback
+    # failed closed too, but did not say what or where) (Aurora's Oracle and the standing Oracle, after #21).
+    def add(path):
+        try:
+            items.append((path, path, open(path, "rb").read()))
+        except OSError:
+            hits.append(f"{path}: [unreadable]")
+
     if not argv:
         names = [p for p in git("ls-files", "-z", "--cached", "--others", "--exclude-standard").decode().split("\0")
                  if p and os.path.isfile(p)]
-        items = [(p, p, open(p, "rb").read()) for p in names]
+        for p in names:
+            add(p)
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
         on_disk, unlistable = disk_shadow_paths()
         hits += unlistable + shadow_findings(sorted(set(names) | set(on_disk)))
@@ -730,17 +740,10 @@ def main(argv):
             return 2
         items, hits = history(rules, rev)
     elif argv[0] == "--paths" and len(argv) > 1:
-        # What the gate cannot read it cannot clear. os.walk skipped a directory it could not list, silently,
-        # and a file it could not open ended the scan with a traceback. Each is a finding now (Aurora's
-        # Oracle, after #21).
+        # os.walk skipped a directory it could not list, silently: that is a finding now too (Aurora's Oracle,
+        # after #21). A file it cannot open goes through add(), above.
         def unlistable(err):
             hits.append(f"{err.filename}/: [unlistable]")
-
-        def add(path):
-            try:
-                items.append((path, path, open(path, "rb").read()))
-            except OSError:
-                hits.append(f"{path}: [unreadable]")
 
         for p in argv[1:]:
             if os.path.isdir(p):
