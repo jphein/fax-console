@@ -7,6 +7,9 @@
 # untar-site.py then extracts regular files only, on the host, and the scrub gate checks every one against
 # the private deny-list. Publishing is a separate step (scripts/publish-pages.sh), on the lead's go only.
 set -euo pipefail
+# A caller's GIT_* could point git at another repository, index or config, or add trace output that the
+# status check below would read as a change (the Oracle, on #25). Nothing here needs one.
+unset "${!GIT_@}"
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 out=${1:?usage: scripts/export-static.sh OUT_DIR (new or empty)}
@@ -17,7 +20,9 @@ out=${1:?usage: scripts/export-static.sh OUT_DIR (new or empty)}
 #   warning, yet Python imports a package through a directory that cannot be listed. So a failure refuses,
 #   and so does anything git says, warnings included. --untracked-files=normal overrides a
 #   status.showUntrackedFiles setting that would hide untracked files.
-# - find: it exits non-zero when it cannot search a directory, including one that git ignores.
+# - find: it exits non-zero when it cannot search a directory, including one that git ignores. It prunes
+#   .git and .venv, which Bob cannot write: an unreadable directory there, such as a root-owned leftover
+#   from a sudo'd pip, would otherwise block every export (the Oracle, on #25).
 changes=$(git status --porcelain --untracked-files=normal 2>&1) || {
   echo "export-static.sh: refusing: git status failed, so the checkout cannot be shown clean:" >&2
   head -n 20 <<<"$changes" >&2
@@ -28,7 +33,7 @@ if [ -n "$changes" ]; then
   head -n 20 <<<"$changes" >&2
   exit 2
 fi
-stray=$(find . \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -not -path './.venv/*' -not -path './.git/*' -print -quit) \
+stray=$(find . \( -path ./.git -o -path ./.venv \) -prune -o \( -name '*.pyc' -o -name '*.so' \) -not -path '*/__pycache__/*' -print -quit) \
   || { echo "export-static.sh: refusing: find could not search the whole tree" >&2; exit 2; }
 [ -z "$stray" ] || { echo "export-static.sh: refusing: stray bytecode or an extension module: $stray" >&2; exit 2; }
 scripts/scrub-check.sh --shadow >/dev/null 2>&1 || { echo "export-static.sh: refusing: the shadow check failed (see scripts/test.sh)" >&2; exit 2; }
@@ -51,12 +56,23 @@ out, root = sys.argv[1], sys.argv[2]
 marks = [re.escape(m) for m in ("/home/", "/tmp/", root, "faxconsole-replay-")]
 marks += [r"\b" + re.escape(w) + r"\b" for w in (socket.gethostname(), getpass.getuser()) if w]
 pattern = re.compile("|".join(marks))
+
+
+def unreadable(e):
+    """A directory or file this scan cannot read is refused, never skipped (the Oracle, on #25)."""
+    print(f"export-static.sh: refusing: the surface scan cannot read {e.filename}: {e.strerror}", file=sys.stderr)
+    sys.exit(2)
+
+
 bad = set()
-for d, _dirs, names in os.walk(out):
+for d, _dirs, names in os.walk(out, onerror=unreadable):
     for n in names:
         p = os.path.join(d, n)
-        with open(p, "rb") as f:
-            text = f.read().decode("utf-8", "replace")
+        try:
+            with open(p, "rb") as f:
+                text = f.read().decode("utf-8", "replace")
+        except OSError as e:
+            unreadable(e)
         bad |= {f"{os.path.relpath(p, out)}: {m.group(0)!r}" for m in pattern.finditer(text)}
 if bad:
     print("export-static.sh: refusing: machine data in the export:", *sorted(bad), sep="\n  ", file=sys.stderr)

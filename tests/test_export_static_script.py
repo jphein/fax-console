@@ -8,9 +8,15 @@ Each check before the export read an instrument's failure as a clean answer, or 
 - `find` exits non-zero when it cannot search a directory, and only set -e turned that into a refusal.
 Each now refuses, with exit 2, before anything runs.
 
+The Oracle's lows on #25:
+- a caller's GIT_* could point git at another index, or add trace output the status check reads as a change,
+  so the script drops every GIT_* first;
+- find prunes .git and .venv, so an unreadable leftover there does not block every export;
+- the surface scan refuses a directory or file it cannot read, instead of skipping it.
+
 The tests run the real script in a throwaway repo. Stubs stand in for the steps after the checks, and each
-records its call, so "refused before anything ran" is measured. The last two tests are the positive
-control: from a clean commit the script runs every step, so an empty record above means that it refused.
+records its call, so "refused before anything ran" is measured. test_a_clean_commit_runs_every_step is the
+positive control: from a clean commit the script runs every step, so an empty record means that it refused.
 """
 import io
 import os
@@ -36,15 +42,16 @@ STUBS = {
 needs_permissions = pytest.mark.skipif(os.geteuid() == 0, reason="root lists a directory whatever its mode")
 
 
-def git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, env={**os.environ, **GIT_ENV}, capture_output=True,
-                          text=True, timeout=60, check=False)
+def git(repo: Path, *args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=repo, env={**os.environ, **GIT_ENV, **(env or {})},
+                          capture_output=True, text=True, timeout=60, check=False)
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A clean commit holding the real script and untar-site.py, a stub for each tool they call next, a
-    tracked file, and a .gitignore that ignores build/."""
+    tracked file, and a .gitignore that ignores build/ and .venv/. The identity is in the repo's config,
+    since the script drops every GIT_* before the stubs run."""
     r = tmp_path / "repo"
     (r / "scripts").mkdir(parents=True)
     for name in ("export-static.sh", "untar-site.py"):
@@ -53,8 +60,9 @@ def repo(tmp_path: Path) -> Path:
         (r / "scripts" / name).write_text(text, encoding="utf-8")
         (r / "scripts" / name).chmod(0o755)
     (r / "data.txt").write_text("committed\n", encoding="utf-8")
-    (r / ".gitignore").write_text("build/\n", encoding="utf-8")
-    for args in (("init", "-q", "-b", "main"), ("add", "scripts", "data.txt", ".gitignore"),
+    (r / ".gitignore").write_text("build/\n.venv/\n", encoding="utf-8")
+    for args in (("init", "-q", "-b", "main"), ("config", "user.name", "t"),
+                 ("config", "user.email", "t@example.com"), ("add", "scripts", "data.txt", ".gitignore"),
                  ("commit", "-q", "-m", "start")):
         assert git(r, *args).returncode == 0
     tar = io.BytesIO()
@@ -163,3 +171,76 @@ def test_the_report_names_the_commit_that_was_exported(repo):
     assert git(repo, "rev-parse", "--short", "HEAD").stdout.strip() != short    # the control: HEAD moved
     assert r.returncode == 0, r.stderr
     assert f"files from {short}, scrub-clean" in r.stderr, r.stderr
+
+
+def test_a_callers_git_index_cannot_hide_a_change(repo, tmp_path):
+    """A caller's GIT_INDEX_FILE could name an index that hides a change: this one marks the modified
+    data.txt skip-worktree. The script drops every GIT_* before its first git call, so it reads the repo's
+    own index."""
+    (repo / "data.txt").write_text("changed\n", encoding="utf-8")
+    crafted = {"GIT_INDEX_FILE": str(tmp_path / "crafted-index")}
+    for args in (("read-tree", "HEAD"), ("update-index", "--skip-worktree", "data.txt")):
+        assert git(repo, *args, env=crafted).returncode == 0
+    probe = git(repo, "status", "--porcelain", env=crafted)
+    assert probe.returncode == 0 and probe.stdout == "", probe          # the control: that index hides it
+    refused(export(repo, **crafted), "the checkout has changes or untracked files")
+
+
+def test_a_callers_git_trace_is_not_read_as_a_change(repo):
+    """Trace output goes to stderr, which the status check counts, so a caller's GIT_TRACE refused every
+    export. It is dropped with the rest of GIT_*."""
+    probe = git(repo, "status", "--porcelain", env={"GIT_TRACE": "1"})
+    assert probe.returncode == 0 and probe.stdout == "" and probe.stderr, probe    # the control: git traces
+    r, calls = export(repo, GIT_TRACE="1", GIT_TRACE2="1")
+    assert r.returncode == 0, r.stderr
+    assert calls[0] == "scrub-check.sh --shadow", calls
+
+
+@needs_permissions
+@pytest.mark.parametrize("top", [".git", ".venv"])
+def test_an_unreadable_directory_in_git_or_the_venv_does_not_block_the_export(repo, top):
+    """find prunes .git and .venv, which Bob cannot write, so a root-owned leftover there does not block
+    every export. It still searches the rest of the tree (the find test above)."""
+    blind = repo / top / "leftover"
+    blind.mkdir(parents=True)
+    blind.chmod(0o311)
+    try:
+        probe = git(repo, "status", "--porcelain")
+        assert (probe.returncode, probe.stdout, probe.stderr) == (0, "", ""), probe     # git is clean
+        r, calls = export(repo)
+        assert r.returncode == 0, r.stderr
+        assert calls[0] == "scrub-check.sh --shadow", calls
+    finally:
+        blind.chmod(0o755)
+
+
+# Stands in for untar-site.py. It writes the site with its data file under api/. With EXPORT_TEST_BLIND set,
+# it then makes api/ impossible to list, as if a later step had broken its mode.
+UNTAR_STAND_IN = """import os, sys
+sys.stdin.buffer.read()
+api = os.path.join(sys.argv[2], "api")
+os.makedirs(api)
+with open(os.path.join(api, "fax.json"), "w") as f:
+    f.write('{"dir": "faxconsole-replay-x1"}\\n')
+if os.environ.get("EXPORT_TEST_BLIND"):
+    os.chmod(api, 0o311)
+"""
+
+
+@needs_permissions
+@pytest.mark.parametrize("blind", [False, True])
+def test_the_surface_scan_refuses_what_it_cannot_read(repo, blind):
+    """The file under api/ holds replay's temp-dir prefix, which the surface scan refuses. Readable, it is
+    found (the control). When api/ cannot be listed, os.walk used to skip it, and the export passed as
+    clean."""
+    (repo / "scripts" / "untar-site.py").write_text(UNTAR_STAND_IN, encoding="utf-8")
+    assert git(repo, "commit", "-qam", "a stand-in for untar-site").returncode == 0
+    api = repo.parent / "site" / "api"
+    try:
+        r, calls = export(repo, **({"EXPORT_TEST_BLIND": "1"} if blind else {}))
+    finally:
+        if api.exists():
+            api.chmod(0o755)
+    why = "the surface scan cannot read" if blind else "machine data in the export"
+    assert r.returncode == 2 and why in r.stderr, (r.returncode, r.stderr)
+    assert not any("--paths" in c for c in calls), calls             # the scrub of the site never ran
