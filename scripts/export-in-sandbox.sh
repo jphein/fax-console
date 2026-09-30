@@ -29,6 +29,8 @@ cd "$src"
 # used: it implies -E, which ignores PYTHONPYCACHEPREFIX, and -P, which drops the cwd (the extraction)
 # from sys.path, so faxconsole would not import. -X pycache_prefix pins the bytecode cache on the
 # interpreter's own command line, before any import and whatever the environment says (the Oracle, on #32):
-# a .pyc in the extraction's __pycache__ is never read. /tmp is the sandbox's own fresh tmpfs.
+# a .pyc in the extraction's __pycache__ is never read. /tmp is the sandbox's own fresh tmpfs. -E ignores
+# every PYTHON* variable (PYTHONPATH could point zipimport, which ignores the prefix, at a tracked zip); the
+# sandbox's --clearenv already drops them, and -E keeps that true if it ever stops (the Oracle, on #33).
 # faxconsole.export also refuses facts unless the cache it mirrors to lies outside the extraction.
-exec "$py" -S -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures "$@"
+exec "$py" -S -E -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures "$@"

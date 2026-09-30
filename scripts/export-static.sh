@@ -77,10 +77,11 @@ if bad:
     print("export-static.sh: refusing: symlinks or submodules under the exported paths:", *bad,
           sep="\n  ", file=sys.stderr)
     sys.exit(2)
-# Bytecode is never exported: a tracked __pycache__ or .pyc/.pyo would be archived, counted and, under a
-# runner that lost its cache prefix, imported instead of the source (the Oracle, on #32). Nor is an
-# extension module: a .so loads before the .py and no cache prefix covers it (Lucid, on #33). The tree
-# stray check above sees these too, but only because a dirty checkout is refused; this reads the commit.
+# No tracked __pycache__ entry or .pyc/.pyo/.so file is exported. A .pyc would be archived, counted and,
+# under a runner that lost its cache prefix, imported instead of the source (the Oracle, on #32); a .so
+# loads before the .py and no cache prefix covers it (Lucid, on #33). Bytecode inside a zip or under another
+# name is not filtered here: -S -E keep such a file off sys.path. The tree stray check above sees .pyc and
+# .so too, but only because a dirty checkout is refused; this reads the commit.
 names = [e.split(b"\t", 1)[-1] for e in entries]
 code = [n.decode("utf-8", "replace") for n in names
         if b"__pycache__" in n.split(b"/") or n.endswith((b".pyc", b".pyo", b".so"))]

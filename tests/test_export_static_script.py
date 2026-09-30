@@ -410,7 +410,7 @@ def test_the_sandboxed_half_exports_from_a_fresh_extraction(tmp_path):
     cwd, *rest = log.splitlines()
     assert Path(cwd).parent == tmp_path and Path(cwd).name.startswith("src."), cwd
     assert rest == ["./faxconsole/__init__.py", "./tests/fixtures/capture.json",
-                    "-S -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures abc1234 main "
+                    "-S -E -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures abc1234 main "
                     "2026-09-29T00:00:00Z"], rest
 
 
