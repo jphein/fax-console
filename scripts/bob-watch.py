@@ -9,6 +9,7 @@ and the API key is masked in everything that is shown.
 """
 import json
 import os
+import re
 import shutil
 import sys
 import textwrap
@@ -26,6 +27,35 @@ def short(v, n=W - 12):
     s = v if isinstance(v, str) else json.dumps(v)
     s = safe(" ".join(s.split()))
     return s if len(s) <= n else s[: n - 1] + "…"
+
+
+# A pytest summary line, e.g. "3 failed, 186 passed in 1.98s", optionally inside ===== rules. Only the
+# counts, the fixed outcome words and the duration are shown, so nothing else a tool printed reaches the
+# screen.
+# ASCII digits only, and bounded: a count has at most 5 digits and a duration at most 4 (plus 2 decimals),
+# so a phone-shaped number in a tool's output can never pass as a count or a duration (Lucid, on #36).
+_OUTCOME = r"[0-9]{1,5} (?:failed|passed|errors?|skipped|xfailed|xpassed|deselected|warnings?)"
+FAILING = re.compile(r"[0-9]{1,5} (?:failed|errors?)\b", re.ASCII)
+_DURATION = r"[0-9]{1,4}(?:\.[0-9]{1,2})?"
+SUMMARY = re.compile(rf"^=*\s*({_OUTCOME}(?:, {_OUTCOME})*) in ({_DURATION})s\b.*$", re.ASCII)
+
+
+def test_summary(text):
+    """The last pytest summary in a tool's output, rebuilt from its parts, or None."""
+    found = None
+    for line in str(text).splitlines():
+        m = SUMMARY.match(line.strip())
+        if m:
+            found = f"{m.group(1)} in {m.group(2)}s"
+    return found
+
+
+def summary_line(text):
+    s = test_summary(text)
+    if s is None:
+        return None
+    colour = R if FAILING.search(s) else G
+    return f"{colour}  ▣ tests: {safe(s)}{X}"
 
 
 def main():
@@ -63,9 +93,14 @@ def render(line, buf):
         if e.get("status") == "success":
             out = e.get("output", "")
             print(f"{D}  ✓ {len(out if isinstance(out, str) else json.dumps(out))} characters of output{X}")
+            out_summary = summary_line(out if isinstance(out, str) else json.dumps(out))
         else:
             err = e.get("error")
-            print(f"{R}  ✗ {short(err.get('message', err) if isinstance(err, dict) else err)}{X}")
+            msg = err.get("message", err) if isinstance(err, dict) else err
+            print(f"{R}  ✗ {short(msg)}{X}")
+            out_summary = summary_line(msg if isinstance(msg, str) else json.dumps(msg))
+        if out_summary:
+            print(out_summary)
     elif t == "result":
         s = e.get("stats") or {}
         print(f"{B}■ {e.get('status')} · cost {s.get('session_costs')} · {s.get('tool_calls')} tool calls · "
