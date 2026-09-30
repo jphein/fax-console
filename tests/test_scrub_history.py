@@ -601,3 +601,104 @@ def test_paths_mode_flags_what_it_cannot_read(repo):
         (base / "q.md").chmod(0o644)
     assert r.returncode == 1, r.stdout + r.stderr
     assert "sub/: [unlistable]" in r.stdout and "q.md: [unreadable]" in r.stdout, r.stdout + r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 file anyway")
+def test_the_default_scan_flags_a_file_it_cannot_read(repo):
+    """The default scan (everything git would publish) reads every file. One it cannot open is a finding
+    that says where, not a traceback (the standing Oracle, on #26). While readable, the number in it is
+    found: the control."""
+    f = repo / "notes.txt"
+    f.write_text("call " + PHONE + "\n", encoding="utf-8")
+    ok = scrub(repo)
+    assert ok.returncode == 1 and "notes.txt:1: [phone-number]" in ok.stdout, ok.stdout
+    f.chmod(0)
+    try:
+        r = scrub(repo)
+    finally:
+        f.chmod(0o644)
+    assert r.returncode == 1 and "notes.txt: [unreadable]" in r.stdout, r.stdout + r.stderr
+    assert "Traceback" not in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root searches a mode-0600 directory anyway")
+def test_the_default_scan_flags_a_file_under_a_directory_it_cannot_search(repo):
+    """git lists a tracked file whose directory the scan cannot search. stat fails there, so an isfile()
+    filter dropped the file silently (the standing Oracle, on #28); it is [unreadable] now. A tracked file
+    deleted from the tree has no content and is not a finding. While searchable, the number in the file is
+    found: the control."""
+    commit(repo, "sub/f.txt", "call " + PHONE + "\n", "a file in sub")
+    commit(repo, "gone.txt", "nothing\n", "a file deleted from the tree later")
+    (repo / "gone.txt").unlink()
+    ok = scrub(repo)
+    assert ok.returncode == 1 and "sub/f.txt:1: [phone-number]" in ok.stdout, ok.stdout
+    assert "gone.txt" not in ok.stdout, ok.stdout
+    (repo / "sub").chmod(0o600)                          # listable, not searchable: stat of sub/f.txt fails
+    try:
+        r = scrub(repo)
+    finally:
+        (repo / "sub").chmod(0o755)
+    assert r.returncode == 1 and "sub/f.txt: [unreadable]" in r.stdout, r.stdout + r.stderr
+    assert "gone.txt" not in r.stdout, r.stdout
+
+
+@pytest.mark.parametrize("sub", ["node_modules", "__pycache__", ".venv", "deep/.git"])
+def test_paths_mode_prunes_only_a_git_directly_under_its_argument(repo, sub):
+    """Given a directory, --paths skipped .git, .venv, __pycache__ and node_modules at any depth, so a number
+    in one went unseen at export time (Lucid, auditing #27). Only a .git directly under the argument is
+    skipped now, since its objects are binary by design: the same number there stays unflagged."""
+    base = repo / "site"
+    (base / sub).mkdir(parents=True)
+    (base / sub / "x.txt").write_text("call " + PHONE + "\n", encoding="utf-8")
+    (base / ".git").mkdir()
+    (base / ".git" / "y.txt").write_text("call " + PHONE + "\n", encoding="utf-8")
+    r = scrub(repo, "--paths", str(base))
+    flagged = [x for x in r.stdout.splitlines() if "[phone-number]" in x]
+    assert r.returncode == 1 and len(flagged) == 1 and f"{sub}/x.txt" in flagged[0], r.stdout
+
+
+def test_paths_mode_flags_a_named_file_that_is_missing(repo):
+    """A path named on purpose must exist: a missing one is [unreadable], never a quiet pass (a mistyped
+    prompt path would otherwise scan as clean)."""
+    r = scrub(repo, "--paths", str(repo / "no-such-prompt.md"))
+    assert r.returncode == 1 and "no-such-prompt.md: [unreadable]" in r.stdout, r.stdout + r.stderr
+
+
+def test_a_fifo_where_a_tracked_file_was_never_blocks_the_scan(repo):
+    """A tracked path replaced by a FIFO has no content to scan, and opening it would block the scan, and a
+    hook with it, for ever (the standing Oracle, on #30). The default scan skips it; --paths named on it
+    reports it. Both must finish."""
+    commit(repo, "pipe.txt", "x\n", "a file that becomes a FIFO")
+    (repo / "pipe.txt").unlink()
+    os.mkfifo(repo / "pipe.txt")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": str(repo / "no-such-deny.txt")}
+    try:
+        r = subprocess.run(["bash", str(SCRIPT)], cwd=repo, env=env, capture_output=True, text=True,
+                           timeout=60, check=False)
+        named = subprocess.run(["bash", str(SCRIPT), "--paths", str(repo / "pipe.txt")], cwd=repo, env=env,
+                               capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired:
+        pytest.fail("the scan blocked on a FIFO")
+    assert r.returncode == 0 and "pipe.txt" not in r.stdout, r.stdout + r.stderr
+    assert named.returncode == 1 and "pipe.txt: [unreadable]" in named.stdout, named.stdout + named.stderr
+
+
+def test_a_tracked_file_whose_directory_became_a_file_is_not_a_finding(repo):
+    """git still lists a/b.txt after a/ was replaced by a regular file. The path fails with ENOTDIR, and the
+    file is simply absent, so it is not a finding (the standing Oracle, on #30)."""
+    commit(repo, "a/b.txt", "x\n", "a file in a/")
+    shutil.rmtree(repo / "a")
+    (repo / "a").write_text("now a file\n", encoding="utf-8")
+    r = scrub(repo)
+    assert r.returncode == 0 and "[unreadable]" not in r.stdout, r.stdout + r.stderr
+
+
+def test_the_default_scan_reads_a_links_text_which_is_what_git_publishes(repo):
+    """git publishes a symlink as its target text, not as what it points at, so the default scan reads that
+    text. A number in a dangling link is found, and a link that loops is no false finding (the standing
+    Oracle, on #30)."""
+    os.symlink("call " + PHONE, repo / "lnk")
+    os.symlink("loop", repo / "loop")
+    r = scrub(repo)
+    assert r.returncode == 1 and "lnk:1: [phone-number]" in r.stdout, r.stdout + r.stderr
+    assert "loop" not in r.stdout, r.stdout

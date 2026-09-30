@@ -40,7 +40,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # The program travels in a variable, not on stdin: stdin belongs to --stdin callers.
 PROG=$(cat <<'PY'
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, stat, subprocess, sys
 
 # Numbers that are PUBLIC test services, used on purpose (documented in BASELINE.md).
 ALLOW_NUMBERS = {
@@ -697,10 +697,44 @@ def main(argv):
     argv = [a for a in argv if a != "--require-deny"]
     rules = GENERIC + load_deny(require)
     items, hits = [], []
+
+    # What the gate cannot read it cannot clear. A file it cannot open is a finding, not a traceback (a traceback
+    # failed closed too, but did not say what or where) (Aurora's Oracle and the standing Oracle, after #21).
+    # Only a regular file is opened. A directory (a gitlink), a FIFO, a socket or a device has no content to
+    # scan, and opening a FIFO would block the scan, and a hook with it, for ever (the standing Oracle, on #30).
+    # O_NONBLOCK covers a file swapped for one between the check and the open.
+    # link_text: git publishes a symlink as its target text, not as what it points at, so the default scan reads
+    # that text. A dangling or looping link then scans like any other. --paths reads what a link points at.
+    # missing_ok: a path that is not there has no content, and neither does a path beneath a component that is no
+    # longer a directory. That covers a tracked file deleted in the tree, or an entry that vanished mid-walk, and
+    # such a path is skipped. So is a non-regular one. A path someone named on purpose is a finding in both cases.
+    def add(path, missing_ok=False, link_text=False):
+        try:
+            st = os.lstat(path)
+            if stat.S_ISLNK(st.st_mode):
+                if link_text:
+                    items.append((path, path, os.fsencode(os.readlink(path))))
+                    return
+                st = os.stat(path)
+            if not stat.S_ISREG(st.st_mode):
+                if not missing_ok:
+                    hits.append(f"{path}: [unreadable]")
+                return
+            with open(path, "rb", opener=lambda p, flags: os.open(p, flags | os.O_NONBLOCK)) as fh:
+                data = fh.read()
+        except OSError as err:
+            if not (missing_ok and isinstance(err, (FileNotFoundError, NotADirectoryError))):
+                hits.append(f"{path}: [unreadable]")
+            return
+        items.append((path, path, data))
+
     if not argv:
+        # Every path git would publish goes to add(). An isfile() filter here dropped, silently, a file under a
+        # directory the scan cannot search, because stat fails there (the standing Oracle, on #28).
         names = [p for p in git("ls-files", "-z", "--cached", "--others", "--exclude-standard").decode().split("\0")
-                 if p and os.path.isfile(p)]
-        items = [(p, p, open(p, "rb").read()) for p in names]
+                 if p]
+        for p in names:
+            add(p, missing_ok=True, link_text=True)
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
         on_disk, unlistable = disk_shadow_paths()
         hits += unlistable + shadow_findings(sorted(set(names) | set(on_disk)))
@@ -730,24 +764,21 @@ def main(argv):
             return 2
         items, hits = history(rules, rev)
     elif argv[0] == "--paths" and len(argv) > 1:
-        # What the gate cannot read it cannot clear. os.walk skipped a directory it could not list, silently,
-        # and a file it could not open ended the scan with a traceback. Each is a finding now (Aurora's
-        # Oracle, after #21).
+        # os.walk skipped a directory it could not list, silently: that is a finding now too (Aurora's Oracle,
+        # after #21). A file it cannot open goes through add(), above.
         def unlistable(err):
             hits.append(f"{err.filename}/: [unlistable]")
-
-        def add(path):
-            try:
-                items.append((path, path, open(path, "rb").read()))
-            except OSError:
-                hits.append(f"{path}: [unreadable]")
 
         for p in argv[1:]:
             if os.path.isdir(p):
                 for d, dirs, fs in os.walk(p, onerror=unlistable):
-                    dirs[:] = [x for x in dirs if x not in (".git", "__pycache__", ".venv", "node_modules")]
+                    # Only a .git directly under the argument is skipped, since its objects are binary by design.
+                    # Pruning __pycache__, .venv and node_modules at any depth hid whatever they held, at export time
+                    # too (Lucid, auditing #27).
+                    if d == p:
+                        dirs[:] = [x for x in dirs if x != ".git"]
                     for f in fs:
-                        add(os.path.join(d, f))
+                        add(os.path.join(d, f), missing_ok=True)
             else:
                 add(p)
     else:
