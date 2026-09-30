@@ -81,7 +81,8 @@ if bad:
 # under a runner that lost its cache prefix, imported instead of the source (the Oracle, on #32); a .so
 # loads before the .py and no cache prefix covers it (Lucid, on #33). Bytecode inside a zip or under another
 # name is not filtered here: -S -E keep such a file off sys.path. The tree stray check above sees .pyc and
-# .so too, but only because a dirty checkout is refused; this reads the commit.
+# .so on disk, but a file tracked with --skip-worktree (or left out by a sparse checkout) is not on disk and
+# the status stays clean, while git archive still exports it; this reads the commit (the Oracle, on #34).
 names = [e.split(b"\t", 1)[-1] for e in entries]
 code = [n.decode("utf-8", "replace") for n in names
         if b"__pycache__" in n.split(b"/") or n.endswith((b".pyc", b".pyo", b".so"))]
