@@ -11,7 +11,7 @@ The public demo is a **static replay on GitHub Pages**, at https://jphein.github
 - The page reads `api/<route>.json` relative to itself, because Pages serves it under `/fax-console/`. The send form is disabled, with a note to run it locally.
 - Pages sends no headers, so the page carries its Content-Security-Policy in a meta tag. A meta tag cannot carry `frame-ancestors`, so that one directive is left out.
 - The version drops the fields that only a running server has (`started`, `uptime`, `runtime`, `os`, `host`, `pid`), per realm-sigil's static contract.
-- `scripts/publish-pages.sh SHA` publishes it, pinned to the commit a review named. It exports afresh, commits the files to the `gh-pages` branch with git plumbing (the checkout never changes), scrubs that history against the private deny-list, and pushes. CI ignores `gh-pages`. Pages serves the branch's root, and a `.nojekyll` file keeps the files as they are.
+- `scripts/publish-pages.sh SHA` publishes it, pinned to the commit a review named (SHA is 7 to 40 lowercase hex). It exports afresh, commits the files to the `gh-pages` branch with git plumbing (the checkout never changes), on top of the remote's `gh-pages` as it is now, scrubs that history against the private deny-list, and pushes. CI ignores `gh-pages`. Pages serves the branch's root, and a `.nojekyll` file keeps the files as they are.
 - There is no custom domain. realm.watch names are LAN-only by design, so the demo stays on the default Pages URL.
 
 ## Run
