@@ -32,9 +32,12 @@ def short(v, n=W - 12):
 # A pytest summary line, e.g. "3 failed, 186 passed in 1.98s", optionally inside ===== rules. Only the
 # counts, the fixed outcome words and the duration are shown, so nothing else a tool printed reaches the
 # screen.
-_OUTCOME = r"\d+ (?:failed|passed|errors?|skipped|xfailed|xpassed|deselected|warnings?)"
-FAILING = re.compile(r"\d+ (?:failed|errors?)\b")
-SUMMARY = re.compile(rf"^=*\s*({_OUTCOME}(?:, {_OUTCOME})*) in (\d+(?:\.\d+)?)s\b.*$")
+# ASCII digits only, and bounded: a count has at most 5 digits and a duration at most 4 (plus 2 decimals),
+# so a phone-shaped number in a tool's output can never pass as a count or a duration (Lucid, on #36).
+_OUTCOME = r"[0-9]{1,5} (?:failed|passed|errors?|skipped|xfailed|xpassed|deselected|warnings?)"
+FAILING = re.compile(r"[0-9]{1,5} (?:failed|errors?)\b", re.ASCII)
+_DURATION = r"[0-9]{1,4}(?:\.[0-9]{1,2})?"
+SUMMARY = re.compile(rf"^=*\s*({_OUTCOME}(?:, {_OUTCOME})*) in ({_DURATION})s\b.*$", re.ASCII)
 
 
 def test_summary(text):
@@ -52,7 +55,7 @@ def summary_line(text):
     if s is None:
         return None
     colour = R if FAILING.search(s) else G
-    return f"{colour}  ▣ tests: {s}{X}"
+    return f"{colour}  ▣ tests: {safe(s)}{X}"
 
 
 def main():

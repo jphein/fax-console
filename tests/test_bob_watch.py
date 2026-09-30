@@ -23,6 +23,11 @@ _spec.loader.exec_module(watch)
     ("2 passed in 1s\nlater\n1 failed, 1 passed in 0.5s", "1 failed, 1 passed in 0.5s"),   # the last one
     ("no tests here", None),
     ("KEY=abc123 3 failed in 1s", None),                  # a summary must start the line
+    ("=== 2025550142 passed in 0.1s ===", None),          # a phone-shaped count (Lucid, on #36)
+    ("1 passed in 2025550142.5s", None),                  # a phone-shaped duration
+    ("\uff13 failed in 1s", None),                         # fullwidth digits are not digits here
+    ("99999 passed in 9999.99s", "99999 passed in 9999.99s"),   # the widest a real summary gets
+    ("1 passed in 0.123s", None),                         # pytest prints two decimals
 ])
 def test_the_summary_is_found(text, want):
     assert watch.test_summary(text) == want
@@ -32,6 +37,15 @@ def test_only_the_rebuilt_parts_are_shown():
     """Trailing text after the duration never reaches the screen."""
     line = watch.summary_line("2 passed in 0.1s  SECRETVALUE-do-not-show")
     assert "2 passed in 0.1s" in line and "SECRETVALUE" not in line
+
+
+def test_the_key_is_masked_in_a_summary_too(monkeypatch):
+    """summary_line goes through safe(), like everything else shown (Lucid, on #36). An all-digit key of 8
+    or more digits cannot pass as a count at all, since a count has at most 5 digits."""
+    monkeypatch.setattr(watch, "KEY", "1 passed")           # 8 characters, so safe() masks it
+    assert watch.summary_line("1 passed in 1s").endswith("tests: *** in 1s" + watch.X)
+    monkeypatch.setattr(watch, "KEY", "12345678")
+    assert watch.summary_line("12345678 passed in 1s") is None
 
 
 def test_red_when_anything_failed_green_otherwise():
