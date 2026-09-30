@@ -63,6 +63,9 @@ REVIEWED_BINARIES = {
     "785d25363dbb43d15bcfd4f1d6dce82c866a9b4e": "docs/deck.pdf (week-2 facts, d663397), checked by eye 2026-09-29 by luna-consulting: "
         "7 slides, dark and light; no phone numbers, private names, hosts or IPs; unfilled slots (demo.url, video.url) show as labels only; "
         "text layer scrub-clean (36 rules)",
+    "da13ec9865d20c83ca422814ad2df874d4d0a3df": "docs/deck.pdf (week-3 text, facts at da00969), checked by eye 2026-09-30 by luna-consulting: "
+        "7 slides, dark and light; no phone numbers, private names, hosts or IPs; demo.url filled (GitHub Pages), video.url shows as a label only; "
+        "text layer scrub-clean (36 rules)",
     "3c879396e4a1beeeb2c06e3dc7085881c3df91e3": "demo/test-page.pdf, checked by eye 2026-09-29 by luna-consulting: "
         "1 page, neutral text, digits and line pairs; no personal information; text layer scrub-clean (30 rules)",
 }
