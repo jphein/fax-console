@@ -58,6 +58,40 @@ def summary_line(text):
     return f"{colour}  ▣ tests: {safe(s)}{X}"
 
 
+# A failed tool's message is never shown: it can hold anything the command printed (another key, a home
+# path; the Oracle, on #36). It is shown as fixed words: the exit code, one phrase from these lists, and a
+# test summary. A phrase from the first list counts only where the message starts (the guard's and Bob's
+# own tool errors). One from the second counts only in the command's stderr, so a test that prints
+# "Permission denied" to stdout is not misread.
+EXIT = re.compile(r"^Error from tool [a-z_]{1,40}: Exit code: ([0-9]{1,3})\b", re.ASCII)
+LEADING_WORDS = (
+    ("command refused:", "the guard refused the command"),
+    ("path refused:", "the guard refused the path"),
+    ("write refused:", "the guard refused the write"),
+    ("File does not exist", "file does not exist"),
+    ("No matches found", "no matches"),
+    ("Invalid range format", "invalid range"),
+)
+STDERR_WORDS = (
+    ("Read-only file system", "read-only file system"),
+    ("Operation not permitted", "operation not permitted"),
+    ("Permission denied", "permission denied"),
+    ("No such file or directory", "no such file or directory"),
+)
+
+
+def error_line(msg):
+    """The red line for a failed tool: fixed words only, never the message itself."""
+    text = msg if isinstance(msg, str) else json.dumps(msg)
+    code = EXIT.match(text)
+    words = next((shown for marker, shown in LEADING_WORDS if text.startswith(marker)), None)
+    if code and words is None and "Stderr:" in text:
+        stderr = text.split("Stderr:", 1)[1]
+        words = next((shown for marker, shown in STDERR_WORDS if marker in stderr), None)
+    parts = [p for p in (f"exit code {code.group(1)}" if code else None, words) if p]
+    return f"{R}  ✗ {' · '.join(parts) if parts else 'failed'} ({len(text)} characters){X}"
+
+
 def main():
     buf = ""
     for line in sys.stdin:
@@ -97,7 +131,7 @@ def render(line, buf):
         else:
             err = e.get("error")
             msg = err.get("message", err) if isinstance(err, dict) else err
-            print(f"{R}  ✗ {short(msg)}{X}")
+            print(error_line(msg))
             out_summary = summary_line(msg if isinstance(msg, str) else json.dumps(msg))
         if out_summary:
             print(out_summary)

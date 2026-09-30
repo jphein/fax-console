@@ -62,7 +62,7 @@ def test_a_tool_result_shows_its_summary_but_not_its_output(status, capsys):
     watch.render(json.dumps(e), "")
     shown = capsys.readouterr().out
     assert "tests: 1 failed, 2 passed in 0.3s" in shown
-    assert ("secret line one" not in shown) if status == "success" else True
+    assert "secret line one" not in shown                    # for an error too, since #39
 
 
 def test_a_result_without_tests_shows_only_its_length(capsys):
@@ -88,3 +88,56 @@ def test_run_5_replays_red_then_green():
             if s:
                 shown.append(s)
     assert any("failed" in s for s in shown) and shown[-1].startswith("189 passed"), shown
+
+
+LEAK = "leak-marker-7f3a"                                     # any text a command printed
+ERR = "Error from tool execute_command: Exit code: {code}  Stdout: {out}  Stderr: {err}"
+
+
+@pytest.mark.parametrize("msg, want", [
+    (ERR.format(code=1, out="ok", err="error: Unable to create './.git/index.lock': Read-only file system"),
+     "exit code 1 · read-only file system"),
+    (ERR.format(code=1, out="Permission denied", err="boom"), "exit code 1"),       # stdout is not read
+    (ERR.format(code=2, out="", err="bash: x: Permission denied"), "exit code 2 · permission denied"),
+    (ERR.format(code=12345, out="", err=""), "failed"),              # not an exit code a shell gives
+    ("write refused: the content carries identifying data (masked): <write>:1: [phone-number]",
+     "the guard refused the write"),
+    (ERR.format(code=1, out="E   path refused: outside", err=""), "exit code 1"),    # not at the start
+    ("File does not exist: ./WORKLOG.md", "file does not exist"),
+    ("something else entirely", "failed"),
+])
+def test_a_failed_tool_shows_fixed_words(msg, want):
+    line = watch.error_line(msg)
+    assert line == f"{watch.R}  ✗ {want} ({len(msg)} characters){watch.X}", line
+
+
+@pytest.mark.parametrize("where", ["out", "err"])
+def test_a_failed_tool_never_shows_its_message(where, capsys):
+    """Another key or a home path in a failed command's output must not reach the screen (the Oracle,
+    on #36)."""
+    leak = f"{LEAK} /home/someone/.ssh/id_ed25519"
+    msg = ERR.format(code=1, out=leak if where == "out" else "", err=leak if where == "err" else "")
+    watch.render(json.dumps({"type": "tool_result", "status": "error", "error": {"message": msg}}), "")
+    shown = capsys.readouterr().out
+    assert LEAK not in shown and "/home/" not in shown and "exit code 1" in shown, shown
+
+
+def test_every_recorded_failure_maps_to_fixed_words():
+    """A regression net over the published recordings: each failed tool gets words from the lists, not the
+    bare fallback, and run 5's git stash refusal reads as a read-only file system (the video's scene 4)."""
+    lines = []
+    for recording in sorted((ROOT / "docs" / "bob-runs").glob("*.jsonl")):
+        if recording.name.endswith(".guard.jsonl"):
+            continue
+        for raw in recording.read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(raw)
+            except ValueError:
+                continue
+            if e.get("type") == "tool_result" and e.get("status") != "success":
+                err = e.get("error")
+                msg = err.get("message", err) if isinstance(err, dict) else err
+                lines.append((recording.name, watch.error_line(msg)))
+    assert len(lines) >= 39, len(lines)
+    assert not [n for n, line in lines if "✗ failed (" in line], lines
+    assert "✗ exit code 1 · read-only file system" in [line for n, line in lines if n.startswith("5-")][-1]
