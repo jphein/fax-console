@@ -190,7 +190,8 @@ def _stream(tmp_path, *events):
     """A Bob Shell stream recording, one event per line, scanned with --paths."""
     import json
     path = tmp_path / "99-plant.jsonl"
-    path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+    lines = [e if isinstance(e, str) else json.dumps(e) for e in events]      # a str is a raw line
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": "/nonexistent/scrub-deny.txt"}
     return subprocess.run(["bash", str(SCRIPT), "--paths", str(path)], env=env, capture_output=True,
                           text=True, check=False, timeout=60)
@@ -218,13 +219,26 @@ def test_only_one_streamed_message_is_joined(tmp_path, events):
     assert r.returncode == 0, r.stdout
 
 
+@pytest.mark.parametrize("between", ["not json at all", "", "42", '["a", "list"]',
+                                     {"type": "message", "role": "assistant", "content": 7}])
+def test_the_run_ends_only_where_bob_watch_ends_it(tmp_path, between):
+    """bob-watch keeps its buffer across a line that is not JSON, a blank line, a scalar and a list, and
+    joins an int chunk as str(); so does the gate (the Oracle, on #41). Here the int chunk is the 7."""
+    head, tail = (j("call 303-", "86"), j("-5", "309\n")) if isinstance(between, dict) else (
+        j("call 303-", "86"), j("7-5", "309\n"))
+    r = _stream(tmp_path, _say(head), between, _say(tail))
+    assert r.returncode == 1 and "+joined: [phone-number]" in r.stdout, (between, r.stdout)
+
+
 @pytest.mark.parametrize("text, caught", [
-    (j("211-400-", "1234"), False),          # N11 area codes are never assigned: service codes
-    (j("1-911-555-", "4321"), False),
-    (j("(411) 867-", "5309"), False),
-    (j("212-400-", "1234"), True),           # the control: an ordinary area code
-    (j("210-400-", "1234"), True),
+    (j("211-400-", "0000"), False),          # the three N11 test vectors Bob narrated in run 6, exactly
+    (j("1-411-555-", "0000"), False),
+    (j("911-555-", "0000"), False),
+    (j("211-400-", "1234"), True),           # but not the rest of their area codes: no blanket N11 rule
+    (j("9112", "345678"), True),             # a real mobile shape elsewhere (the Oracle's fuzz, on #41)
+    (j("8112", "345678"), True),
+    (j("+91 9112", "345678"), True),
 ])
-def test_an_n11_area_code_is_not_a_real_number(text, caught):
+def test_only_the_listed_n11_vectors_are_allowed(text, caught):
     r = scrub(text + "\n")
     assert (r.returncode == 1 and "[phone-number]" in r.stdout) == caught, (text, r.stdout)
