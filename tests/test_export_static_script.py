@@ -244,3 +244,16 @@ def test_the_surface_scan_refuses_what_it_cannot_read(repo, blind):
     why = "the surface scan cannot read" if blind else "machine data in the export"
     assert r.returncode == 2 and why in r.stderr, (r.returncode, r.stderr)
     assert not any("--paths" in c for c in calls), calls             # the scrub of the site never ran
+
+
+def test_the_operators_global_ignore_cannot_hide_a_planted_file(repo, tmp_path):
+    """A global ignore of "*" hid a planted json.py from git status (the Oracle, on #27). The status check
+    sets core.excludesFile=/dev/null, so only the repo's own .gitignore applies."""
+    home = tmp_path / "home"
+    (home / ".config" / "git").mkdir(parents=True)
+    (home / ".config" / "git" / "ignore").write_text("*\n", encoding="utf-8")
+    operator = {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config")}
+    (repo / "json.py").write_text("planted = True\n", encoding="utf-8")
+    probe = git(repo, "status", "--porcelain", env=operator)
+    assert probe.returncode == 0 and probe.stdout == "", probe          # the control: that ignore hides it
+    refused(export(repo, **operator), "the checkout has changes or untracked files")

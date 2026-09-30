@@ -5,6 +5,9 @@ The Oracle's residuals on #25:
 - The parent is read from the remote with `git ls-remote`, never from a stale local ref. So a deleted gh-pages
   comes back as a root commit, not on top of its old history, and a remote the script cannot read refuses.
 - A caller's GIT_* cannot point it at another repository, so the pin is checked against this one.
+And its lows on #27:
+- The work directory (TMPDIR) must be outside the repository, where no sandbox can write.
+- Only the exact gh-pages ref counts, since ls-remote also matches the tail of other refs.
 
 Each test runs the real script in a throwaway repo whose origin is a local bare repository. Stubs stand in
 for export-static.sh, which writes a one-file site, and for the scrub gate. Each stub records its call.
@@ -62,9 +65,12 @@ def head(repo: Path) -> str:
 
 
 def remote_pages(repo: Path) -> str:
-    """The remote's gh-pages commit, or "" when it has none."""
-    out = git(repo, "ls-remote", "origin", "refs/heads/gh-pages").stdout.split()
-    return out[0] if out else ""
+    """The remote's gh-pages commit, or "" when it has none. The exact ref: ls-remote also matches a tail."""
+    for line in git(repo, "ls-remote", "origin", "refs/heads/gh-pages").stdout.splitlines():
+        sha, ref = line.split("\t")
+        if ref == "refs/heads/gh-pages":
+            return sha
+    return ""
 
 
 def parents(repo: Path, commit: str) -> list[str]:
@@ -129,3 +135,31 @@ def test_a_callers_git_dir_cannot_redirect_the_pin(repo, tmp_path):
     assert r.returncode == 2, (r.returncode, r.stderr)
     assert f"HEAD is {head(repo)[:7]}, not {theirs[:7]}" in r.stderr, r.stderr
     assert calls == [] and remote_pages(repo) == "", calls
+
+
+@pytest.mark.parametrize("how", ["inside", "through a symlink"])
+def test_a_tmpdir_inside_the_repository_is_refused(repo, tmp_path, how):
+    """The site sits in the work directory between the scrub and the push, so a sandbox that can write the
+    repository must not reach it (the Oracle, on #27)."""
+    inside = repo / ".bob" / "tmp"
+    inside.mkdir(parents=True)
+    tmpdir = inside
+    if how == "through a symlink":
+        tmpdir = tmp_path / "tmp-link"
+        tmpdir.symlink_to(inside)
+    r, calls = publish(repo, head(repo)[:7], TMPDIR=str(tmpdir))
+    assert r.returncode == 2 and "is inside the repository" in r.stderr, (r.returncode, r.stderr)
+    assert calls == [] and remote_pages(repo) == "", calls
+
+
+def test_a_decoy_branch_does_not_block_the_publish(repo):
+    """ls-remote matches its pattern against the tail of each ref, so a branch named a/refs/heads/gh-pages
+    matches too, and sorts first. Only the exact ref counts (the Oracle, on #27)."""
+    assert publish(repo, head(repo)[:7])[0].returncode == 0
+    first = remote_pages(repo)
+    assert git(repo, "push", "-q", "origin", "main:refs/heads/a/refs/heads/gh-pages").returncode == 0
+    lines = git(repo, "ls-remote", "origin", "refs/heads/gh-pages").stdout.splitlines()
+    assert len(lines) == 2 and lines[0].endswith("\trefs/heads/a/refs/heads/gh-pages"), lines   # the control
+    r, _calls = publish(repo, head(repo)[:7])
+    assert r.returncode == 0, r.stderr
+    assert parents(repo, remote_pages(repo)) == [first]

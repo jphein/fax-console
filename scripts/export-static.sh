@@ -19,11 +19,12 @@ out=${1:?usage: scripts/export-static.sh OUT_DIR (new or empty)}
 # - git status: when it fails, it prints nothing. When it cannot open a directory, it exits 0 with only a
 #   warning, yet Python imports a package through a directory that cannot be listed. So a failure refuses,
 #   and so does anything git says, warnings included. --untracked-files=normal overrides a
-#   status.showUntrackedFiles setting that would hide untracked files.
+#   status.showUntrackedFiles setting that would hide untracked files, and core.excludesFile=/dev/null a
+#   global ignore that would (the Oracle, on #27). The repo's own .gitignore still applies.
 # - find: it exits non-zero when it cannot search a directory, including one that git ignores. It prunes
 #   .git and .venv, which Bob cannot write: an unreadable directory there, such as a root-owned leftover
 #   from a sudo'd pip, would otherwise block every export (the Oracle, on #25).
-changes=$(git status --porcelain --untracked-files=normal 2>&1) || {
+changes=$(git -c core.excludesFile=/dev/null status --porcelain --untracked-files=normal 2>&1) || {
   echo "export-static.sh: refusing: git status failed, so the checkout cannot be shown clean:" >&2
   head -n 20 <<<"$changes" >&2
   exit 2
