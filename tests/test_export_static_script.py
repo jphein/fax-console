@@ -321,6 +321,28 @@ def test_a_tracked_symlink_or_submodule_is_refused(repo, kind):
     assert not (repo.parent / "site").exists()
 
 
+@pytest.mark.parametrize("path, why", [
+    ("faxconsole/__pycache__/export.cpython-314.pyc", "bytecode under the exported paths"),
+    ("faxconsole/__pycache__/notes.txt", "bytecode under the exported paths"),
+    ("faxcli/stray.pyc", "stray bytecode or an extension module"),     # the tree's check sees this one first
+])
+def test_tracked_bytecode_is_refused(repo, path, why):
+    """Bytecode is never exported: a committed .pyc would be archived and counted, and a runner that lost its
+    cache prefix would import it instead of the source (the Oracle, on #32). The tree's stray-bytecode check
+    skips __pycache__ (a cache there is normal and purged before the sandbox), so a tracked one is refused
+    from the commit's file list."""
+    (repo / path).parent.mkdir(parents=True, exist_ok=True)
+    (repo / path).write_bytes(b"planted")
+    assert git(repo, "add", "-f", path).returncode == 0
+    assert git(repo, "commit", "-qm", "tracked bytecode").returncode == 0
+    probe = git(repo, "status", "--porcelain")
+    assert probe.stdout == "", probe                         # the control: the checkout is clean
+    r, calls = export(repo)
+    assert r.returncode == 2 and why in r.stderr and path in r.stderr, r.stderr
+    assert not any(c.startswith("bob-sandbox.sh") for c in calls), calls     # the sandbox never ran
+    assert not (repo.parent / "site").exists()
+
+
 def test_a_detached_head_is_exported_as_detached(repo):
     """HEAD is read once (the lead's condition 3). Detached, the branch fact says so, and publish-pages.sh
     refuses to publish it."""
@@ -384,7 +406,8 @@ def test_the_sandboxed_half_exports_from_a_fresh_extraction(tmp_path):
     cwd, *rest = log.splitlines()
     assert Path(cwd).parent == tmp_path and Path(cwd).name.startswith("src."), cwd
     assert rest == ["./faxconsole/__init__.py", "./tests/fixtures/capture.json",
-                    "-S -m faxconsole.export tests/fixtures abc1234 main 2026-09-29T00:00:00Z"], rest
+                    "-S -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures abc1234 main "
+                    "2026-09-29T00:00:00Z"], rest
 
 
 @pytest.mark.parametrize("case", ["a wrong count", "a parent path", "a duplicate", "not a count"])
