@@ -215,6 +215,8 @@
   .kstrip { margin-top: calc(12 * var(--u)); }
   .kstrip .kpi { padding: calc(10 * var(--u)) calc(16 * var(--u)); }
   .kstrip .kpi .v { font-size: calc(26 * var(--u)); }
+  .kstrip .kpi .v.url { font-size: calc(19 * var(--u)); }   /* a URL, not a number */
+  .kstrip .kpi .v.url .slot { font-size: 0.8em; }
   .term.judge { font-size: calc(14 * var(--u)); line-height: 1.55; }
   /* Terminal-style panel */
   .term { background: var(--panel); border: 1px solid var(--rule); border-radius: calc(12 * var(--u)); padding: calc(18 * var(--u)) calc(20 * var(--u)); font: calc(15 * var(--u))/1.5 var(--mono); color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -278,7 +280,7 @@
     </div>
     <dl class="links">
       <dt>Repository</dt><dd><a href="https://github.com/jphein/fax-console">github.com/jphein/fax-console</a></dd>
-      <dt>Live demo</dt><dd><a href="https://fax.realm.watch">fax.realm.watch</a> <span class="muted" style="font-family:var(--sans)">(replay mode, fixtures only)</span></dd>
+      <dt>Live demo</dt><dd><span class="slot" data-slot="demo.url">demo.url</span> <span class="muted" style="font-family:var(--sans)">(replay mode, fixtures only)</span></dd>
       <dt>Video</dt><dd><span class="slot" data-slot="video.url">video.url</span></dd>
     </dl>
   </div>
@@ -299,9 +301,9 @@
       <div class="card step"><span class="n">5</span><h3>Isolate</h3><p>One Asterisk adapter, with replay mode on fixtures.</p><span class="out">adapter + replay</span></div>
     </div>
     <div class="grid g4 kpis2">
-      <div class="kpi"><span class="l">Bob factor</span><span class="v"><span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span></span><span class="d">of committed lines written by Bob</span></div>
-      <div class="kpi"><span class="l">Bob-assisted commits</span><span class="v"><span class="slot" data-slot="bob.commits">bob.commits</span></span><span class="d">of <span class="slot" data-slot="commits.in_window">commits.in_window</span>, each marked <code>Assisted-by: IBM Bob</code></span></div>
-      <div class="kpi"><span class="l">Bob runs on record</span><span class="v"><span class="slot" data-slot="bob.runs">bob.runs</span></span><span class="d">prompt, transcript and guard log for each</span></div>
+      <div class="kpi"><span class="l">Bob factor</span><span class="v"><span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span></span><span class="d">of the new code and test lines came from Bob's runs</span></div>
+      <div class="kpi"><span class="l">Bob-assisted commits</span><span class="v"><span class="slot" data-slot="bob.commits">bob.commits</span></span><span class="d">one per run that changed files, marked <code>Assisted-by: IBM Bob</code></span></div>
+      <div class="kpi"><span class="l">Bob runs on record</span><span class="v"><span class="slot" data-slot="bob.runs">bob.runs</span></span><span class="d">runs 0 to 13, each with its prompt and transcript</span></div>
       <div class="kpi"><span class="l">Rejected in review</span><span class="t"><span class="slot" data-slot="bob.reject_example">bob.reject_example</span></span></div>
     </div>
     <div class="callout"><p><strong>How Bob runs.</strong> Bob Shell, headless, inside an OS sandbox. Claude (Anthropic) drives it and checks every claim against the code; Jeffrey approves at two checkpoints.</p></div>
@@ -315,18 +317,19 @@
     <p class="tag">Tool Usage &amp; Depth of Adoption · 30% · Bob from day one</p>
     <p class="rq">The rubric asks: “Did the team actually build with IBM Bob as a core part of their workflow, not just bolt it on at the end?”</p>
     <h2 id="s3-h">Bob from day one: every run, by day</h2>
-    <div class="strip" aria-label="Days of the hackathon window, Sep 28 to Oct 18, filled on days Bob ran"><!-- strip:start --><span class="d on" title="Sep 28: 6 runs">6</span><span class="d" title="Sep 29: 0 runs"></span><span class="d" title="Sep 30: 0 runs"></span><span class="d" title="Oct 1: 0 runs"></span><span class="d" title="Oct 2: 0 runs"></span><span class="d" title="Oct 3: 0 runs"></span><span class="d" title="Oct 4: 0 runs"></span><span class="d" title="Oct 5: 0 runs"></span><span class="d" title="Oct 6: 0 runs"></span><span class="d" title="Oct 7: 0 runs"></span><span class="d" title="Oct 8: 0 runs"></span><span class="d" title="Oct 9: 0 runs"></span><span class="d" title="Oct 10: 0 runs"></span><span class="d" title="Oct 11: 0 runs"></span><span class="d" title="Oct 12: 0 runs"></span><span class="d" title="Oct 13: 0 runs"></span><span class="d" title="Oct 14: 0 runs"></span><span class="d" title="Oct 15: 0 runs"></span><span class="d" title="Oct 16: 0 runs"></span><span class="d" title="Oct 17: 0 runs"></span><span class="d" title="Oct 18: 0 runs"></span><!-- strip:end --></div>
+    <div class="strip" aria-label="Days of the hackathon window, Sep 28 to Oct 18, filled on days Bob ran"><!-- strip:start --><span class="d on" title="Sep 28: 7 runs">7</span><span class="d on" title="Sep 29: 7 runs">7</span><span class="d" title="Sep 30: 0 runs"></span><span class="d" title="Oct 1: 0 runs"></span><span class="d" title="Oct 2: 0 runs"></span><span class="d" title="Oct 3: 0 runs"></span><span class="d" title="Oct 4: 0 runs"></span><span class="d" title="Oct 5: 0 runs"></span><span class="d" title="Oct 6: 0 runs"></span><span class="d" title="Oct 7: 0 runs"></span><span class="d" title="Oct 8: 0 runs"></span><span class="d" title="Oct 9: 0 runs"></span><span class="d" title="Oct 10: 0 runs"></span><span class="d" title="Oct 11: 0 runs"></span><span class="d" title="Oct 12: 0 runs"></span><span class="d" title="Oct 13: 0 runs"></span><span class="d" title="Oct 14: 0 runs"></span><span class="d" title="Oct 15: 0 runs"></span><span class="d" title="Oct 16: 0 runs"></span><span class="d" title="Oct 17: 0 runs"></span><span class="d" title="Oct 18: 0 runs"></span><!-- strip:end --></div>
     <div class="strip-l"><span>Sep 28, hacking begins</span><span>Oct 18, deadline</span></div>
     <table class="tl">
       <thead><tr><th scope="col">Day</th><th scope="col">Runs</th><th scope="col">What Bob did</th><th scope="col">Bobcoins</th></tr></thead>
       <tbody>
 <!-- timeline:start -->
-<tr><th scope="row">Sep 28</th><td class="runs">runs 0 to 5</td><td>Sandbox smoke test · Modernization analysis · Isolation check · Sandbox check · The faxcli package · The review fixes</td><td class="coins">14.40</td></tr>
-<tr class="total"><th scope="row">So far</th><td class="runs">6 runs</td><td>on 1 of the 21 days</td><td class="coins">14.40</td></tr>
+<tr><th scope="row">Sep 28</th><td class="runs">runs 0 to 6</td><td>Sandbox smoke test · Modernization analysis · Isolation check · Sandbox check · The faxcli package · The review fixes · The faxconsole core</td><td class="coins">22.44</td></tr>
+<tr><th scope="row">Sep 29</th><td class="runs">runs 7 to 13</td><td>Run 6&#x27;s review and the VoIP.ms poller · Finish the VoIP.ms port · The page · The inbound dialplan · Review fixes · Faxcli fixes · Oracle fixes</td><td class="coins">40.68</td></tr>
+<tr class="total"><th scope="row">So far</th><td class="runs">14 runs</td><td>on 2 of the 21 days</td><td class="coins">63.12</td></tr>
 <!-- timeline:end -->
       </tbody>
     </table>
-    <p class="muted" style="margin-top:calc(16 * var(--u));font-size:calc(14 * var(--u))">Rebuilt from the ledger in <code>docs/bob-usage.md</code> by <code>docs/deck/timeline.py</code>. Each run's prompt, transcript and guard log are in <code>docs/bob-runs/</code>. In run 5 the sandbox refused Bob's <code>git stash</code>.</p>
+    <p class="muted" style="margin-top:calc(16 * var(--u));font-size:calc(14 * var(--u))">Rebuilt from the ledger in <code>docs/bob-usage.md</code> by <code>docs/deck/timeline.py</code>. Every run's prompt and transcript are in <code>docs/bob-runs/</code>, with a guard log for each run that started. In run 5 the sandbox refused Bob's <code>git stash</code>.</p>
   </div>
   <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>3 / 7</span></div>
 </section>
@@ -348,8 +351,8 @@
         </ul>
       </div>
       <div class="minis">
-        <div class="card mini"><h3>Real legacy, real stakes</h3><p>Framework-free production code. The track's own list is the work: structure, tests, an API, modernization docs.</p></div>
-        <div class="card mini"><h3>Safe by construction</h3><p>Bob works in an OS sandbox with no network. In run 5 it tried <code>git stash</code>; the read-only <code>.git</code> refused it.</p></div>
+        <div class="card mini"><h3>Bob found a real flaw</h3><p>The legacy inbound-fax design passed the caller's number to a shell. Bob caught it unaided in run 10, and review narrowed the filter to digits and <code>+</code>.</p></div>
+        <div class="card mini"><h3>Safe by construction</h3><p>Bob works in an OS sandbox that cannot reach the LAN or the PBX. In run 5 it tried <code>git stash</code>; the read-only <code>.git</code> refused it.</p></div>
         <div class="card mini"><h3>No private data reached an AI tool</h3><p>Every prompt passes the scrub gate first. Fixtures use 555-01xx numbers and example.com hosts.</p></div>
       </div>
     </div>
@@ -365,7 +368,7 @@
     <p class="rq">The rubric asks: “Does the project work as demoed? Is it technically sound given the 3-week timeframe?”</p>
     <h2 id="s5-h">Before and after, and the proof it works</h2>
     <figure class="dg">
-      <svg viewBox="0 0 1136 436" role="img" aria-label="Before: every reader in the 11,858-line console shells out on its own, to asterisk -rx and to the 288-line fax CLI, which shells out again to Asterisk and ghostscript; 11 call sites in all. After: the browser talks to a typed faxconsole API, which uses the faxcli package; one Asterisk adapter is the only way to the PBX, and replay mode points it at recorded fixtures, which is also what the tests run against.">
+      <svg viewBox="0 0 1136 436" role="img" aria-label="Before: every reader in the 11,858-line console shells out on its own, to asterisk -rx and to the 288-line fax CLI, which shells out again to Asterisk and ghostscript; 11 call sites in all. After: the browser loads the page and a typed JSON API from faxconsole, which uses the faxcli package; one Asterisk adapter is the only way to the PBX, and replay mode points it at recorded fixtures, which is also what the tests run against.">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
           <marker id="ah-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z"/></marker>
@@ -418,9 +421,10 @@
         <text x="740" y="58" text-anchor="middle" class="t-s">HTTP</text>
 
         <rect class="box" x="768" y="34" width="368" height="96" rx="10"/>
-        <text x="786" y="61" class="t-b t-m">faxconsole</text>
-        <text x="786" y="86" class="t-m t-s">GET /api/fax/status · log · version</text>
-        <text x="786" y="109" class="t-m t-s">POST /api/fax/send (test, dry-run)</text>
+        <text x="786" y="58" class="t-b t-m">faxconsole</text>
+        <text x="786" y="80" class="t-m t-s">GET / (the page) · /api/fax/* · /api/pbx/*</text>
+        <text x="786" y="99" class="t-m t-s">GET /api/voipms · /api/version</text>
+        <text x="786" y="118" class="t-m t-s">POST /api/fax/send (test, dry-run)</text>
 
         <rect class="box" x="596" y="164" width="130" height="52" rx="8"/>
         <text x="661" y="195" text-anchor="middle" class="t-b">fax CLI</text>
@@ -461,9 +465,9 @@
     </figure>
     <div class="grid g4 kstrip">
       <div class="kpi"><span class="l">Tests</span><span class="v"><span class="slot" data-slot="tests.count">tests.count</span></span><span class="d">on scrubbed fixtures</span></div>
-      <div class="kpi"><span class="l">Line coverage</span><span class="v"><span class="slot" data-slot="tests.coverage_pct">tests.coverage_pct</span></span><span class="d"><code>faxcli</code>, <code>faxconsole</code></span></div>
-      <div class="kpi"><span class="l">CI on every push</span><span class="v"><span class="slot" data-slot="ci.status">ci.status</span></span><span class="d">GitHub Actions, scrub gate</span></div>
-      <div class="kpi"><span class="l">Live demo</span><span class="v" style="font-size:calc(19 * var(--u))">fax.realm.watch</span><span class="d">replay mode, read-only</span></div>
+      <div class="kpi"><span class="l">Deliberate fixes to legacy</span><span class="v"><span class="slot" data-slot="changes.count">changes.count</span></span><span class="d">each tested, in <code>docs/changes.md</code></span></div>
+      <div class="kpi"><span class="l">CI on every push</span><span class="v"><span class="slot" data-slot="ci.status">ci.status</span></span><span class="d">Python 3.10, 3.12 and 3.14</span></div>
+      <div class="kpi"><span class="l">Live demo</span><span class="v url"><span class="slot" data-slot="demo.url">demo.url</span></span><span class="d">replay mode, read-only</span></div>
     </div>
   </div>
   <div class="foot"><span>Fax Console · IBM Bob Hackathon 2026 · Modernize What Matters</span><span>5 / 7</span></div>
@@ -478,17 +482,18 @@
     <div class="grid" style="grid-template-columns: 1fr 1.05fr;">
       <div class="card">
         <h3>What we built</h3>
-        <p>A house PBX's legacy fax tools, modernized without taking the phone line down: a typed, tested <code>faxcli</code> package, and the Fax panel as a small typed API (<code>faxconsole</code>) behind one Asterisk adapter, with a replay mode.</p>
+        <p>A house PBX's legacy fax tools, modernized without taking the phone line down: a typed, tested <code>faxcli</code> package, and the Fax panel as a small service (<code>faxconsole</code>): a typed API and a page, behind one Asterisk adapter, with a replay mode for the demo.</p>
         <h3 style="margin-top:calc(12 * var(--u))">How Bob was used</h3>
-        <p>Bob wrote the analysis, the package and its tests, and fixed most of what review found (Bob factor <span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span>), headless, inside an OS sandbox, with every run recorded.</p>
+        <p>Bob wrote the analysis, both packages, the page and their tests, and fixed most of what review found (Bob factor <span class="slot" data-slot="bob.factor_pct">bob.factor_pct</span>), headless, inside an OS sandbox, with every run recorded.</p>
         <h3 style="margin-top:calc(12 * var(--u))">Improvements made in the window</h3>
         <p>Commit #1 is the pre-hackathon baseline, scrubbed and otherwise unchanged, rebuilt once on day one. Everything after it is new. Bob wrote most of the code and tests. Claude wrote the scrub gate, CI, the sandbox and the ledger, plus a few small review fixes, each in its own commit with a test.</p>
       </div>
       <div class="term judge"><span class="p"># View it</span>
-Live demo (replay mode, read-only):  https://fax.realm.watch
+Live demo (replay mode, read-only):  <span class="slot" data-slot="demo.url">demo.url</span>
 Demo video (under 3 minutes):        <span class="slot" data-slot="video.url">video.url</span>
 The Bob ledger:                      docs/bob-usage.md
 Each Bob run, prompt to guard log:   docs/bob-runs/
+Deliberate changes from legacy:      docs/changes.md
 
 <span class="p"># Run it (no PBX needed)</span>
 $ git clone https://github.com/jphein/fax-console
@@ -515,14 +520,14 @@ $ git log --oneline --grep 'Assisted-by: IBM Bob'</div>
         <ul class="pts">
           <li><strong>Scrub before the first prompt.</strong> The baseline was cleaned of numbers, names and hosts before any AI tool saw it, and a pre-commit check keeps it that way.</li>
           <li><strong>Review Bob against the code.</strong> The analysis's most important finding, a PBX that cannot be read reported as <code>ok: true</code>, came from review, not from Bob.</li>
-          <li><span class="slot" data-slot="learn.3">learn.3</span></li>
+          <li><strong>Check that a test can fail.</strong> Review found Bob tests that stayed green on broken code in runs 5, 7, 8, 9 and 10. Review now breaks the code on purpose and checks that the tests go red.</li>
         </ul>
       </div>
       <div>
         <p class="col-h">Room to improve</p>
         <ul class="pts">
-          <li><span class="slot" data-slot="improve.1">improve.1</span></li>
-          <li><span class="slot" data-slot="improve.2">improve.2</span></li>
+          <li><strong>Size Bob's runs to the cap.</strong> Runs 11 to 13 all hit their Bobcoin cap, and twice the reviewer had to finish the work. Smaller, single-task runs would fit.</li>
+          <li><strong>The inbound path is config only.</strong> Run 10's dialplan and hook are generated and tested, but have never run on a live line.</li>
         </ul>
       </div>
       <div>
@@ -533,7 +538,7 @@ $ git log --oneline --grep 'Assisted-by: IBM Bob'</div>
         </ul>
         <div class="next-idea">
           <span class="k">Next: LTE on CBRS</span>
-          <p>A Magma core on CBRS Band 48 shared spectrum, linked over the SGs interface to a circuit-switched core, so LTE phones can send SMS and fall back to voice calls through the same PBX. Idea stage, not built.</p>
+          <p>A Magma core on CBRS Band 48 with SMS and voice fallback through the same PBX. Idea stage, not built.</p>
         </div>
       </div>
     </div>
