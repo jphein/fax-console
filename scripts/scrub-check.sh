@@ -449,7 +449,8 @@ def lines_of(kind, text):
                 continue
             piece = _stream_piece(obj)
             if piece is not None and (not run or piece[0] == run[0][0]):
-                run, first = run + [piece], first or n
+                run.append(piece)
+                first = first or n
                 last = n
                 continue
             yield from _joined(run, first, last if run else 0)

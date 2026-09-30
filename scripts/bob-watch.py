@@ -123,6 +123,18 @@ def render(line, buf):
         return buf
     if buf.strip():
         print(G + textwrap.fill(safe(buf), W) + X)
+    # The buffer is flushed, so it is empty from here on, even if this event cannot be shown: the gate
+    # ends a joined run at this object too (the Oracle, on #41). Without this, a malformed tool event
+    # between two chunks raised after the flush, main kept the old buffer, and the next chunk joined it.
+    try:
+        _show(e, t)
+    except Exception as ex:  # noqa: BLE001 -- the watcher is a view; it must never stop the run
+        print(f"{D}(an event this viewer could not show: {type(ex).__name__}){X}")
+    return ""
+
+
+def _show(e, t):
+    """Show one non-message event."""
     if t == "tool_use":
         p = e.get("parameters") or {}
         arg = p.get("command") or p.get("path") or p.get("pattern") or p
@@ -143,7 +155,6 @@ def render(line, buf):
         s = e.get("stats") or {}
         print(f"{B}■ {e.get('status')} · cost {s.get('session_costs')} · {s.get('tool_calls')} tool calls · "
               f"{round((s.get('duration_ms') or 0) / 1000)}s · task {s.get('task_id')}{X}")
-    return ""
 
 if __name__ == "__main__":
     main()

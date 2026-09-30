@@ -242,3 +242,25 @@ def test_the_run_ends_only_where_bob_watch_ends_it(tmp_path, between):
 def test_only_the_listed_n11_vectors_are_allowed(text, caught):
     r = scrub(text + "\n")
     assert (r.returncode == 1 and "[phone-number]" in r.stdout) == caught, (text, r.stdout)
+
+
+def test_a_long_stream_scans_in_linear_time(tmp_path):
+    """One message in many chunks. Copying the run list on every chunk made the join quadratic: 139 s at
+    100K chunks against 15 s with an append (measured on the workstation, #41's follow-up). A fixed budget
+    depends on the machine, so this compares two sizes: 4 times the chunks must take well under 16 times
+    as long. Measured in the sandbox: 3.9x with the append (2.2 s, 8.5 s), 16.5x with the copy."""
+    import json
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": "/nonexistent/scrub-deny.txt"}
+    chunk = json.dumps({"type": "message", "role": "assistant", "content": "ab "}) + "\n"
+
+    def seconds(n):
+        path = tmp_path / f"long-{n}.jsonl"
+        path.write_text(chunk * n, encoding="utf-8")
+        t = time.monotonic()
+        r = subprocess.run(["bash", str(SCRIPT), "--paths", str(path)], env=env, capture_output=True,
+                           text=True, check=False, timeout=300)
+        assert r.returncode == 0, r.stdout
+        return time.monotonic() - t
+
+    small, large = seconds(25_000), seconds(100_000)
+    assert large / small < 6.0, (small, large)
