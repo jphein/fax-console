@@ -77,6 +77,14 @@ if bad:
     print("export-static.sh: refusing: symlinks or submodules under the exported paths:", *bad,
           sep="\n  ", file=sys.stderr)
     sys.exit(2)
+# Bytecode is never exported: a tracked __pycache__ or .pyc/.pyo would be archived, counted and, under a
+# runner that lost its cache prefix, imported instead of the source (the Oracle, on #32).
+names = [e.split(b"\t", 1)[-1] for e in entries]
+code = [n.decode("utf-8", "replace") for n in names
+        if b"__pycache__" in n.split(b"/") or n.endswith((b".pyc", b".pyo"))]
+if code:
+    print("export-static.sh: refusing: bytecode under the exported paths:", *code, sep="\n  ", file=sys.stderr)
+    sys.exit(2)
 print(len(entries))') || { rc=$?; [ "$rc" -eq 2 ] || echo "export-static.sh: refusing: cannot list the commit's files" >&2; exit 2; }
 # The sandbox gets the commit as a tar stream on stdin, extracts it into a fresh directory of its own and
 # exports from there (scripts/export-in-sandbox.sh). PYTHONPYCACHEPREFIX: it never reads a .pyc planted in

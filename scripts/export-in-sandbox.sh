@@ -27,5 +27,8 @@ cd "$src"
 # -S: no site-packages on sys.path and no sitecustomize, so the imports are the extraction's and the
 # stdlib's by construction, not because the venv happens to hold nothing (the Oracle, on #29). -I is not
 # used: it implies -E, which ignores PYTHONPYCACHEPREFIX, and -P, which drops the cwd (the extraction)
-# from sys.path, so faxconsole would not import. faxconsole.export refuses facts without the prefix.
-exec "$py" -S -m faxconsole.export tests/fixtures "$@"
+# from sys.path, so faxconsole would not import. -X pycache_prefix pins the bytecode cache on the
+# interpreter's own command line, before any import and whatever the environment says (the Oracle, on #32):
+# a .pyc in the extraction's __pycache__ is never read. /tmp is the sandbox's own fresh tmpfs.
+# faxconsole.export also refuses facts unless the cache it mirrors to lies outside the extraction.
+exec "$py" -S -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures "$@"

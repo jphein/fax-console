@@ -142,11 +142,16 @@ def write_tar(files: dict[str, bytes], out: BinaryIO) -> None:
 
 
 def _prefix_outside(tree: str) -> bool:
-    """True when Python's bytecode cache is set and lies outside tree."""
+    """True when Python's bytecode cache is set and the place it mirrors tree to lies outside tree.
+
+    Python caches <tree>/x.py at <prefix>/<tree>/x.pyc, so the mirrored path is what must be outside, not the
+    prefix itself: a prefix of "/" is outside no tree but mirrors every tree onto itself (the Oracle, on #32).
+    """
     if not sys.pycache_prefix:
         return False
-    prefix, root = os.path.realpath(sys.pycache_prefix), os.path.realpath(tree)
-    return os.path.commonpath([prefix, root]) != root
+    root = os.path.realpath(tree)
+    mirror = os.path.realpath(os.path.join(os.path.realpath(sys.pycache_prefix), root.lstrip(os.sep)))
+    return os.path.commonpath([mirror, root]) != root
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -160,9 +165,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if facts and not _prefix_outside(os.getcwd()):
         # With facts this is the publish path (scripts/export-in-sandbox.sh). Python must read its bytecode
-        # from a cache outside the exported tree, or a .pyc planted in a __pycache__ there would run instead
-        # of the source the archive holds (the Oracle's runtime-guard low, on PR 20). The runners set
-        # PYTHONPYCACHEPREFIX=/tmp/pycache; this refuses when they stop doing so.
+        # from a cache outside the exported tree. This is a misconfiguration tripwire: by the time main()
+        # runs, the imports are done, so a planted .pyc would already have run (the Oracle, on #32). The
+        # enforcement is -X pycache_prefix on the sandboxed exec line and export-static.sh refusing a
+        # tracked __pycache__ or .pyc.
         print(f"export: refusing to publish: sys.pycache_prefix is {sys.pycache_prefix!r}, "
               "not a directory outside the exported tree (set PYTHONPYCACHEPREFIX)", file=sys.stderr)
         return 2

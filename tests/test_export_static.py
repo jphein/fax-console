@@ -176,12 +176,13 @@ def test_the_meta_tag_escapes_markup_for_a_naive_reader():
 GOOD_FACTS = ["abc1234", "main", "2026-09-29T21:54:35Z"]
 
 
-@pytest.mark.parametrize("where", ["unset", "inside the tree", "the tree itself"])
+@pytest.mark.parametrize("where", ["unset", "inside the tree", "the tree itself", "the root"])
 def test_the_export_refuses_to_publish_without_a_cache_outside_the_tree(where, tmp_path, monkeypatch, capsys):
     """With facts (the publish path), bytecode must come from a cache outside the exported tree, or a .pyc
     planted in the tree's __pycache__ would run (the Oracle's runtime-guard low, on PR 20)."""
     prefix = {"unset": None, "inside the tree": str(tmp_path / "pycache"),
-              "the tree itself": str(tmp_path)}[where]
+              "the tree itself": str(tmp_path),
+              "the root": "/"}[where]                      # mirrors the tree onto itself (the Oracle, on #32)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(ex.sys, "pycache_prefix", prefix)
     monkeypatch.setattr(ex, "export", lambda *a: pytest.fail("the export ran"))
