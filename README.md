@@ -96,7 +96,7 @@ Bob writes the modernization one step at a time: first the analysis
   exact prompt, Bob's stream-json transcript, and every allow or deny decision its hooks made.
 - **Inside an OS sandbox.** Bob Shell runs in a bubblewrap filesystem view behind a systemd BPF
   network filter (`scripts/bob-sandbox.sh`), with a fresh home directory for every run and Bob's
-  gateway pinned by a read-only policy. 50 containment probes prove it as of 623b50d, including a
+  gateway pinned by a read-only policy. 58 containment probes prove it as of 783eaa8, including a
   live control; `scripts/sandbox-probe.sh` counts them at run time.
 - **Audited by Bob's own hooks.** On top of the sandbox, a prompt gate runs every prompt through
   the scrub gate before Bob sees it, and a tool guard refuses network, PBX and privileged
@@ -127,8 +127,8 @@ Bob writes the modernization one step at a time: first the analysis
 - **`legacy/` never changes.** CI fails if it drifts from the `baseline-2026-09-28` tag.
 - **Bob works inside an OS sandbox** ([`scripts/bob-sandbox.sh`](scripts/bob-sandbox.sh)). It
   sees only this repository, has no route to the LAN, and gets a fresh home directory for every
-  run. [`scripts/sandbox-probe.sh`](scripts/sandbox-probe.sh) checks the containment: 50 probes as
-  of 623b50d, counted at run time.
+  run. [`scripts/sandbox-probe.sh`](scripts/sandbox-probe.sh) checks the containment: 58 probes as
+  of 783eaa8, counted at run time.
 
 ## Hackathon notes
 
