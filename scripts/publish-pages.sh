@@ -20,6 +20,14 @@ case "$head" in
   "$want"*) ;;
   *) echo "publish-pages.sh: refusing: HEAD is ${head:0:7}, not $want" >&2; exit 2 ;;
 esac
+# The site names the branch it was exported from, and that branch is main (the lead's condition 3 on the
+# git-archive design). A detached HEAD or another branch refuses.
+if ref=$(git symbolic-ref -q HEAD); then
+  [ "$ref" = refs/heads/main ] \
+    || { echo "publish-pages.sh: refusing: publish from main, not ${ref#refs/heads/}" >&2; exit 2; }
+else
+  echo "publish-pages.sh: refusing: HEAD is detached; publish from main" >&2; exit 2
+fi
 # The work directory holds the site between the scrub and the push, so it must be outside the repository,
 # where no sandbox can write (the Oracle, on #27). Symlinks are resolved first.
 base=$(realpath -m -- "${TMPDIR:-/var/tmp}") || { echo "publish-pages.sh: refusing: cannot resolve TMPDIR" >&2; exit 2; }

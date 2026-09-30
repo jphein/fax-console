@@ -21,10 +21,12 @@ out=${1:?usage: scripts/export-static.sh OUT_DIR (new or empty)}
 #   and so does anything git says, warnings included. --untracked-files=normal overrides a
 #   status.showUntrackedFiles setting that would hide untracked files, and core.excludesFile=/dev/null a
 #   global ignore that would (the Oracle, on #27). The repo's own .gitignore still applies.
+#   core.fsmonitor=false keeps an operator's fsmonitor hook out of it: git runs that hook during status,
+#   and trusts what it reports.
 # - find: it exits non-zero when it cannot search a directory, including one that git ignores. It prunes
 #   .git and .venv, which Bob cannot write: an unreadable directory there, such as a root-owned leftover
 #   from a sudo'd pip, would otherwise block every export (the Oracle, on #25).
-changes=$(git -c core.excludesFile=/dev/null status --porcelain --untracked-files=normal 2>&1) || {
+changes=$(git -c core.excludesFile=/dev/null -c core.fsmonitor=false status --porcelain --untracked-files=normal 2>&1) || {
   echo "export-static.sh: refusing: git status failed, so the checkout cannot be shown clean:" >&2
   head -n 20 <<<"$changes" >&2
   exit 2
@@ -38,15 +40,50 @@ stray=$(find . \( -path ./.git -o -path ./.venv \) -prune -o \( -name '*.pyc' -o
   || { echo "export-static.sh: refusing: find could not search the whole tree" >&2; exit 2; }
 [ -z "$stray" ] || { echo "export-static.sh: refusing: stray bytecode or an extension module: $stray" >&2; exit 2; }
 scripts/scrub-check.sh --shadow >/dev/null 2>&1 || { echo "export-static.sh: refusing: the shadow check failed (see scripts/test.sh)" >&2; exit 2; }
-# The version (realm-sigil) needs the commit's facts, and the sandbox has no git: read them here. "built" is
-# the commit's own time, so the same commit exports the same bytes.
-hash=$(git rev-parse --short HEAD)
-branch=$(git rev-parse --abbrev-ref HEAD)
-built=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ HEAD)
-# PYTHONPYCACHEPREFIX: the export runs the committed code, never a .pyc planted in the tree's __pycache__
-# (see scripts/test.sh; the Oracle, on PR 20).
-scripts/bob-sandbox.sh env PYTHONPYCACHEPREFIX=/tmp/pycache \
-  .venv/bin/python -m faxconsole.export tests/fixtures "$hash" "$branch" "$built" \
+# The export is of the commit, never the working tree (the design the lead approved on 9/29, with three
+# conditions). HEAD is read once, as $full, and the archive and every fact come from it, so nothing that
+# changes the tree after the checks above can reach the export. The version (realm-sigil) needs the facts,
+# and the sandbox has no git, so they are read here. "built" is the commit's own time, so the same commit
+# exports the same bytes. A detached HEAD is exported as branch "detached", and publish-pages.sh refuses one.
+if ref=$(git symbolic-ref -q HEAD); then
+  branch=${ref#refs/heads/}
+  full=$(git rev-parse --verify -q "$ref^{commit}") \
+    || { echo "export-static.sh: refusing: $ref names no commit" >&2; exit 2; }
+else
+  rc=$?
+  [ "$rc" -eq 1 ] || { echo "export-static.sh: refusing: cannot read HEAD (git symbolic-ref exit $rc)" >&2; exit 2; }
+  branch=detached
+  full=$(git rev-parse --verify -q 'HEAD^{commit}') \
+    || { echo "export-static.sh: refusing: HEAD names no commit" >&2; exit 2; }
+fi
+hash=$(git rev-parse --short "$full")
+built=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ "$full")
+# What the export imports and reads. tests/test_export_static_script.py holds this list to faxconsole's
+# import graph.
+paths=(faxconsole faxcli tests/fixtures)
+for p in "${paths[@]}"; do
+  [ "$(git cat-file -t "$full:$p" 2>/dev/null)" = tree ] \
+    || { echo "export-static.sh: refusing: $p is not a directory at $hash" >&2; exit 2; }
+done
+# Only regular files are exported: a tracked symlink or submodule under those paths refuses (condition 1).
+# The count is what the sandbox's extraction must hold (condition 2). A NUL cannot live in a shell
+# variable, so Python reads git's list.
+files=$(git ls-tree -r -z "$full" -- "${paths[@]}" | python3 -I -c '
+import sys
+entries = [e for e in sys.stdin.buffer.read().split(b"\0") if e]
+bad = [e.split(b"\t", 1)[-1].decode("utf-8", "replace") for e in entries
+       if not e.startswith((b"100644 ", b"100755 "))]
+if bad:
+    print("export-static.sh: refusing: symlinks or submodules under the exported paths:", *bad,
+          sep="\n  ", file=sys.stderr)
+    sys.exit(2)
+print(len(entries))') || { rc=$?; [ "$rc" -eq 2 ] || echo "export-static.sh: refusing: cannot list the commit's files" >&2; exit 2; }
+# The sandbox gets the commit as a tar stream on stdin, extracts it into a fresh directory of its own and
+# exports from there (scripts/export-in-sandbox.sh). PYTHONPYCACHEPREFIX: it never reads a .pyc planted in
+# a __pycache__ (see scripts/test.sh; the Oracle, on PR 20).
+git archive --format=tar "$full" -- "${paths[@]}" \
+  | scripts/bob-sandbox.sh env PYTHONPYCACHEPREFIX=/tmp/pycache \
+      bash scripts/export-in-sandbox.sh "$root/.venv/bin/python" "$files" "$hash" "$branch" "$built" \
   | python3 -I scripts/untar-site.py - "$out"
 # The replay surface: nothing derived from this machine may be in the public demo (the lead's rule). The
 # scrub gate knows the house values. This scan knows the machine's own: temp and home paths, the repo's

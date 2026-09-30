@@ -163,3 +163,15 @@ def test_a_decoy_branch_does_not_block_the_publish(repo):
     r, _calls = publish(repo, head(repo)[:7])
     assert r.returncode == 0, r.stderr
     assert parents(repo, remote_pages(repo)) == [first]
+
+
+@pytest.mark.parametrize("where", ["detached", "a branch"])
+def test_only_main_is_published(repo, where):
+    """The site names the branch it was exported from, and that branch is main (the lead's condition 3 on
+    the git-archive design)."""
+    switch = ("switch", "-q", "--detach") if where == "detached" else ("switch", "-q", "-c", "feature")
+    assert git(repo, *switch).returncode == 0
+    r, calls = publish(repo, head(repo)[:7])
+    why = "HEAD is detached" if where == "detached" else "publish from main, not feature"
+    assert r.returncode == 2 and why in r.stderr, (r.returncode, r.stderr)
+    assert calls == [] and remote_pages(repo) == "", calls
