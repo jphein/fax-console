@@ -272,9 +272,11 @@ def allowed(rule, m, kind=""):
     if rule == "phone-number":
         raw = re.sub(r"\D", "", s)
         digits = raw if len(raw) == 11 else "1" + raw
-        # 555-0100..555-0199: the block reserved for fiction; any area code.
+        # 555-0100..555-0199: the block reserved for fiction; any area code. An N11 area code (211 to
+        # 911) is a service code that NANP never assigns as an area code, so no real number has one: the
+        # N11 test vectors Bob narrated in run 6 (the joined-stream view, the Oracle on #39).
         return (digits in ALLOW_NUMBERS or raw in INT_LIMITS
-                or (digits[4:7] == "555" and digits[7:9] == "01"))
+                or (digits[4:7] == "555" and digits[7:9] == "01") or digits[2:4] == "11")
     if rule == "email":
         dom = m.group(1).lower()
         if re.fullmatch(r"[\d.]+", dom):       # a SIP URI like 2001@192.0.2.10 is not an address
@@ -401,6 +403,22 @@ def json_strings(obj):
         yield str(obj)
 
 
+def _stream_piece(obj):
+    """(role, content) for a Bob Shell stream message event, else None."""
+    if isinstance(obj, _Pairs):
+        d = dict(obj)
+        if d.get("type") == "message" and isinstance(d.get("content"), str):
+            return str(d.get("role")), d["content"]
+    return None
+
+
+def _joined(run, first):
+    """The joined text of a run of stream pieces, line by line, when it spans more than one event."""
+    if len(run) > 1:
+        for sub in "".join(c for _, c in run).splitlines():
+            yield f"{first}-{first + len(run) - 1}+joined", sub
+
+
 def lines_of(kind, text):
     """(where, line) pairs to scan. JSON escapes hide what a value really says (an escaped newline
     followed by a Python decorator reads as an e-mail address), so .json and .jsonl content is
@@ -408,14 +426,26 @@ def lines_of(kind, text):
     .json finding names the decoded string's index. Anything that does not decode is scanned raw."""
     kind = kind.lower()
     if kind.endswith(".jsonl"):
+        run, first = [], 0                               # one streamed message, as Bob sends it in pieces
         for n, raw in enumerate(text.split("\n"), 1):
             try:
-                strings = list(json_strings(json.loads(raw, object_pairs_hook=_Pairs)))
+                obj = json.loads(raw, object_pairs_hook=_Pairs)
+                strings = list(json_strings(obj))
             except ValueError:
-                strings = [raw]
+                obj, strings = None, [raw]
             for s in strings:
                 for sub in s.splitlines():
                     yield str(n), sub
+            # Bob Shell streams a message in chunks, one event per line, and bob-watch shows them joined:
+            # a number split across two chunks is on no single line (the Oracle's run-6 replay, on #39).
+            # So a run of message events from one role is also scanned as the text it joins into.
+            piece = _stream_piece(obj)
+            if piece is not None and run and piece[0] == run[0][0]:
+                run.append(piece)
+                continue
+            yield from _joined(run, first)
+            run, first = ([piece], n) if piece is not None else ([], 0)
+        yield from _joined(run, first)
         return
     if kind.endswith(".json"):
         try:

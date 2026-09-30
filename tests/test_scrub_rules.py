@@ -184,3 +184,47 @@ def test_long_lines_scan_in_linear_time(line):
     t = time.monotonic()
     scrub(line)
     assert time.monotonic() - t < 5.0               # quadratic at 200K characters takes minutes
+
+
+def _stream(tmp_path, *events):
+    """A Bob Shell stream recording, one event per line, scanned with --paths."""
+    import json
+    path = tmp_path / "99-plant.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": "/nonexistent/scrub-deny.txt"}
+    return subprocess.run(["bash", str(SCRIPT), "--paths", str(path)], env=env, capture_output=True,
+                          text=True, check=False, timeout=60)
+
+
+def _say(text, role="assistant"):
+    return {"type": "message", "role": role, "content": text}
+
+
+def test_a_number_split_across_stream_chunks_is_caught(tmp_path):
+    """Bob streams a message in pieces, one event per line, and bob-watch shows them joined: a number split
+    across two pieces is on no single line (the Oracle's run-6 replay, on #39)."""
+    r = _stream(tmp_path, _say(j("I will call 303-", "86")), _say(j("7-5", "309 later.\n")))
+    assert r.returncode == 1 and "99-plant.jsonl:1-2+joined: [phone-number]" in r.stdout, r.stdout
+
+
+@pytest.mark.parametrize("events", [
+    [_say(j("call 303-", "86")), {"type": "tool_use", "tool_name": "x", "parameters": {}},
+     _say(j("7-5", "309\n"))],                                  # a tool call ends the message
+    [_say(j("call 303-", "86")), _say(j("7-5", "309\n"), role="user")],     # another role
+    [_say(j("202-555-", "01")), _say("23 is fiction.\n")],                  # the fiction block, split
+])
+def test_only_one_streamed_message_is_joined(tmp_path, events):
+    r = _stream(tmp_path, *events)
+    assert r.returncode == 0, r.stdout
+
+
+@pytest.mark.parametrize("text, caught", [
+    (j("211-400-", "1234"), False),          # N11 area codes are never assigned: service codes
+    (j("1-911-555-", "4321"), False),
+    (j("(411) 867-", "5309"), False),
+    (j("212-400-", "1234"), True),           # the control: an ordinary area code
+    (j("210-400-", "1234"), True),
+])
+def test_an_n11_area_code_is_not_a_real_number(text, caught):
+    r = scrub(text + "\n")
+    assert (r.returncode == 1 and "[phone-number]" in r.stdout) == caught, (text, r.stdout)
