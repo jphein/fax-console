@@ -91,20 +91,24 @@ def test_run_5_replays_red_then_green():
 
 
 LEAK = "leak-marker-7f3a"                                     # any text a command printed
-ERR = "Error from tool execute_command: Exit code: {code}  Stdout: {out}  Stderr: {err}"
+def ERR(code, out="", err=""):                                  # the layout Bob writes (run 5)
+    head = f"Error from tool execute_command: Exit code: {code}"
+    return head + (f"\n\nStdout:\n{out}" if out else "") + (f"\n\nStderr:\n{err}" if err else "")
 
 
 @pytest.mark.parametrize("msg, want", [
-    (ERR.format(code=1, out="ok", err="error: Unable to create './.git/index.lock': Read-only file system"),
+    (ERR(code=1, err="error: Unable to create './.git/index.lock': Read-only file system"),
      "exit code 1 · read-only file system"),
-    (ERR.format(code=1, out="Permission denied", err="boom"), "exit code 1"),       # stdout is not read
-    (ERR.format(code=2, out="", err="bash: x: Permission denied"), "exit code 2 · permission denied"),
-    (ERR.format(code=12345, out="", err=""), "failed"),              # not an exit code a shell gives
+    (ERR(code=1, out="Permission denied", err="boom"), "exit code 1"),       # stdout is not read
+    (ERR(code=2, out="", err="bash: x: Permission denied"), "exit code 2 · permission denied"),
+    (ERR(code=12345, out="", err=""), "failed"),              # not an exit code a shell gives
     ("write refused: the content carries identifying data (masked): <write>:1: [phone-number]",
      "the guard refused the write"),
-    (ERR.format(code=1, out="E   path refused: outside", err=""), "exit code 1"),    # not at the start
+    (ERR(code=1, out="E   path refused: outside", err=""), "exit code 1"),    # not at the start
     ("File does not exist: ./WORKLOG.md", "file does not exist"),
     ("something else entirely", "failed"),
+    (ERR(1, out="Stderr: Permission denied"), "exit code 1"),     # a fake section in stdout (Lucid, on #39)
+    (ERR(1, out="x", err="Permission denied"), "exit code 1"),     # stderr after stdout is not read either
 ])
 def test_a_failed_tool_shows_fixed_words(msg, want):
     line = watch.error_line(msg)
@@ -116,7 +120,7 @@ def test_a_failed_tool_never_shows_its_message(where, capsys):
     """Another key or a home path in a failed command's output must not reach the screen (the Oracle,
     on #36)."""
     leak = f"{LEAK} /home/someone/.ssh/id_ed25519"
-    msg = ERR.format(code=1, out=leak if where == "out" else "", err=leak if where == "err" else "")
+    msg = ERR(1, out=leak if where == "out" else "", err=leak if where == "err" else "")
     watch.render(json.dumps({"type": "tool_result", "status": "error", "error": {"message": msg}}), "")
     shown = capsys.readouterr().out
     assert LEAK not in shown and "/home/" not in shown and "exit code 1" in shown, shown
