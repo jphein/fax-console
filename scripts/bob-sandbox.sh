@@ -25,10 +25,15 @@
 #
 # Everything Bob writes that later executes (tests, conftest.py) must run here or in CI.
 set -euo pipefail
-# The host-side git calls below must see the tree they run in, never an index or a repository a caller exported
-# (a private GIT_INDEX_FILE, or a hook's GIT_DIR). The purge's tracked-file check depends on it (the standing
-# Oracle, on #21). The sandbox itself starts from --clearenv in any case.
-unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+# The host-side git calls below must see the tree they run in, as it is. So every GIT_* variable a caller
+# exported is dropped before the first one:
+# - which tree and index git reads (a private GIT_INDEX_FILE, a hook's GIT_DIR);
+# - config injected through the environment (GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_PARAMETERS), which can name
+#   a command git runs;
+# - GIT_CEILING_DIRECTORIES, GIT_TRACE and the rest.
+# The purge's tracked-file check depends on it (the standing Oracle on #21; all of them, Aurora's Oracle on #24).
+# The sandbox itself starts from --clearenv in any case.
+for v in $(compgen -e); do case $v in GIT_*) unset "$v" ;; esac; done
 root=$(git rev-parse --show-toplevel)
 [ "$#" -ge 1 ] || { echo "usage: bob-sandbox.sh CMD [ARGS...]" >&2; exit 2; }
 # Bob Shell 2.0.5's own gateway and login (its built-in defaults). The gateway is pinned by Bob's own
@@ -143,11 +148,12 @@ save_logs() {
 # The EXIT trap runs under set -e too. A failing step there, say a log copy that meets a file the run made
 # unreadable, turned the run's exit code into 1 (which bob-run.sh ledgers) and skipped the rm. That left $rt on
 # disk, with the env file (and the key, when there is one) and Bob's home (the standing Oracle, on #24). So
-# no step may fail: the copy is best effort, $rt is made removable first (chmod -R never follows a link it
-# meets), and a failed removal is reported.
+# no step may fail. $rt is made readable and removable first (chmod -R never follows a link it meets), so the
+# log copy, which scripts/bob_lock_check.py audits, is complete, not silently partial (the standing Oracle, on
+# #24). The copy is then best effort, and a failed removal is reported.
 cleanup() {
-  save_logs || true
   chmod -R u+rwX -- "$rt" 2>/dev/null || true
+  save_logs || true
   rm -rf -- "$rt" || echo "bob-sandbox: warning: could not remove $rt" >&2
 }
 trap cleanup EXIT

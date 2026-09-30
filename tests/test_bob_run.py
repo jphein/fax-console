@@ -692,5 +692,28 @@ def test_a_run_that_leaves_unreadable_logs_keeps_its_exit_code_and_its_temp_dir_
         assert home.name == "home", "the fake never found Bob's home: the test would prove nothing"
         assert r.returncode == 3, r.stderr
         assert not home.parent.exists(), "the per-start temp dir, with the env file, was left on disk"
+        # and the saved copy, which bob_lock_check.py audits, is complete: the unreadable file made it across
+        saved = list((tmp_path / "trap" / "state" / "fax-console" / "bob-logs").iterdir())
+        assert len(saved) == 1 and (saved[0] / "locked" / "x").exists(), saved
     finally:
         subprocess.run(["chmod", "-R", "u+rwX", str(tmp_path / "trap")], check=False)
+
+
+def test_no_git_variable_a_caller_exported_reaches_the_host_side_git_calls(tmp_path):
+    """Every GIT_* variable is dropped before the first git call. That covers which tree and index git reads,
+    config injected through the environment (which can name a command git runs), GIT_CEILING_DIRECTORIES and
+    the rest (Aurora's Oracle, on #24). A stand-in git, first on PATH, logs any GIT_* it inherits and then
+    runs the real git; it must see none, and must have run at all."""
+    repo, env, argv = sandbox_repo(tmp_path, "gitenv")
+    fake = Path(env["PATH"].split(":")[0])
+    real, seen = shutil.which("git"), tmp_path / "gitenv" / "git-env"
+    (fake / "git").write_text(f"#!/bin/sh\nenv | grep '^GIT_' >> {seen}\n: >> {seen}\nexec {real} \"$@\"\n",
+                              encoding="utf-8")
+    (fake / "git").chmod(0o755)
+    exported = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "true",
+                "GIT_CONFIG_PARAMETERS": "'core.fsmonitor'='true'", "GIT_CEILING_DIRECTORIES": str(tmp_path),
+                "GIT_TRACE": "0", "GIT_INDEX_FILE": str(tmp_path / "gitenv" / "no-index")}
+    r = sandbox(repo, {**env, **exported})
+    assert r.returncode == 0 and argv.exists(), r.stderr
+    assert seen.exists(), "the stand-in git never ran: the test would prove nothing"
+    assert seen.read_text(encoding="utf-8").strip() == "", seen.read_text(encoding="utf-8")
