@@ -140,7 +140,17 @@ save_logs() {
   fi
   return 0
 }
-trap 'save_logs; rm -rf "$rt"' EXIT
+# The EXIT trap runs under set -e too. A failing step there, say a log copy that meets a file the run made
+# unreadable, turned the run's exit code into 1 (which bob-run.sh ledgers) and skipped the rm. That left $rt on
+# disk, with the env file (and the key, when there is one) and Bob's home (the standing Oracle, on #24). So
+# no step may fail: the copy is best effort, $rt is made removable first (chmod -R never follows a link it
+# meets), and a failed removal is reported.
+cleanup() {
+  save_logs || true
+  chmod -R u+rwX -- "$rt" 2>/dev/null || true
+  rm -rf -- "$rt" || echo "bob-sandbox: warning: could not remove $rt" >&2
+}
+trap cleanup EXIT
 mkdir -p "$bob_home/.bob/settings"
 printf '{"licenseConsent": true, "bobShell": {"autoUpdate": false}}\n' > "$bob_home/.bob/settings/settings.json"
 printf '{"version": 1, "folders": {"%s": "TRUST_FOLDER"}}\n' "$root" > "$bob_home/.bob/trustedFolders.json"

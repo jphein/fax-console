@@ -669,3 +669,28 @@ def test_a_refused_purge_after_the_run_only_warns_and_the_next_start_is_refused(
     finally:
         if locked.exists():
             locked.chmod(0o755)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 directory anyway")
+def test_a_run_that_leaves_unreadable_logs_keeps_its_exit_code_and_its_temp_dir_goes(tmp_path):
+    """The EXIT trap copies Bob's logs and removes the per-start temp dir, which holds the env file (and the
+    key, when there is one). Under set -e, a failing step there turned the run's exit code into 1 and left
+    the dir on disk, and a run can cause that with a file it leaves in its own home (the standing Oracle,
+    on #24). The fake sudo stands in for the run: it finds Bob's home in bwrap's argv, leaves a mode-000
+    directory in its logs, and exits 3."""
+    repo, env, argv = sandbox_repo(tmp_path, "trap")
+    fake = Path(env["PATH"].split(":")[0])
+    seen = tmp_path / "trap" / "home-seen"
+    (fake / "sudo").write_text(
+        "#!/bin/sh\nprev=\nfor a in \"$@\"; do [ \"$a\" = /home/bob ] && h=$prev; prev=$a; done\n"
+        f"printf '%s\\n' \"$h\" > {seen}\n"
+        "lk=\"$h/.bob/logs/locked\"; mkdir -p \"$lk\" && : > \"$lk/x\" && chmod 000 \"$lk\"\n"
+        "exit 3\n", encoding="utf-8")
+    try:
+        r = sandbox(repo, env)
+        home = Path(seen.read_text(encoding="utf-8").strip())
+        assert home.name == "home", "the fake never found Bob's home: the test would prove nothing"
+        assert r.returncode == 3, r.stderr
+        assert not home.parent.exists(), "the per-start temp dir, with the env file, was left on disk"
+    finally:
+        subprocess.run(["chmod", "-R", "u+rwX", str(tmp_path / "trap")], check=False)
