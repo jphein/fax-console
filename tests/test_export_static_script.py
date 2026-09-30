@@ -321,10 +321,14 @@ def test_a_tracked_symlink_or_submodule_is_refused(repo, kind):
     assert not (repo.parent / "site").exists()
 
 
+COMMIT_LIST = "bytecode or an extension module under the exported paths"
+
+
 @pytest.mark.parametrize("path, why", [
-    ("faxconsole/__pycache__/export.cpython-314.pyc", "bytecode under the exported paths"),
-    ("faxconsole/__pycache__/notes.txt", "bytecode under the exported paths"),
+    ("faxconsole/__pycache__/export.cpython-314.pyc", COMMIT_LIST),
+    ("faxconsole/__pycache__/notes.txt", COMMIT_LIST),
     ("faxcli/stray.pyc", "stray bytecode or an extension module"),     # the tree's check sees this one first
+    ("faxcli/_speed.cpython-314-x86_64-linux-gnu.so", "stray bytecode or an extension module"),
 ])
 def test_tracked_bytecode_is_refused(repo, path, why):
     """Bytecode is never exported: a committed .pyc would be archived and counted, and a runner that lost its
@@ -406,7 +410,7 @@ def test_the_sandboxed_half_exports_from_a_fresh_extraction(tmp_path):
     cwd, *rest = log.splitlines()
     assert Path(cwd).parent == tmp_path and Path(cwd).name.startswith("src."), cwd
     assert rest == ["./faxconsole/__init__.py", "./tests/fixtures/capture.json",
-                    "-S -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures abc1234 main "
+                    "-S -E -X pycache_prefix=/tmp/pycache -m faxconsole.export tests/fixtures abc1234 main "
                     "2026-09-29T00:00:00Z"], rest
 
 
