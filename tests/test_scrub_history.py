@@ -13,8 +13,10 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import resource
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -702,3 +704,51 @@ def test_the_default_scan_reads_a_links_text_which_is_what_git_publishes(repo):
     r = scrub(repo)
     assert r.returncode == 1 and "lnk:1: [phone-number]" in r.stdout, r.stdout + r.stderr
     assert "loop" not in r.stdout, r.stdout
+
+
+# Runs the gate's own Python program with a stand-in os.open that swaps the target, at the moment it is
+# opened, for a link to DEST. That is exactly inside the window between add()'s check and its open.
+SWAP_DRIVER = r'''
+import os, sys
+src = open(sys.argv[1], encoding="utf-8").read()
+prog = src.split("PROG=$(cat <<'PY'\n", 1)[1].split("\nPY\n)", 1)[0]
+target, dest = sys.argv[2], sys.argv[3]
+real_open, swapped = os.open, []
+def swapping_open(p, flags, *args, **kw):
+    if os.fspath(p) == target and not swapped:
+        swapped.append(1)
+        os.unlink(target)
+        os.symlink(dest, target)
+    return real_open(p, flags, *args, **kw)
+os.open = swapping_open
+sys.argv = ["-c", "--paths", target]
+exec(compile(prog, "scrub-check", "exec"), {"__name__": "__main__"})
+'''
+
+
+def _cap_memory():
+    resource.setrlimit(resource.RLIMIT_AS, (1 << 30, 1 << 30))
+
+
+@pytest.mark.parametrize("dest", ["/dev/zero", "fifo"])
+def test_a_file_swapped_between_the_check_and_the_open_is_never_read(repo, tmp_path, dest):
+    """add() checks a path's type, then opens it. A path swapped in that window, for a link to /dev/zero
+    (which would read without end) or for a FIFO, must not be read. The opened descriptor is checked again
+    and has to be the same regular file (Lucid, on #30; issue #28 item 4). The swap runs in a subprocess with
+    a 1 GiB memory cap and a timeout, so a regression fails this test and not the whole run."""
+    target = repo / "a.txt"
+    target.write_text("clean\n", encoding="utf-8")
+    if dest == "fifo":
+        dest = str(tmp_path / "fifo")
+        os.mkfifo(dest)
+    driver = tmp_path / "swap_driver.py"
+    driver.write_text(SWAP_DRIVER, encoding="utf-8")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": str(repo / "no-such-deny.txt")}
+    try:
+        r = subprocess.run([sys.executable, "-I", str(driver), str(SCRIPT), str(target), dest], cwd=repo,
+                           env=env, capture_output=True, text=True, timeout=60, preexec_fn=_cap_memory,
+                           check=False)
+    except subprocess.TimeoutExpired:
+        pytest.fail("the scan blocked on the swapped file")
+    assert target.is_symlink(), "the swap never happened: the test would prove nothing"
+    assert r.returncode == 1 and f"{target}: [unreadable]" in r.stdout, r.stdout + r.stderr[-400:]

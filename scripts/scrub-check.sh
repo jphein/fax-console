@@ -702,7 +702,10 @@ def main(argv):
     # failed closed too, but did not say what or where) (Aurora's Oracle and the standing Oracle, after #21).
     # Only a regular file is opened. A directory (a gitlink), a FIFO, a socket or a device has no content to
     # scan, and opening a FIFO would block the scan, and a hook with it, for ever (the standing Oracle, on #30).
-    # O_NONBLOCK covers a file swapped for one between the check and the open.
+    # The check comes first, so nothing but a regular file is opened in the normal case. The open is O_NONBLOCK,
+    # and the descriptor is checked again. A path swapped between the check and the open (for a link to
+    # /dev/zero, which would read without end, or for a FIFO) is read only if it is still the regular file that
+    # was checked, the same device and inode; otherwise it is a finding (Lucid, on #30; issue #28 item 4).
     # link_text: git publishes a symlink as its target text, not as what it points at, so the default scan reads
     # that text. A dangling or looping link then scans like any other. --paths reads what a link points at.
     # missing_ok: a path that is not there has no content, and neither does a path beneath a component that is no
@@ -721,6 +724,10 @@ def main(argv):
                     hits.append(f"{path}: [unreadable]")
                 return
             with open(path, "rb", opener=lambda p, flags: os.open(p, flags | os.O_NONBLOCK)) as fh:
+                now = os.fstat(fh.fileno())
+                if not stat.S_ISREG(now.st_mode) or (now.st_dev, now.st_ino) != (st.st_dev, st.st_ino):
+                    hits.append(f"{path}: [unreadable]")
+                    return
                 data = fh.read()
         except OSError as err:
             if not (missing_ok and isinstance(err, (FileNotFoundError, NotADirectoryError))):
