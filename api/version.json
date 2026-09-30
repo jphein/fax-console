@@ -1,13 +1,13 @@
 {
  "branch": "main",
- "built": "2026-09-29T22:22:39Z",
- "commit_url": "https://github.com/jphein/fax-console/commit/210493c",
+ "built": "2026-09-30T01:45:52Z",
+ "commit_url": "https://github.com/jphein/fax-console/commit/da00969",
  "description": "Fax panel back end \u2014 send, receive, and status",
  "dirty": false,
- "hash": "210493c",
+ "hash": "da00969",
  "name": "fax.realm.watch",
  "realm": "signal",
  "replay": true,
  "repo": "https://github.com/jphein/fax-console",
- "version": "Keyed Beacon \u00b7 210493c"
+ "version": "Latched Modem \u00b7 da00969"
 }
