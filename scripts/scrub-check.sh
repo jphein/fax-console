@@ -40,7 +40,7 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # The program travels in a variable, not on stdin: stdin belongs to --stdin callers.
 PROG=$(cat <<'PY'
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, stat, subprocess, sys
 
 # Numbers that are PUBLIC test services, used on purpose (documented in BASELINE.md).
 ALLOW_NUMBERS = {
@@ -700,14 +700,30 @@ def main(argv):
 
     # What the gate cannot read it cannot clear. A file it cannot open is a finding, not a traceback (a traceback
     # failed closed too, but did not say what or where) (Aurora's Oracle and the standing Oracle, after #21).
-    # missing_ok: a path that is not there, or is a directory, has no content to read. That's a tracked file
-    # deleted in the tree, a tracked link to a directory, or an entry that vanished mid-walk. A path someone
-    # named on purpose is still a finding when it is missing.
-    def add(path, missing_ok=False):
+    # Only a regular file is opened. A directory (a gitlink), a FIFO, a socket or a device has no content to
+    # scan, and opening a FIFO would block the scan, and a hook with it, for ever (the standing Oracle, on #30).
+    # O_NONBLOCK covers a file swapped for one between the check and the open.
+    # link_text: git publishes a symlink as its target text, not as what it points at, so the default scan reads
+    # that text. A dangling or looping link then scans like any other. --paths reads what a link points at.
+    # missing_ok: a path that is not there has no content, and neither does a path beneath a component that is no
+    # longer a directory. That covers a tracked file deleted in the tree, or an entry that vanished mid-walk, and
+    # such a path is skipped. So is a non-regular one. A path someone named on purpose is a finding in both cases.
+    def add(path, missing_ok=False, link_text=False):
         try:
-            data = open(path, "rb").read()
+            st = os.lstat(path)
+            if stat.S_ISLNK(st.st_mode):
+                if link_text:
+                    items.append((path, path, os.fsencode(os.readlink(path))))
+                    return
+                st = os.stat(path)
+            if not stat.S_ISREG(st.st_mode):
+                if not missing_ok:
+                    hits.append(f"{path}: [unreadable]")
+                return
+            with open(path, "rb", opener=lambda p, flags: os.open(p, flags | os.O_NONBLOCK)) as fh:
+                data = fh.read()
         except OSError as err:
-            if not (missing_ok and isinstance(err, (FileNotFoundError, IsADirectoryError))):
+            if not (missing_ok and isinstance(err, (FileNotFoundError, NotADirectoryError))):
                 hits.append(f"{path}: [unreadable]")
             return
         items.append((path, path, data))
@@ -718,7 +734,7 @@ def main(argv):
         names = [p for p in git("ls-files", "-z", "--cached", "--others", "--exclude-standard").decode().split("\0")
                  if p]
         for p in names:
-            add(p, missing_ok=True)
+            add(p, missing_ok=True, link_text=True)
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
         on_disk, unlistable = disk_shadow_paths()
         hits += unlistable + shadow_findings(sorted(set(names) | set(on_disk)))

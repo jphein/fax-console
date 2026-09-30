@@ -662,3 +662,43 @@ def test_paths_mode_flags_a_named_file_that_is_missing(repo):
     prompt path would otherwise scan as clean)."""
     r = scrub(repo, "--paths", str(repo / "no-such-prompt.md"))
     assert r.returncode == 1 and "no-such-prompt.md: [unreadable]" in r.stdout, r.stdout + r.stderr
+
+
+def test_a_fifo_where_a_tracked_file_was_never_blocks_the_scan(repo):
+    """A tracked path replaced by a FIFO has no content to scan, and opening it would block the scan, and a
+    hook with it, for ever (the standing Oracle, on #30). The default scan skips it; --paths named on it
+    reports it. Both must finish."""
+    commit(repo, "pipe.txt", "x\n", "a file that becomes a FIFO")
+    (repo / "pipe.txt").unlink()
+    os.mkfifo(repo / "pipe.txt")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": str(repo / "no-such-deny.txt")}
+    try:
+        r = subprocess.run(["bash", str(SCRIPT)], cwd=repo, env=env, capture_output=True, text=True,
+                           timeout=60, check=False)
+        named = subprocess.run(["bash", str(SCRIPT), "--paths", str(repo / "pipe.txt")], cwd=repo, env=env,
+                               capture_output=True, text=True, timeout=60, check=False)
+    except subprocess.TimeoutExpired:
+        pytest.fail("the scan blocked on a FIFO")
+    assert r.returncode == 0 and "pipe.txt" not in r.stdout, r.stdout + r.stderr
+    assert named.returncode == 1 and "pipe.txt: [unreadable]" in named.stdout, named.stdout + named.stderr
+
+
+def test_a_tracked_file_whose_directory_became_a_file_is_not_a_finding(repo):
+    """git still lists a/b.txt after a/ was replaced by a regular file. The path fails with ENOTDIR, and the
+    file is simply absent, so it is not a finding (the standing Oracle, on #30)."""
+    commit(repo, "a/b.txt", "x\n", "a file in a/")
+    shutil.rmtree(repo / "a")
+    (repo / "a").write_text("now a file\n", encoding="utf-8")
+    r = scrub(repo)
+    assert r.returncode == 0 and "[unreadable]" not in r.stdout, r.stdout + r.stderr
+
+
+def test_the_default_scan_reads_a_links_text_which_is_what_git_publishes(repo):
+    """git publishes a symlink as its target text, not as what it points at, so the default scan reads that
+    text. A number in a dangling link is found, and a link that loops is no false finding (the standing
+    Oracle, on #30)."""
+    os.symlink("call " + PHONE, repo / "lnk")
+    os.symlink("loop", repo / "loop")
+    r = scrub(repo)
+    assert r.returncode == 1 and "lnk:1: [phone-number]" in r.stdout, r.stdout + r.stderr
+    assert "loop" not in r.stdout, r.stdout
