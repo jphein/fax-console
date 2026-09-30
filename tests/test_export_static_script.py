@@ -347,6 +347,26 @@ def test_tracked_bytecode_is_refused(repo, path, why):
     assert not (repo.parent / "site").exists()
 
 
+@pytest.mark.parametrize("path", ["faxcli/_speed.cpython-314-x86_64-linux-gnu.so", "faxcli/stray.pyc"])
+def test_tracked_bytecode_hidden_from_the_tree_is_refused_from_the_commit(repo, path):
+    """A file tracked with --skip-worktree and deleted from disk leaves the status clean and is invisible to
+    the tree's stray check, but git archive still exports it. Only the commit's file list refuses it (the
+    Oracle, on #34: main 8b038ad exported such a .so)."""
+    (repo / path).parent.mkdir(parents=True, exist_ok=True)
+    (repo / path).write_bytes(b"planted")
+    assert git(repo, "add", "-f", path).returncode == 0
+    assert git(repo, "commit", "-qm", "tracked bytecode").returncode == 0
+    assert git(repo, "update-index", "--skip-worktree", path).returncode == 0
+    (repo / path).unlink()
+    probe = git(repo, "status", "--porcelain")
+    assert probe.stdout == "", probe                         # the control: the checkout reads as clean
+    assert path in git(repo, "ls-tree", "-r", "--name-only", "HEAD").stdout   # and the commit holds it
+    r, calls = export(repo)
+    assert r.returncode == 2 and COMMIT_LIST in r.stderr and path in r.stderr, r.stderr
+    assert not any(c.startswith("bob-sandbox.sh") for c in calls), calls     # the sandbox never ran
+    assert not (repo.parent / "site").exists()
+
+
 def test_a_detached_head_is_exported_as_detached(repo):
     """HEAD is read once (the lead's condition 3). Detached, the branch fact says so, and publish-pages.sh
     refuses to publish it."""
