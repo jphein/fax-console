@@ -8,6 +8,8 @@ The Oracle's residuals on #25:
 And its lows on #27:
 - The work directory (TMPDIR) must be outside the repository, where no sandbox can write.
 - Only the exact gh-pages ref counts, since ls-remote also matches the tail of other refs.
+And Lucid's and the Oracle's on #29: the export reads HEAD again, so its version.json must name what the go
+pinned, both the commit and main.
 
 Each test runs the real script in a throwaway repo whose origin is a local bare repository. Stubs stand in
 for export-static.sh, which writes a one-file site, and for the scrub gate. Each stub records its call.
@@ -23,7 +25,17 @@ ROOT = Path(__file__).resolve().parents[1]
 RECORD = 'printf "%s %s\\n" "${0##*/}" "$*" >> "$PUBLISH_TEST_CALLS"\n'
 STUBS = {
     "scrub-check.sh": "#!/bin/sh\n" + RECORD,
-    "export-static.sh": "#!/bin/sh\n" + RECORD + 'mkdir "$1" && printf "ok\\n" > "$1/index.html"\n',
+    # The export reads HEAD itself, and names its commit and branch in version.json. After publish-pages.sh
+    # has pinned HEAD, PUBLISH_TEST_MOVE_HEAD moves it to a new commit, and PUBLISH_TEST_SWITCH switches it
+    # (git switch $PUBLISH_TEST_SWITCH) at the same commit. PUBLISH_TEST_HASH overrides the hash it writes.
+    "export-static.sh": ("#!/bin/sh\n" + RECORD
+                         + '[ -z "${PUBLISH_TEST_MOVE_HEAD:-}" ] || git commit -q --allow-empty -m moved\n'
+                         + '[ -z "${PUBLISH_TEST_SWITCH:-}" ] || git switch -q $PUBLISH_TEST_SWITCH\n'
+                         + 'h=${PUBLISH_TEST_HASH-$(git rev-parse --short HEAD)}\n'
+                         + 'b=$(git symbolic-ref -q --short HEAD || echo detached)\n'
+                         + 'mkdir "$1" && printf "ok\\n" > "$1/index.html"'
+                         + ' && printf \'{"hash": "%s", "branch": "%s"}\\n\' "$h" "$b"'
+                         + ' > "$1/version.json"\n'),
 }
 IDENTITY = (("config", "user.name", "t"), ("config", "user.email", "t@example.com"))
 
@@ -163,3 +175,44 @@ def test_a_decoy_branch_does_not_block_the_publish(repo):
     r, _calls = publish(repo, head(repo)[:7])
     assert r.returncode == 0, r.stderr
     assert parents(repo, remote_pages(repo)) == [first]
+
+
+@pytest.mark.parametrize("where", ["detached", "a branch"])
+def test_only_main_is_published(repo, where):
+    """The site names the branch it was exported from, and that branch is main (the lead's condition 3 on
+    the git-archive design)."""
+    switch = ("switch", "-q", "--detach") if where == "detached" else ("switch", "-q", "-c", "feature")
+    assert git(repo, *switch).returncode == 0
+    r, calls = publish(repo, head(repo)[:7])
+    why = "HEAD is detached" if where == "detached" else "publish from main, not feature"
+    assert r.returncode == 2 and why in r.stderr, (r.returncode, r.stderr)
+    assert calls == [] and remote_pages(repo) == "", calls
+
+
+def test_a_head_that_moves_during_the_export_is_refused(repo):
+    """publish-pages.sh pins HEAD, then the export reads HEAD again. If HEAD moved in between, the export
+    names another commit, and the publish refuses rather than put it under the pinned name (Lucid, on #29)."""
+    pinned = head(repo)
+    r, calls = publish(repo, pinned[:7], PUBLISH_TEST_MOVE_HEAD="1")
+    assert head(repo) != pinned                                    # the control: HEAD did move
+    assert r.returncode == 2 and "HEAD moved" in r.stderr, (r.returncode, r.stderr)
+    assert not any("--history" in c for c in calls) and remote_pages(repo) == "", calls
+
+
+@pytest.mark.parametrize("bad", ["", "abc"])
+def test_an_export_that_names_no_commit_is_refused(repo, bad):
+    """The export's hash must be a sha: an empty prefix would match any HEAD."""
+    r, _calls = publish(repo, head(repo)[:7], PUBLISH_TEST_HASH=bad)
+    assert r.returncode == 2 and "the export's hash" in r.stderr, (r.returncode, r.stderr)
+    assert remote_pages(repo) == ""
+
+
+@pytest.mark.parametrize("switch", ["--detach", "-c other"])
+def test_a_head_that_changes_branch_during_the_export_is_refused(repo, switch):
+    """The same commit, detached or on another branch. The export would label the pinned content with the
+    wrong branch (the Oracle, on #29)."""
+    pinned = head(repo)
+    r, calls = publish(repo, pinned[:7], PUBLISH_TEST_SWITCH=switch)
+    assert head(repo) == pinned                                    # the control: the commit did not change
+    assert r.returncode == 2 and "not main; HEAD moved" in r.stderr, (r.returncode, r.stderr)
+    assert not any("--history" in c for c in calls) and remote_pages(repo) == "", calls

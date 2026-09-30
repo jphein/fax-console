@@ -5,13 +5,14 @@ The public demo is a **static replay on GitHub Pages**, at https://jphein.github
 ## The static demo (GitHub Pages)
 
 - `scripts/export-static.sh OUT_DIR` builds it from a clean commit:
-  - `faxconsole.export` renders every GET route in replay mode inside the OS sandbox, and hands the files over as a tar stream on stdout, so they never land in a directory Bob can write.
+  - It exports the commit, never the working tree. HEAD is read once, and `git archive` of the commit's `faxconsole/`, `faxcli/` and `tests/fixtures/` goes to the OS sandbox on stdin, so nothing that changes the tree after the checks can reach the export. A tracked symlink or submodule there refuses.
+  - Inside the sandbox, `scripts/export-in-sandbox.sh` extracts the archive into a fresh directory (no `..` members, nothing overwritten, owners and modes not kept), checks that it holds exactly the commit's file count, and runs `faxconsole.export` there. That renders every GET route in replay mode and hands the files over as a tar stream on stdout, so they never land in a directory Bob can write.
   - `scripts/untar-site.py` extracts regular files only, with plain names, into a new directory.
   - The scrub gate then checks every file against the private deny-list.
 - The page reads `api/<route>.json` relative to itself, because Pages serves it under `/fax-console/`. The send form is disabled, with a note to run it locally.
 - Pages sends no headers, so the page carries its Content-Security-Policy in a meta tag. A meta tag cannot carry `frame-ancestors`, so that one directive is left out.
 - The version drops the fields that only a running server has (`started`, `uptime`, `runtime`, `os`, `host`, `pid`), per realm-sigil's static contract.
-- `scripts/publish-pages.sh SHA` publishes it, pinned to the commit a review named (SHA is 7 to 40 lowercase hex). It exports afresh, commits the files to the `gh-pages` branch with git plumbing (the checkout never changes), on top of the remote's `gh-pages` as it is now, scrubs that history against the private deny-list, and pushes. CI ignores `gh-pages`. Pages serves the branch's root, and a `.nojekyll` file keeps the files as they are.
+- `scripts/publish-pages.sh SHA` publishes it, pinned to the commit a review named (SHA is 7 to 40 lowercase hex), and only from `main`. It exports afresh, commits the files to the `gh-pages` branch with git plumbing (the checkout never changes), on top of the remote's `gh-pages` as it is now, scrubs that history against the private deny-list, and pushes. CI ignores `gh-pages`. Pages serves the branch's root, and a `.nojekyll` file keeps the files as they are.
 - There is no custom domain. realm.watch names are LAN-only by design, so the demo stays on the default Pages URL.
 
 ## Run
