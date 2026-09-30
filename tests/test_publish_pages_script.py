@@ -8,6 +8,8 @@ The Oracle's residuals on #25:
 And its lows on #27:
 - The work directory (TMPDIR) must be outside the repository, where no sandbox can write.
 - Only the exact gh-pages ref counts, since ls-remote also matches the tail of other refs.
+And Lucid's on #29: the export reads HEAD again, so the commit its version.json names must be the one the
+go pinned.
 
 Each test runs the real script in a throwaway repo whose origin is a local bare repository. Stubs stand in
 for export-static.sh, which writes a one-file site, and for the scrub gate. Each stub records its call.
@@ -23,7 +25,13 @@ ROOT = Path(__file__).resolve().parents[1]
 RECORD = 'printf "%s %s\\n" "${0##*/}" "$*" >> "$PUBLISH_TEST_CALLS"\n'
 STUBS = {
     "scrub-check.sh": "#!/bin/sh\n" + RECORD,
-    "export-static.sh": "#!/bin/sh\n" + RECORD + 'mkdir "$1" && printf "ok\\n" > "$1/index.html"\n',
+    # The export reads HEAD itself and names it in version.json. With PUBLISH_TEST_MOVE_HEAD set, HEAD moves
+    # first, after publish-pages.sh has pinned it; PUBLISH_TEST_HASH overrides the hash it writes.
+    "export-static.sh": ("#!/bin/sh\n" + RECORD
+                         + '[ -z "${PUBLISH_TEST_MOVE_HEAD:-}" ] || git commit -q --allow-empty -m moved\n'
+                         + 'h=${PUBLISH_TEST_HASH-$(git rev-parse --short HEAD)}\n'
+                         + 'mkdir "$1" && printf "ok\\n" > "$1/index.html"'
+                         + ' && printf \'{"hash": "%s"}\\n\' "$h" > "$1/version.json"\n'),
 }
 IDENTITY = (("config", "user.name", "t"), ("config", "user.email", "t@example.com"))
 
@@ -175,3 +183,21 @@ def test_only_main_is_published(repo, where):
     why = "HEAD is detached" if where == "detached" else "publish from main, not feature"
     assert r.returncode == 2 and why in r.stderr, (r.returncode, r.stderr)
     assert calls == [] and remote_pages(repo) == "", calls
+
+
+def test_a_head_that_moves_during_the_export_is_refused(repo):
+    """publish-pages.sh pins HEAD, then the export reads HEAD again. If HEAD moved in between, the export
+    names another commit, and the publish refuses rather than put it under the pinned name (Lucid, on #29)."""
+    pinned = head(repo)
+    r, calls = publish(repo, pinned[:7], PUBLISH_TEST_MOVE_HEAD="1")
+    assert head(repo) != pinned                                    # the control: HEAD did move
+    assert r.returncode == 2 and "HEAD moved" in r.stderr, (r.returncode, r.stderr)
+    assert not any("--history" in c for c in calls) and remote_pages(repo) == "", calls
+
+
+@pytest.mark.parametrize("bad", ["", "abc"])
+def test_an_export_that_names_no_commit_is_refused(repo, bad):
+    """The export's hash must be a sha: an empty prefix would match any HEAD."""
+    r, _calls = publish(repo, head(repo)[:7], PUBLISH_TEST_HASH=bad)
+    assert r.returncode == 2 and "the export's hash" in r.stderr, (r.returncode, r.stderr)
+    assert remote_pages(repo) == ""

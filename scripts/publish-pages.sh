@@ -38,6 +38,17 @@ esac
 work=$(mktemp -d "$base/fax-pages.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 scripts/export-static.sh "$work/site"
+# The export reads HEAD again, as $full, so it must name the commit pinned above: a HEAD that moved in
+# between would otherwise publish another commit's export under this one's name (Lucid, on #29). The hash
+# must be one, since an empty prefix would match any HEAD.
+exported=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["hash"])' \
+  "$work/site/version.json") || { echo "publish-pages.sh: refusing: cannot read the export's version.json" >&2; exit 2; }
+[[ $exported =~ ^[0-9a-f]{7,40}$ ]] \
+  || { echo "publish-pages.sh: refusing: the export's hash '$exported' is not a commit sha" >&2; exit 2; }
+case "$head" in
+  "$exported"*) ;;
+  *) echo "publish-pages.sh: refusing: the export is of $exported, not the pinned ${head:0:7}; HEAD moved" >&2; exit 2 ;;
+esac
 export GIT_INDEX_FILE="$work/index"
 python3 -I -c 'import os, sys
 top = sys.argv[1]
