@@ -64,6 +64,9 @@ def summary_line(text):
 # own tool errors). One from the second counts only in the command's stderr, so a test that prints
 # "Permission denied" to stdout is not misread.
 EXIT = re.compile(r"^Error from tool [a-z_]{1,40}: Exit code: ([0-9]{1,3})\b", re.ASCII)
+# Bob writes "Exit code: N", a blank line, then "Stdout:" or "Stderr:". Stderr is read only when it is the
+# first section, so a stdout that prints "Stderr: Permission denied" is not misread (Lucid, on #39).
+STDERR_FIRST = re.compile(r"^Error from tool [a-z_]{1,40}: Exit code: [0-9]{1,3}\n+Stderr:", re.ASCII)
 LEADING_WORDS = (
     ("command refused:", "the guard refused the command"),
     ("path refused:", "the guard refused the path"),
@@ -85,8 +88,9 @@ def error_line(msg):
     text = msg if isinstance(msg, str) else json.dumps(msg)
     code = EXIT.match(text)
     words = next((shown for marker, shown in LEADING_WORDS if text.startswith(marker)), None)
-    if code and words is None and "Stderr:" in text:
-        stderr = text.split("Stderr:", 1)[1]
+    first = STDERR_FIRST.match(text)
+    if code and words is None and first:
+        stderr = text[first.end():]
         words = next((shown for marker, shown in STDERR_WORDS if marker in stderr), None)
     parts = [p for p in (f"exit code {code.group(1)}" if code else None, words) if p]
     return f"{R}  ✗ {' · '.join(parts) if parts else 'failed'} ({len(text)} characters){X}"
