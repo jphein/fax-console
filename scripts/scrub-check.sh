@@ -700,17 +700,25 @@ def main(argv):
 
     # What the gate cannot read it cannot clear. A file it cannot open is a finding, not a traceback (a traceback
     # failed closed too, but did not say what or where) (Aurora's Oracle and the standing Oracle, after #21).
-    def add(path):
+    # missing_ok: a path that is not there, or is a directory, has no content to read. That's a tracked file
+    # deleted in the tree, a tracked link to a directory, or an entry that vanished mid-walk. A path someone
+    # named on purpose is still a finding when it is missing.
+    def add(path, missing_ok=False):
         try:
-            items.append((path, path, open(path, "rb").read()))
-        except OSError:
-            hits.append(f"{path}: [unreadable]")
+            data = open(path, "rb").read()
+        except OSError as err:
+            if not (missing_ok and isinstance(err, (FileNotFoundError, IsADirectoryError))):
+                hits.append(f"{path}: [unreadable]")
+            return
+        items.append((path, path, data))
 
     if not argv:
+        # Every path git would publish goes to add(). An isfile() filter here dropped, silently, a file under a
+        # directory the scan cannot search, because stat fails there (the standing Oracle, on #28).
         names = [p for p in git("ls-files", "-z", "--cached", "--others", "--exclude-standard").decode().split("\0")
-                 if p and os.path.isfile(p)]
+                 if p]
         for p in names:
-            add(p)
+            add(p, missing_ok=True)
         items += [(f"<file name> {p}", None, p.encode()) for p in names]
         on_disk, unlistable = disk_shadow_paths()
         hits += unlistable + shadow_findings(sorted(set(names) | set(on_disk)))
@@ -748,9 +756,13 @@ def main(argv):
         for p in argv[1:]:
             if os.path.isdir(p):
                 for d, dirs, fs in os.walk(p, onerror=unlistable):
-                    dirs[:] = [x for x in dirs if x not in (".git", "__pycache__", ".venv", "node_modules")]
+                    # Only a .git directly under the argument is skipped, since its objects are binary by design.
+                    # Pruning __pycache__, .venv and node_modules at any depth hid whatever they held, at export time
+                    # too (Lucid, auditing #27).
+                    if d == p:
+                        dirs[:] = [x for x in dirs if x != ".git"]
                     for f in fs:
-                        add(os.path.join(d, f))
+                        add(os.path.join(d, f), missing_ok=True)
             else:
                 add(p)
     else:

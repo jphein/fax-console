@@ -619,3 +619,46 @@ def test_the_default_scan_flags_a_file_it_cannot_read(repo):
         f.chmod(0o644)
     assert r.returncode == 1 and "notes.txt: [unreadable]" in r.stdout, r.stdout + r.stderr
     assert "Traceback" not in r.stderr, r.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root searches a mode-0600 directory anyway")
+def test_the_default_scan_flags_a_file_under_a_directory_it_cannot_search(repo):
+    """git lists a tracked file whose directory the scan cannot search. stat fails there, so an isfile()
+    filter dropped the file silently (the standing Oracle, on #28); it is [unreadable] now. A tracked file
+    deleted from the tree has no content and is not a finding. While searchable, the number in the file is
+    found: the control."""
+    commit(repo, "sub/f.txt", "call " + PHONE + "\n", "a file in sub")
+    commit(repo, "gone.txt", "nothing\n", "a file deleted from the tree later")
+    (repo / "gone.txt").unlink()
+    ok = scrub(repo)
+    assert ok.returncode == 1 and "sub/f.txt:1: [phone-number]" in ok.stdout, ok.stdout
+    assert "gone.txt" not in ok.stdout, ok.stdout
+    (repo / "sub").chmod(0o600)                          # listable, not searchable: stat of sub/f.txt fails
+    try:
+        r = scrub(repo)
+    finally:
+        (repo / "sub").chmod(0o755)
+    assert r.returncode == 1 and "sub/f.txt: [unreadable]" in r.stdout, r.stdout + r.stderr
+    assert "gone.txt" not in r.stdout, r.stdout
+
+
+@pytest.mark.parametrize("sub", ["node_modules", "__pycache__", ".venv", "deep/.git"])
+def test_paths_mode_prunes_only_a_git_directly_under_its_argument(repo, sub):
+    """Given a directory, --paths skipped .git, .venv, __pycache__ and node_modules at any depth, so a number
+    in one went unseen at export time (Lucid, auditing #27). Only a .git directly under the argument is
+    skipped now, since its objects are binary by design: the same number there stays unflagged."""
+    base = repo / "site"
+    (base / sub).mkdir(parents=True)
+    (base / sub / "x.txt").write_text("call " + PHONE + "\n", encoding="utf-8")
+    (base / ".git").mkdir()
+    (base / ".git" / "y.txt").write_text("call " + PHONE + "\n", encoding="utf-8")
+    r = scrub(repo, "--paths", str(base))
+    flagged = [x for x in r.stdout.splitlines() if "[phone-number]" in x]
+    assert r.returncode == 1 and len(flagged) == 1 and f"{sub}/x.txt" in flagged[0], r.stdout
+
+
+def test_paths_mode_flags_a_named_file_that_is_missing(repo):
+    """A path named on purpose must exist: a missing one is [unreadable], never a quiet pass (a mistyped
+    prompt path would otherwise scan as clean)."""
+    r = scrub(repo, "--paths", str(repo / "no-such-prompt.md"))
+    assert r.returncode == 1 and "no-such-prompt.md: [unreadable]" in r.stdout, r.stdout + r.stderr
