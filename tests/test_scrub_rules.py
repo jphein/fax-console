@@ -184,3 +184,61 @@ def test_long_lines_scan_in_linear_time(line):
     t = time.monotonic()
     scrub(line)
     assert time.monotonic() - t < 5.0               # quadratic at 200K characters takes minutes
+
+
+def _stream(tmp_path, *events):
+    """A Bob Shell stream recording, one event per line, scanned with --paths."""
+    import json
+    path = tmp_path / "99-plant.jsonl"
+    lines = [e if isinstance(e, str) else json.dumps(e) for e in events]      # a str is a raw line
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    env = {**os.environ, "CI": "1", "FAX_CONSOLE_SCRUB_DENY": "/nonexistent/scrub-deny.txt"}
+    return subprocess.run(["bash", str(SCRIPT), "--paths", str(path)], env=env, capture_output=True,
+                          text=True, check=False, timeout=60)
+
+
+def _say(text, role="assistant"):
+    return {"type": "message", "role": role, "content": text}
+
+
+def test_a_number_split_across_stream_chunks_is_caught(tmp_path):
+    """Bob streams a message in pieces, one event per line, and bob-watch shows them joined: a number split
+    across two pieces is on no single line (the Oracle's run-6 replay, on #39)."""
+    r = _stream(tmp_path, _say(j("I will call 303-", "86")), _say(j("7-5", "309 later.\n")))
+    assert r.returncode == 1 and "99-plant.jsonl:1-2+joined: [phone-number]" in r.stdout, r.stdout
+
+
+@pytest.mark.parametrize("events", [
+    [_say(j("call 303-", "86")), {"type": "tool_use", "tool_name": "x", "parameters": {}},
+     _say(j("7-5", "309\n"))],                                  # a tool call ends the message
+    [_say(j("call 303-", "86")), _say(j("7-5", "309\n"), role="user")],     # another role
+    [_say(j("202-555-", "01")), _say("23 is fiction.\n")],                  # the fiction block, split
+])
+def test_only_one_streamed_message_is_joined(tmp_path, events):
+    r = _stream(tmp_path, *events)
+    assert r.returncode == 0, r.stdout
+
+
+@pytest.mark.parametrize("between", ["not json at all", "", "42", '["a", "list"]',
+                                     {"type": "message", "role": "assistant", "content": 7}])
+def test_the_run_ends_only_where_bob_watch_ends_it(tmp_path, between):
+    """bob-watch keeps its buffer across a line that is not JSON, a blank line, a scalar and a list, and
+    joins an int chunk as str(); so does the gate (the Oracle, on #41). Here the int chunk is the 7."""
+    head, tail = (j("call 303-", "86"), j("-5", "309\n")) if isinstance(between, dict) else (
+        j("call 303-", "86"), j("7-5", "309\n"))
+    r = _stream(tmp_path, _say(head), between, _say(tail))
+    assert r.returncode == 1 and "+joined: [phone-number]" in r.stdout, (between, r.stdout)
+
+
+@pytest.mark.parametrize("text, caught", [
+    (j("211-400-", "0000"), False),          # the three N11 test vectors Bob narrated in run 6, exactly
+    (j("1-411-555-", "0000"), False),
+    (j("911-555-", "0000"), False),
+    (j("211-400-", "1234"), True),           # but not the rest of their area codes: no blanket N11 rule
+    (j("9112", "345678"), True),             # a real mobile shape elsewhere (the Oracle's fuzz, on #41)
+    (j("8112", "345678"), True),
+    (j("+91 9112", "345678"), True),
+])
+def test_only_the_listed_n11_vectors_are_allowed(text, caught):
+    r = scrub(text + "\n")
+    assert (r.returncode == 1 and "[phone-number]" in r.stdout) == caught, (text, r.stdout)
