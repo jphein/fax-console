@@ -145,3 +145,35 @@ def test_every_recorded_failure_maps_to_fixed_words():
     assert len(lines) >= 39, len(lines)
     assert not [n for n, line in lines if "✗ failed (" in line], lines
     assert "✗ exit code 1 · read-only file system" in [line for n, line in lines if n.startswith("5-")][-1]
+
+
+HEAD_CHUNK, TAIL_CHUNK = "call 303-" + "86", "7-5" + "309 later\n"      # fictional, split like a stream
+JOINED = "303-86" + "7-5309"
+
+
+def _watch(monkeypatch, capsys, between):
+    import io
+    chunk = lambda text: json.dumps({"type": "message", "role": "assistant", "content": text})  # noqa: E731
+    middle = between if isinstance(between, str) else json.dumps(between)
+    lines = [chunk(HEAD_CHUNK), middle, chunk(TAIL_CHUNK)]
+    monkeypatch.setattr(watch.sys, "stdin", io.StringIO("\n".join(lines) + "\n"))
+    watch.main()
+    return capsys.readouterr().out
+
+
+@pytest.mark.parametrize("between", [
+    {"type": "tool_use", "tool_name": "x", "parameters": "a string, not an object"},
+    {"type": "result", "status": "success", "stats": "a string, not an object"},
+])
+def test_a_malformed_event_ends_the_message_as_the_gate_does(monkeypatch, capsys, between):
+    """A malformed tool event between two chunks used to raise after the flush, and main kept the old
+    buffer, so the viewer showed the joined number while the gate ended the run there (the Oracle,
+    on #41)."""
+    shown = _watch(monkeypatch, capsys, between)
+    assert "could not show" in shown and JOINED not in shown, shown
+
+
+@pytest.mark.parametrize("between", ["not json", '["a", "list"]'])
+def test_a_line_that_is_not_an_event_keeps_the_message_open(monkeypatch, capsys, between):
+    """The control, and the gate's rule too: a line that is not a JSON object leaves the buffer as it was."""
+    assert JOINED in _watch(monkeypatch, capsys, between)
