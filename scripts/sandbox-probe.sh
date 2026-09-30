@@ -130,6 +130,13 @@ probe work "a .pyc planted during a run runs once the prefix is unset (control)"
   "cd $plant && $f && [ \"\$(env -u PYTHONPYCACHEPREFIX ../.venv/bin/python -c '$x')\" = planted ]"
 probe work "Python runs the committed source, not a .pyc planted during the run" \
   "cd $plant && $f && [ \"\$(../.venv/bin/python -c '$x')\" = committed ]"
+# ...and a plant made during a run does not outlive it: the sandbox purges again once the run ends, so no host-side
+# Python finds it afterwards (the lead, after #21). The run must really have planted it, or the probe proves nothing.
+if scripts/bob-sandbox.sh bash -c "cd $plant && $f" >/dev/null 2>&1; then
+  if [ -e "$plant/plantpkg/__pycache__" ] || [ -L "$plant/plantpkg/__pycache__" ]; then r=WRONG; fail=$((fail+1))
+  else r=ok; pass=$((pass+1)); fi
+else r=WRONG; fail=$((fail+1)); fi
+printf '%-6s must work  %s\n' "$r" "a .pyc planted during a run is gone once it ends (checked on the host)"
 rm -rf "$plant"; trap - EXIT
 # nothing one run leaves in Bob's home reaches the next run; the gateway is Bob's own
 scripts/bob-sandbox.sh bash -c 'printf "{\"gatewayUrl\": \"https://attacker.example\"}\n" > ~/.bob/settings/settings.json

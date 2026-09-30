@@ -16,7 +16,7 @@
 #     run), and Bob's gateway pinned; of the global npm tree, only the bobshell package. The owner's real home is not visible at all: no
 #     ~/.ssh, no ~/.config, no ~/.claude (Bob lists every skill it finds there in its prompt).
 #     Python's bytecode cache lives on the sandbox's own /tmp, never in the tree's __pycache__, and every
-#     __pycache__ in the tree is purged before each start.
+#     __pycache__ in the tree is purged before each start and again once it ends.
 #   network (systemd scope, BPF): LAN, loopback, link-local and CGNAT ranges and ALL of IPv6 denied,
 #     except the local DNS stub; the public IPv4 internet stays open so Bob can reach its API. The PBX and every
 #     house service are unreachable, and ssh has no keys, no agent and no config in any case.
@@ -25,6 +25,15 @@
 #
 # Everything Bob writes that later executes (tests, conftest.py) must run here or in CI.
 set -euo pipefail
+# The host-side git calls below must see the tree they run in, as it is. So every GIT_* variable a caller
+# exported is dropped before the first one:
+# - which tree and index git reads (a private GIT_INDEX_FILE, a hook's GIT_DIR);
+# - config injected through the environment (GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_PARAMETERS), which can name
+#   a command git runs;
+# - GIT_CEILING_DIRECTORIES, GIT_TRACE and the rest.
+# The purge's tracked-file check depends on it (the standing Oracle on #21; all of them, Aurora's Oracle on #24).
+# The sandbox itself starts from --clearenv in any case.
+for v in $(compgen -e); do case $v in GIT_*) unset "$v" ;; esac; done
 root=$(git rev-parse --show-toplevel)
 [ "$#" -ge 1 ] || { echo "usage: bob-sandbox.sh CMD [ARGS...]" >&2; exit 2; }
 # Bob Shell 2.0.5's own gateway and login (its built-in defaults). The gateway is pinned by Bob's own
@@ -39,8 +48,11 @@ BOB_WEB_LOGIN=https://bob.ibm.com
 [ ! -e "$root/.env" ] || { echo "refusing: $root/.env exists, and Bob would load it" >&2; exit 2; }
 # It also lists every skill it finds in the workspace (.claude/skills, .agents/skills) in its prompt, and
 # the repo is writable: a skill one run leaves there would steer the next (the Oracle, 9/29 01:4x).
+# One that cannot be listed might hold a skill too, so an ls failure refuses; it is never read as "empty".
 for d in .claude .agents; do
-  [ -z "$(ls -A "$root/$d" 2>/dev/null)" ] || { echo "refusing: $root/$d is not empty; Bob would read skills there" >&2; exit 2; }
+  [ -e "$root/$d" ] || [ -L "$root/$d" ] || continue
+  out=$(ls -A -- "$root/$d") || { echo "refusing: cannot list $root/$d; Bob would read skills there" >&2; exit 2; }
+  [ -z "$out" ] || { echo "refusing: $root/$d is not empty; Bob would read skills there" >&2; exit 2; }
 done
 [ -z "${BOB_HOME:-}" ] || echo "bob-sandbox: BOB_HOME is ignored: Bob's home is made fresh for every start" >&2
 # Bob's own logs are kept, as data, outside the repository: one directory per start. bob-run.sh names
@@ -87,14 +99,17 @@ check_links
 # - a listing that fails also stops the start: set -e cannot see into a process substitution, so its status
 #   is read with `wait` (the standing Oracle, on #21);
 # - so does a git that cannot read its index. An ignored ls-files failure looked like "nothing tracked", and a
-#   tracked file was purged (Aurora's Oracle, on #21).
+#   tracked file was purged (Aurora's Oracle, on #21);
+# - every step that can fail refuses explicitly, and none relies on set -e. The run's end calls this from an
+#   `||` list, where bash ignores set -e inside the function.
 # The last path component is always __pycache__. So even a path that a concurrent run swapped mid-purge could
 # only remove a cache directory. Nothing enforces one sandbox per tree yet, so don't start another one (test.sh,
 # an export, the probe) in a tree where Bob is running. Not walked: .git, .venv (read-only to Bob) and scratch/
 # (never written).
 purge_pycache() {
   local t parent root_p out found=() targets=()
-  root_p=$(cd -P -- "$root" && pwd)
+  root_p=$(cd -P -- "$root" && pwd) && [ -n "$root_p" ] \
+    || { echo "refusing: cannot resolve the repo root; nothing was purged" >&2; exit 2; }
   mapfile -d '' -t found < <(cd "$root" && find . \
     \( -path ./.git -o -path ./.venv -o -path ./scratch \) -prune -o -name __pycache__ \( -type d -o -type l \) \
     -prune -print0)
@@ -107,7 +122,10 @@ purge_pycache() {
       || { echo "refusing: cannot check $t against git's index; nothing was purged" >&2; exit 2; }
     [ -z "$out" ] || { echo "refusing: $t holds a tracked file; only cache artifacts are purged" >&2; exit 2; }
   done
-  for t in "${targets[@]}"; do rm -rf -- "$t"; done
+  for t in "${targets[@]}"; do
+    rm -rf -- "$t" || { echo "refusing: could not remove $t; the purge stopped there" >&2; exit 2; }
+  done
+  return 0
 }
 purge_pycache
 
@@ -127,7 +145,18 @@ save_logs() {
   fi
   return 0
 }
-trap 'save_logs; rm -rf "$rt"' EXIT
+# The EXIT trap runs under set -e too. A failing step there, say a log copy that meets a file the run made
+# unreadable, turned the run's exit code into 1 (which bob-run.sh ledgers) and skipped the rm. That left $rt on
+# disk, with the env file (and the key, when there is one) and Bob's home (the standing Oracle, on #24). So
+# no step may fail. $rt is made readable and removable first (chmod -R never follows a link it meets), so the
+# log copy, which scripts/bob_lock_check.py audits, is complete, not silently partial (the standing Oracle, on
+# #24). The copy is then best effort, and a failed removal is reported.
+cleanup() {
+  chmod -R u+rwX -- "$rt" 2>/dev/null || true
+  save_logs || true
+  rm -rf -- "$rt" || echo "bob-sandbox: warning: could not remove $rt" >&2
+}
+trap cleanup EXIT
 mkdir -p "$bob_home/.bob/settings"
 printf '{"licenseConsent": true, "bobShell": {"autoUpdate": false}}\n' > "$bob_home/.bob/settings/settings.json"
 printf '{"version": 1, "folders": {"%s": "TRUST_FOLDER"}}\n' "$root" > "$bob_home/.bob/trustedFolders.json"
@@ -191,6 +220,7 @@ resolv=$(readlink -f /etc/resolv.conf)
 # private-range list covers, and Bob needs none (its API is reached over IPv4).
 deny="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16 127.0.0.0/8 ::/0"
 check_links   # again, right before bwrap: narrows the window between the check and the mounts (the Oracle, PR #14)
+run_rc=0
 sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" \
   -p "IPAddressDeny=$deny" -p "IPAddressAllow=127.0.0.53" -- \
   bwrap --die-with-parent --new-session --unshare-pid --unshare-ipc --unshare-uts --unshare-cgroup-try \
@@ -206,4 +236,11 @@ sudo -n systemd-run --scope --quiet --collect --uid="$(id -u)" --gid="$(id -g)" 
     --bind "$root" "$root" "${docs_bind[@]}" "${ro[@]}" --tmpfs "$root/scratch" --remount-ro "$root/scratch" \
     "${rw[@]}" \
     --ro-bind "$envf" /run/bob-env --chdir "$root" \
-    /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@"
+    /bin/bash -c 'set -a; . /run/bob-env; set +a; exec "$@"' bob-sandbox "$@" || run_rc=$?
+# Purge again once the run is over, so nothing a run left in a __pycache__ outlives it on the host, where a later
+# Python without -I or the prefix would find it (the lead, after #21). The run's own exit code is kept, since
+# bob-run.sh records it in the ledger. So a refusal here only warns, and the next start's purge refuses on the
+# same grounds until the tree is fixed.
+( purge_pycache ) || echo "bob-sandbox: warning: the purge after the run refused (see above); the tree may still" \
+  "hold a __pycache__, and the next start refuses until that is fixed" >&2
+exit "$run_rc"
