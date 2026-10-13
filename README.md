@@ -5,9 +5,9 @@ A house PBX's legacy fax tools, modernized with **IBM Bob** while the phone line
 **Building with IBM Bob hackathon · track Modernize What Matters** · Demo (a static replay):
 https://jphein.github.io/fax-console/ · Video: https://youtu.be/SnsuG6-jPNQ · Deck: [`docs/deck.pdf`](docs/deck.pdf)
 
-> **Status: week 2 of 3.** The pre-hackathon baseline, the safety tooling, Bob's modernization
-> analysis, the `faxcli` package and the `faxconsole` service with its replay mode are here. This
-> README grows as the work lands.
+> **Status: week 3 of 3, complete for judging.** The pre-hackathon baseline, the safety tooling,
+> Bob's modernization analysis, the `faxcli` package, the `faxconsole` service with its replay
+> mode, the demo video and the deck are all here.
 
 ## What it is
 
