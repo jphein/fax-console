@@ -3,7 +3,7 @@
 A house PBX's legacy fax tools, modernized with **IBM Bob** while the phone line kept working.
 
 **Building with IBM Bob hackathon · track Modernize What Matters** · Demo (a static replay):
-https://jphein.github.io/fax-console/ · Video: {{video.url}} · Deck: [`docs/deck.pdf`](docs/deck.pdf)
+https://jphein.github.io/fax-console/ · Video: https://youtu.be/SnsuG6-jPNQ · Deck: [`docs/deck.pdf`](docs/deck.pdf)
 
 > **Status: week 2 of 3.** The pre-hackathon baseline, the safety tooling, Bob's modernization
 > analysis, the `faxcli` package and the `faxconsole` service with its replay mode are here. This
@@ -114,8 +114,8 @@ Bob writes the modernization one step at a time: first the analysis
   ([run 10 notes](docs/bob-usage.md#run-10-the-inbound-dialplan)).
 - **Everything reviewed.** [`docs/bob-usage.md`](docs/bob-usage.md) is the ledger: each run's
   task, cost, and what was kept, changed or rejected, and why. Bob's commits carry an
-  `Assisted-by: IBM Bob` trailer. At submission: Bob factor {{bob.factor_pct}} (Bob's share of the
-  new code and test lines), and {{bob.commits}} Bob-assisted commits, one per run that changed files.
+  `Assisted-by: IBM Bob` trailer. At submission: Bob factor 65.4% (Bob's share of the
+  new code and test lines), and 11 Bob-assisted commits, one per run that changed files.
 
 ## Ground rules
 
