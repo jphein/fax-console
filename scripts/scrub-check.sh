@@ -74,6 +74,9 @@ REVIEWED_BINARIES = {
     "db5a3cdb0403b19bfed549c5ec378f3a2935ca89": "docs/deck.pdf (facts at e1bb410, the video capture commit), checked by eye 2026-09-30 by the deck reviewer: "
         "7 slides, dark and light; no phone numbers, private names, hosts or IPs; video.url shows as a label only; "
         "text layer scrub-clean (36 rules)",
+    "4e449c23a5261b2d6aad478abb52bb3e2ca892bd": "docs/deck.pdf (video link + CI test count at d176f9f), checked by eye 2026-10-13 by money-e9: "
+        "7 slides, dark; no phone numbers, private names, hosts or IPs; video.url filled (youtu.be); text layer scrub-clean (11 generic rules); "
+        "no images, JavaScript, actions or attachments; one link (the repo)",
     "3c879396e4a1beeeb2c06e3dc7085881c3df91e3": "demo/test-page.pdf, checked by eye 2026-09-29 by the deck reviewer: "
         "1 page, neutral text, digits and line pairs; no personal information; text layer scrub-clean (30 rules)",
 }

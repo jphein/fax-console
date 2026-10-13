@@ -1,6 +1,6 @@
 {
   "values": {
-    "video.url": null,
+    "video.url": "https://youtu.be/SnsuG6-jPNQ",
     "cmd.replay": "python3 -m faxconsole --replay tests/fixtures",
     "cmd.test": "python3 -m pytest -q",
     "license.spdx": "AGPL-3.0-or-later",
@@ -14,8 +14,8 @@
     "bob.bobcoins": "63.12",
     "bob.reject_example": "Run 12's replay mode reported fax calls it never placed. Review reverted it.",
     "bob.source": null,
-    "tests.count": "1044",
-    "tests.summary": "1044 passed in 54.80s",
+    "tests.count": "1066",
+    "tests.summary": "1066 passed, 1 skipped in 77.45s",
     "ci.status": "passing",
     "lint.status": "clean",
     "after.shellouts_outside_adapter": "0",
@@ -31,7 +31,7 @@
     "demo.url": "https://jphein.github.io/fax-console/"
   },
   "sources": {
-    "video.url": "YouTube unlisted link after upload (week 3)",
+    "video.url": "YouTube unlisted link, uploaded 2026-10-13",
     "cmd.replay": "README.md, the replay section (python3 -m faxconsole --replay tests/fixtures)",
     "cmd.test": "AGENTS.md conventions (and CI)",
     "license.spdx": "README.md License section",
@@ -45,8 +45,8 @@
     "bob.bobcoins": "docs/bob-usage.md running total at e1bb410 (63.12 after run 13, of the 180 allotment)",
     "bob.reject_example": "docs/bob-usage.md, run 12: 'Review reverted a replay transport that claimed successful originates'",
     "bob.source": "e.g. 'git trailers and docs/bob-usage.md, Oct 15'",
-    "tests.count": "scripts/test.sh --collect-only -q (inside the sandbox) at e1bb410: per-file counts summed, 33 files",
-    "tests.summary": "last line of the full scripts/test.sh run (inside the sandbox) at e1bb410, from a fresh clone: the run the video shows",
+    "tests.count": "CI on main d176f9f, job 'tests (Python 3.14)' (run 36781639250): 1066 passed, 1 skipped",
+    "tests.summary": "last line of that CI job log on main d176f9f: the run the video shows",
     "ci.status": "GitHub Actions check runs on e1bb410: 5 of 5 success",
     "lint.status": "scripts/test.sh ends with ruff 'All checks passed!' at e1bb410",
     "after.shellouts_outside_adapter": "git grep 'subprocess|os.system' e1bb410 -- faxcli faxconsole: every hit outside faxcli/transport.py (the adapter) is a comment",
