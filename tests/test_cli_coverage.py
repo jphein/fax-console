@@ -278,3 +278,33 @@ class TestCmdTest:
 
         main(["test"], transport=ReplayTransport(spool_dir=tmp_path), stdout=io.StringIO())
         assert captured_waits == [90]
+
+    def test_explicit_wait_is_not_overwritten(self, tmp_path, monkeypatch):
+        """cmd_test must NOT overwrite an explicit --wait value with 90.
+
+        With the inverted condition ``if not (not a.wait):`` (i.e. ``if a.wait:``)
+        the branch fires for any truthy wait value and overwrites it with 90.
+        This test catches that mutation by asserting wait stays at 30.
+        """
+        import faxcli.cli as _cli  # noqa: PLC0415
+
+        pdf = tmp_path / "page.pdf"
+        pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+        monkeypatch.setattr(_cli, "_DEFAULT_TEST_PAGE", str(pdf))
+
+        captured_waits = []
+
+        def _capturing_send(a, transport, stdout):
+            captured_waits.append(a.wait)
+            return 0
+
+        monkeypatch.setattr(_cli, "cmd_send", _capturing_send)
+
+        main(
+            ["test", "--wait", "30"],
+            transport=ReplayTransport(spool_dir=tmp_path),
+            stdout=io.StringIO(),
+        )
+        assert captured_waits == [30], (
+            "explicit --wait 30 must be preserved; cmd_test must not overwrite it with 90"
+        )

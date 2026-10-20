@@ -1,0 +1,22 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "1376 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/pbx.py\", \"range\": \"90-130\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"225-270\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"270-310\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_pbx_coverage.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_cli_coverage.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[-] Add test to test_pbx_coverage.py: exact note text with mixed in_call/signalling subscribers\\n[ ] Add tests to test_cli_coverage.py: --wait 30 kept, no --wait stays 90\\n[ ] Verify each"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./tests/test_pbx_coverage.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:48\\n-------\\n# Two blocks: one with cc (call-control) tag, one signalling only.\\n# MSISDN valu"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_pbx_coverage.py\", \"range\": \"155-175\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "insert_content", "detail": "{\"path\": \"./tests/test_pbx_coverage.py\", \"line\": 0, \"content\": \"\\n    def test_note_counts_in_call_subscribers_exactly(self, tmp_path):\\n        \\\"\\\"\\\"Note must report exac"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:262\\n-------\\n    def test_default_wait_is_set_to_90(self, tmp_path, monkeypatch):\\n        \\\"\\\"\\\"cmd_test must set wait=90 when the caller doesn't specify --wait"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_pbx_coverage.py tests/test_cli_coverage.py 2>&1\", \"cwd\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./faxconsole/pbx.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:105\\n-------\\n                ncc = sum(1 for v in subs.values() if v[\\\"in_call\\\"])\\n=======\\n         "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_pbx_coverage.py 2>&1\", \"cwd\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:105\\n-------\\n                ncc = sum(1 for v in subs.values() if not v[\\\"in_call\\\"])\\n=======\\n                ncc = sum(1 for v in subs.values() if v[\\\"in_cal"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:242\\n-------\\n    if not a.wait:\\n        a.wait = 90\\n=======\\n    if not (not a.wait):\\n        a.wait = 90\\n>>>>>>> REPLACE\\n\", \"path\": \"~/Projects/fax-"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_cli_coverage.py 2>&1\", \"cwd\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:242\\n-------\\n    if not (not a.wait):\\n        a.wait = 90\\n=======\\n    if not a.wait:\\n        a.wait = 90\\n>>>>>>> REPLACE\\n\", \"path\": \"~/Projects/fax-"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \"git diff faxconsole faxcli 2>&1\", \"cwd\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_pbx_coverage.py tests/test_cli_coverage.py 2>&1\", \"cwd\": \".\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"\\n[x] Add test to test_pbx_coverage.py: exact note text with mixed in_call/signalling subscribers\\n[x] Add tests to test_cli_coverage.py: --wait 30 kept, no --wait stays 90\\n[x] Verify each"}

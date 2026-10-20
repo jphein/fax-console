@@ -58,6 +58,22 @@ _VTY_TWO_BLOCKS = (
     " Use count: 1 (signalling)\n"
 )
 
+# Three blocks: two carrying call-control, one signalling only.
+_VTY_THREE_BLOCKS = (
+    "Connection #0: Serving host-A\n"
+    " MSISDN-2025550111\n"
+    " RAN connection state: CONNECTED\n"
+    " Use count: 1 (cc)\n"
+    "Connection #1: Serving host-B\n"
+    " MSISDN-2025550122\n"
+    " RAN connection state: CONNECTED\n"
+    " Use count: 1 (cc)\n"
+    "Connection #2: Serving host-C\n"
+    " MSISDN-2025550133\n"
+    " RAN connection state: CONNECTED\n"
+    " Use count: 1 (signalling)\n"
+)
+
 _VTY_NO_CONNECTIONS = "\n"
 
 
@@ -154,3 +170,21 @@ class TestReadCallsVtyFn:
         assert result["value"] == 5
         assert result["cellular"] == 2
         assert result["impossible"] is False
+
+    def test_note_counts_in_call_subscribers_exactly(self, tmp_path):
+        """Note must report exactly the count of subscribers with in_call=True.
+
+        Three subscribers, two carrying call-control (cc tag), one signalling only.
+        The exact note text is checked so that inverting the in_call condition
+        (``if not v["in_call"]``) produces ncc=1 instead of 2 and the test fails.
+        """
+        t = _make_transport(tmp_path, active_calls=5)
+        result = read_calls(t, vty_fn=lambda _msc, _cmd: _VTY_THREE_BLOCKS)
+
+        msc = next(i for i in result["instruments"] if i["name"] == "MSC connections")
+        assert msc["ok"] is True
+        assert msc["value"] == 3
+        assert msc["note"] == (
+            "2 of 3 carrying call-control; the "
+            "rest are signalling only (location update, SMS)"
+        )

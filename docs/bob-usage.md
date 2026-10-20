@@ -131,8 +131,9 @@ Costs are Bob Shell's `session_costs`, the Bobcoin figure; the wrapper fills the
 | 12 | 9/29 09:44 | [Faxcli fixes](bob-runs/12-faxcli-fixes.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.10).) | 48 | 5.100 | Kept: the three deliberate fixes, the hardening and `docs/changes.md`. Review reverted a replay transport that claimed successful originates, and fixed a temp dir that leaked on a failed render and a CDR limit of 0 that returned every line |
 | 13 | 9/29 10:42 | [Oracle fixes](bob-runs/13-oracle-fixes.prompt.md) | success (The task reached the cost limit of 6.00 (spent: 6.19).) | 52 | 6.191 | Kept: both must-fixes (no POST body read before the gate; replay error text masked) and part of the live-mode items. The reviewer fixed the early 401/413 being lost to a reset, and closed the items not reached at the cap |
 | 19 | 10/19 17:32 | [Coverage](bob-runs/19-coverage.prompt.md) | success (The task reached the cost limit of 5.00 (spent: 5.16).) | 46 | 5.158 | review pending |
+| 20 | 10/19 17:56 | [Mutants](bob-runs/20-mutants.prompt.md) | success | 21 | 0.935 | review pending |
 
-**Running total: 68.27 Bobcoins** (after run 19).
+**Running total: 69.21 Bobcoins** (after run 20).
 
 **Budget.** Pro Plus: 180 Bobcoins for the month, renewing Oct 28, with overage off. We stop and
 report at 100 and keep about 30 in reserve for week 3. The per-run cap is 3 unless a step
