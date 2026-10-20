@@ -133,3 +133,12 @@ def test_non_dict_parameters_of_a_refused_call_are_replaced(rr, tmp_path, params
     f = _refused(tmp_path, params)
     rr.main(str(f))
     assert "LEAKMARK" not in f.read_text(encoding="utf-8")
+
+
+def test_parameter_names_of_a_refused_call_are_not_published(rr, tmp_path):
+    f = _refused(tmp_path, {"path": "a.md", "LEAKMARK_KEY": "x", "content": "y"})
+    rr.main(str(f))
+    text = f.read_text(encoding="utf-8")
+    assert "LEAKMARK" not in text
+    params = json.loads(text.split("\n")[0])["parameters"]
+    assert params == {"path": "a.md", "_redacted": PLACEHOLDER}

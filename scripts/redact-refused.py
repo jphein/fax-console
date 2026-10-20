@@ -80,14 +80,18 @@ def main(path):
                 continue
             reason = json.dumps((results.get(tool_id(e)) or {}).get("error") or "")
             path_refusal = any(m in reason for m in PATH_REFUSAL)
-            for k, v in list(params.items()):
-                keep = isinstance(k, str) and k.lower() in PATH_KEYS and isinstance(v, str)
-                shown = v if (keep and not path_refusal and repo_relative(v)) else PATH_PLACEHOLDER
-                new = shown if keep else PLACEHOLDER
-                if new != v:
-                    params[k] = new
-                    n += 1
-                    changed.add(i)
+            # Rebuild from scratch: only allowlisted path keys survive (by name), everything else, key
+            # names included, collapses into one marker (cross-model review: names could carry data).
+            rebuilt = {}
+            for k, v in params.items():
+                if isinstance(k, str) and k.lower() in PATH_KEYS and isinstance(v, str):
+                    rebuilt[k] = v if (not path_refusal and repo_relative(v)) else PATH_PLACEHOLDER
+            if len(rebuilt) < len(params):
+                rebuilt["_redacted"] = PLACEHOLDER
+            if rebuilt != params:
+                e["parameters"] = rebuilt
+                n += 1
+                changed.add(i)
     if not changed:                                 # nothing refused: the file is left exactly as it was
         print(f"redact-refused: 0 refused write field(s) replaced in {path}", file=sys.stderr)
         return
