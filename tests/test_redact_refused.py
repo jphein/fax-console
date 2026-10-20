@@ -117,3 +117,19 @@ def test_path_keys_match_the_guard(rr):
             assert set(ast.literal_eval(node.value)) == set(rr.PATH_KEYS)
             return
     raise AssertionError("no PATH_KEYS in tool_guard.py")
+
+
+@pytest.mark.parametrize("path", ["/etc/LEAKMARK", "~/LEAKMARK.pdf", "../LEAKMARK/x.md",
+                                  "docs/../../LEAKMARK"])
+def test_a_non_repo_path_is_masked_whatever_the_reason_says(rr, tmp_path, path):
+    # the reason says nothing about paths: the value itself decides
+    f = _refused(tmp_path, {"path": path, "content": "x"})
+    rr.main(str(f))
+    assert "LEAKMARK" not in f.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("params", ["write LEAKMARK to x.md", ["LEAKMARK", "x.md"]])
+def test_non_dict_parameters_of_a_refused_call_are_replaced(rr, tmp_path, params):
+    f = _refused(tmp_path, params)
+    rr.main(str(f))
+    assert "LEAKMARK" not in f.read_text(encoding="utf-8")

@@ -30,6 +30,14 @@ PATH_REFUSAL = ("path refused", "outside the repository")
 MARKERS = ("sandbox guard:", "write refused", "path refused")
 
 
+def repo_relative(p):
+    """A plain path inside the repository, judged from the value itself (never from the guard's reason):
+    relative, no ~, no .. component, no backslashes or NULs. Anything else is masked."""
+    if not p or p.startswith(("/", "~")) or "\\" in p or "\0" in p:
+        return False
+    return ".." not in p.replace("\\", "/").split("/")
+
+
 def refused(result):
     msg = json.dumps((result or {}).get("error") or "")
     return result is not None and result.get("status") != "success" and any(m in msg for m in MARKERS)
@@ -64,13 +72,18 @@ def main(path):
     for i, e in enumerate(events):
         if e and e.get("type") == "tool_use" and tool_id(e) is not None and refused(results.get(tool_id(e))):
             params = e.get("parameters")
-            if not isinstance(params, dict):
+            if not isinstance(params, dict):                # a string or list: nothing to keep
+                if params not in (None, PLACEHOLDER):
+                    e["parameters"] = PLACEHOLDER
+                    n += 1
+                    changed.add(i)
                 continue
             reason = json.dumps((results.get(tool_id(e)) or {}).get("error") or "")
             path_refusal = any(m in reason for m in PATH_REFUSAL)
             for k, v in list(params.items()):
                 keep = isinstance(k, str) and k.lower() in PATH_KEYS and isinstance(v, str)
-                new = (PATH_PLACEHOLDER if path_refusal else v) if keep else PLACEHOLDER
+                shown = v if (keep and not path_refusal and repo_relative(v)) else PATH_PLACEHOLDER
+                new = shown if keep else PLACEHOLDER
                 if new != v:
                     params[k] = new
                     n += 1
