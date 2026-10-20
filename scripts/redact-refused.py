@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""redact-refused.py RUN.jsonl — keep writes the sandbox guard refused out of a published recording.
+"""redact-refused.py RUN.jsonl — keep calls the sandbox guard refused out of a published recording.
 
-A write the guard refuses (identifying data, a protected path, a path outside the repository)
-never reaches the repository. The recording must not publish it either: its content is exactly
-what the guard exists to keep out. So each refused call keeps its tool name, its path and the
-guard's reason, which is already masked, and its content fields are replaced by a placeholder.
-Everything else in the recording stays verbatim.
+A call the guard refuses (identifying data, a protected path, a path outside the repository)
+never reaches the repository, and the recording must not publish it either. Redaction is by
+ALLOWLIST (Oracle review of PR #47): a refused call keeps its tool name and its top-level path
+parameters (keys matched case-insensitively against the guard's PATH_KEYS, plain string values
+only); every other parameter, at any depth and in any case (content, Content, body, command,
+files[...]), becomes a placeholder. On a path refusal the path itself is masked too, since a path
+outside the repository can be identifying. The guard's reason is already masked.
+
+Not covered here: assistant messages and thinking that restate refused content. The published
+stream is still scrubbed as a whole afterwards (bob-run.sh runs scrub-check on it, and CI's scrub
+gate runs on every push), which catches identifying data wherever it appears.
 """
 import json
 import sys
 
-CONTENT_KEYS = ("content", "contents", "diff", "patch", "new_str", "new_string", "text",
-                "replace", "replacement", "new_content", "code", "search_and_replace", "edits",
-                "operations", "lines")   # same set as .bob/hooks/tool_guard.py (test_redact_keys_match_guard)
+# Same set as .bob/hooks/tool_guard.py PATH_KEYS (tests/test_redact_refused.py checks they match).
+PATH_KEYS = ("path", "file_path", "filepath", "target_file", "file", "paths", "files", "target",
+             "destination", "source", "directory", "dir", "cwd")
 PLACEHOLDER = "<not published: the sandbox guard refused this write>"
+PATH_PLACEHOLDER = "<path not published: the sandbox guard refused it>"
+PATH_REFUSAL = ("path refused", "outside the repository")
 
 
 # Every refusal from .bob/hooks/tool_guard.py starts with this marker, whichever rule fired. The two older
@@ -58,9 +66,13 @@ def main(path):
             params = e.get("parameters")
             if not isinstance(params, dict):
                 continue
-            for k in CONTENT_KEYS:
-                if k in params:
-                    params[k] = PLACEHOLDER
+            reason = json.dumps((results.get(tool_id(e)) or {}).get("error") or "")
+            path_refusal = any(m in reason for m in PATH_REFUSAL)
+            for k, v in list(params.items()):
+                keep = isinstance(k, str) and k.lower() in PATH_KEYS and isinstance(v, str)
+                new = (PATH_PLACEHOLDER if path_refusal else v) if keep else PLACEHOLDER
+                if new != v:
+                    params[k] = new
                     n += 1
                     changed.add(i)
     if not changed:                                 # nothing refused: the file is left exactly as it was

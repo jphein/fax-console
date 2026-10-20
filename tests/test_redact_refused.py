@@ -75,3 +75,45 @@ def test_nothing_refused_leaves_the_file_untouched(rr, tmp_path):
     rr.main(str(f))
     assert f.read_bytes() == before
     assert f.stat().st_mtime_ns == stamp          # not even rewritten with the same bytes
+
+
+# --- allowlist redaction (Oracle review of PR #47): every leak the Oracle crafted stays out ---
+
+def _refused(tmp_path, params, reason="sandbox guard: write refused: the content carries identifying data"):
+    use = {"type": "tool_use", "tool_id": "t9", "tool_name": "write_file", "parameters": params}
+    return _write(tmp_path, [use, _result("t9", reason)])
+
+
+@pytest.mark.parametrize("params", [
+    {"path": "a.md", "files": [{"path": "b.md", "content": "LEAKMARK"}]},   # nested content
+    {"path": "a.md", "Content": "LEAKMARK"},                                # case
+    {"path": "a.md", "body": "LEAKMARK"},                                   # a key no list names
+    {"command": "cat > ../x <<EOF\nLEAKMARK\nEOF"},                          # refused command text
+    {"path": "a.md", "content": "LEAKMARK", "edits": [{"new": "LEAKMARK"}]},
+])
+def test_refused_call_publishes_only_tool_name_and_paths(rr, tmp_path, params):
+    f = _refused(tmp_path, params)
+    rr.main(str(f))
+    text = f.read_text(encoding="utf-8")
+    assert "LEAKMARK" not in text
+    use = json.loads(text.split("\n")[0])
+    assert use["tool_name"] == "write_file"
+    if "path" in params:
+        assert use["parameters"]["path"] == "a.md"          # an in-repo path stays readable
+
+
+def test_a_path_refusal_masks_the_path_itself(rr, tmp_path):
+    f = _refused(tmp_path, {"path": "/home/someone/clients/LEAKMARK.pdf", "content": "x"},
+                 reason="sandbox guard: path refused: outside the repository")
+    rr.main(str(f))
+    assert "LEAKMARK" not in f.read_text(encoding="utf-8")
+
+
+def test_path_keys_match_the_guard(rr):
+    import ast
+    guard = Path(__file__).resolve().parents[1] / ".bob" / "hooks" / "tool_guard.py"
+    for node in ast.parse(guard.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and "PATH_KEYS" in [getattr(t, "id", None) for t in node.targets]:
+            assert set(ast.literal_eval(node.value)) == set(rr.PATH_KEYS)
+            return
+    raise AssertionError("no PATH_KEYS in tool_guard.py")
