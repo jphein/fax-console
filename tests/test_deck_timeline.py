@@ -21,9 +21,12 @@ def _run(n, month, day, task="A task", coins=1.0):
 def test_every_numbered_run_in_the_ledger_is_parsed_inside_the_window():
     runs = timeline.numbered(timeline.ledger_runs(timeline.LEDGER.read_text(encoding="utf-8")))
     assert runs, "no numbered runs parsed from docs/bob-usage.md"
-    for r in runs:
+    # Runs after the hackathon window (10/18) are the post-hackathon credit burn (Oct 2026): real ledger
+    # rows, but outside the deck's scope, so they are skipped here, not dropped from the ledger.
+    hack = [r for r in runs if (int(r["month"]), r["day"]) <= (10, 18)]
+    assert hack, "no hackathon-window runs parsed"
+    for r in hack:
         assert (int(r["month"]), r["day"]) >= (9, 28), r
-        assert (int(r["month"]), r["day"]) <= (10, 18), r
         assert r["task"] and r["coins"] >= 0, r
 
 

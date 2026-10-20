@@ -71,6 +71,8 @@ LEADING_WORDS = (
     ("command refused:", "the guard refused the command"),
     ("path refused:", "the guard refused the path"),
     ("write refused:", "the guard refused the write"),
+    ("sandbox guard: write refused:", "the guard refused the write"),
+    ("Error during validation: No sufficiently similar match", "the edit did not match the file"),
     ("File does not exist", "file does not exist"),
     ("No matches found", "no matches"),
     ("Invalid range format", "invalid range"),
