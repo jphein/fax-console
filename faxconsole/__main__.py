@@ -47,7 +47,9 @@ def build(
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--replay", metavar="DIR", help="serve recorded fixtures from DIR")
     mode.add_argument("--local", action="store_true", help="run locally on the PBX")
-    mode.add_argument("--ssh", metavar="HOST", nargs="?", const=None,
+    # const="" (not None): Python 3.10's argparse counts a bare --ssh as "not given" when its value
+    # equals the default (None), so the required group failed there (found by the 3.10 CI job).
+    mode.add_argument("--ssh", metavar="HOST", nargs="?", const="",
                       help="connect via SSH (default host: FAX_EXCHANGE_HOST or 'pbx')")
     p.add_argument("--port", type=int, default=8093, help="listen port (default: 8093)")
     p.add_argument("--host", default="127.0.0.1", help="bind address (default: 127.0.0.1)")
@@ -105,7 +107,7 @@ def build(
         transport = LocalTransport()
         config = Config(transport=transport, inbox=a.inbox, replay=False)
     else:
-        transport = SshTransport(host=a.ssh)  # host=None → exchange_host()
+        transport = SshTransport(host=a.ssh or None)  # bare --ssh ("") → exchange_host()
         config = Config(transport=transport, inbox=a.inbox, replay=False)
 
     def cleanup() -> None:
