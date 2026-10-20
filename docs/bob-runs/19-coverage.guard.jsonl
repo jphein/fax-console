@@ -1,0 +1,47 @@
+{"hook": "prompt_gate", "verdict": "allow", "detail": "1599 chars"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./AGENTS.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./BASELINE.md\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/pbx.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/tiff.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/__main__.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "list_files", "detail": "{\"path\": \"./tests\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/conftest.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_transport.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_unit.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_faxconsole_pbx.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m coverage run -m pytest -q tests 2>&1 | tail -5\", \"cwd\": \".\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m coverage report --include='faxcli/*,faxconsole/*' 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 15}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m coverage report --include='faxcli/transport.py,faxconsole/pbx.py,faxcli/cli.py,faxcli/tiff.py,faxconsole/__main__.py' --show-missing 2>&1\", \"cwd\": \"~/Projects/f"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./tests/test_characterization.py\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/voipms.py\", \"range\": \"1-60\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"1-60\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/server.py\", \"range\": \"1-50\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"60-130\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"[-] Write test_transport_coverage.py (transport.py: 72% \\u2192 90%)\\n[ ] Write test_pbx_coverage.py (pbx.py: 73% \\u2192 90%)\\n[ ] Write test_cli_coverage.py (cli.py: 76% \\u2192 90%)\\n[ ] Wr"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"path\": \"./tests/test_transport_coverage.py\", \"line_count\": 267, \"content\": \"\\\"\\\"\\\"tests/test_transport_coverage.py \\u2014 edge-path coverage for faxcli.transport.\\n\\nTarg"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"path\": \"./tests/test_transport_coverage.py\", \"diff\": \"<<<<<<< SEARCH\\n:start_line:30\\n-------\\nclass TestDefaultIsAsteriskUser:\\n    def test_returns_bool(self):\\n       "}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -c \\\"\\nf = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError('test'))\\ntry:\\n    f()\\nexcept RuntimeError as e:\\n    print('caught:', e)\\n\\\"\", \"cwd\": \"~/Projects"}
+{"hook": "tool_guard", "verdict": "deny", "tool": "write_file", "detail": "sandbox guard: write refused: the content carries identifying data (masked): <write>:49: [imsi-imei-shape]"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_pbx_coverage.py \\u2014 edge-path coverage for faxconsole.pbx.\\n\\nTargets lines untouched by the existing suite:\\n  - read_trunk: no registration row in the output (line 5"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_cli_coverage.py \\u2014 edge-path coverage for faxcli.cli.\\n\\nTargets lines untouched by the existing suite:\\n  - cmd_status human-readable output (lines 96-112, including"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_tiff_coverage.py \\u2014 edge-path coverage for faxcli.tiff.\\n\\nTargets lines untouched by the existing suite:\\n  - count_pages: IFD offset points past end of data (line 2"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/routes.py\", \"range\": \"130-200\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "write_file", "detail": "{\"content\": \"\\\"\\\"\\\"tests/test_main_coverage.py \\u2014 edge-path coverage for faxconsole.__main__.\\n\\nTargets lines untouched by the existing suite:\\n  - build() --local branch (line 104-106): Config u"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_transport_coverage.py tests/test_pbx_coverage.py tests/test_tiff_coverage.py 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 60}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_cli_coverage.py 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 30}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "grep", "detail": "{\"pattern\": \"class SendResult\", \"path\": \"./faxcli\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/models.py\", \"range\": \"118-160\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:163\\n-------\\n    def test_send_with_wait_and_result_human_readable(self, tmp_path):\\n        \\\"\\\"\\\"With --wait and a fax result, human-readable output shows outc"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_cli_coverage.py 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 30}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_main_coverage.py 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 30}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:90\\n-------\\nclass TestMain:\\n    def test_sigterm_handler_raises_system_exit(self, monkeypatch, tmp_path):\\n        \\\"\\\"\\\"The SIGTERM handler must raise SystemEx"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m pytest -q tests/test_main_coverage.py 2>&1\", \"cwd\": \".\", \"timeout_seconds\": 30}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "update_todo_list", "detail": "{\"todos\": \"[x] Write test_transport_coverage.py (transport.py: 72% \\u2192 90%)\\n[x] Write test_pbx_coverage.py (pbx.py: 73% \\u2192 90%)\\n[x] Write test_cli_coverage.py (cli.py: 76% \\u2192 90%)\\n[x] Wr"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m coverage run -m pytest -q tests 2>&1 | tail -5\", \"cwd\": \".\", \"timeout_seconds\": 150}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "execute_command", "detail": "{\"command\": \".venv/bin/python -m coverage report --include='faxcli/transport.py,faxconsole/pbx.py,faxcli/cli.py,faxcli/tiff.py,faxconsole/__main__.py' --show-missing 2>&1\", \"cwd\": \"~/Projects/f"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/transport.py\", \"range\": \"304-313\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxconsole/__main__.py\", \"range\": \"128-141\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "read_file", "detail": "{\"path\": \"./faxcli/cli.py\", \"range\": \"229-246\"}"}
+{"hook": "tool_guard", "verdict": "allow", "tool": "apply_diff", "detail": "{\"diff\": \"<<<<<<< SEARCH\\n:start_line:208\\n-------\\n    def test_default_wait_is_set_to_90(self, tmp_path, monkeypatch):\\n        \\\"\\\"\\\"cmd_test must set wait=90 when the caller doesn't specify --wait"}
