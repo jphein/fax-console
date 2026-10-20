@@ -11,7 +11,8 @@ import json
 import sys
 
 CONTENT_KEYS = ("content", "contents", "diff", "patch", "new_str", "new_string", "text",
-                "replace", "replacement", "new_content", "code", "edits", "operations", "lines")
+                "replace", "replacement", "new_content", "code", "search_and_replace", "edits",
+                "operations", "lines")   # same set as .bob/hooks/tool_guard.py (test_redact_keys_match_guard)
 PLACEHOLDER = "<not published: the sandbox guard refused this write>"
 
 
